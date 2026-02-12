@@ -39,62 +39,54 @@ export function Nav() {
 
   return (
     <nav
-      className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-lg border-b border-border/60"
+      className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl"
       role="navigation"
       aria-label="Main navigation"
     >
-      <div className="max-w-[1400px] mx-auto px-6 sm:px-8 lg:px-12 py-4 flex items-center justify-between">
+      <div className="editorial-container h-20 flex items-center justify-between">
         {/* Logo */}
         <Link
           href="/portal"
-          className="flex items-center gap-3"
+          className="text-[13px] tracking-[0.35em] text-foreground font-light uppercase"
           aria-label={`${SITECONFIG.brand.name} home`}
         >
-          <span className="text-lg tracking-[0.2em] text-foreground font-light uppercase">
-            {SITECONFIG.brand.name}
-          </span>
+          {SITECONFIG.brand.name}
         </Link>
 
         {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-8" role="menubar">
+        <div className="hidden md:flex items-center gap-10" role="menubar">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="text-[11px] tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors py-2 uppercase font-light"
+              className="text-[11px] tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors uppercase"
               role="menuitem"
             >
               {link.label}
             </Link>
           ))}
-        </div>
-
-        {/* Right Side */}
-        <div className="hidden md:flex items-center gap-4">
           <Link
             href="/access"
-            className="px-6 py-2.5 bg-foreground text-background text-[10px] tracking-[0.2em] hover:bg-foreground/90 transition-all duration-300 uppercase font-light"
+            className="text-[11px] tracking-[0.15em] text-foreground uppercase border-b border-foreground/30 hover:border-foreground transition-colors pb-0.5"
           >
             Account
           </Link>
         </div>
 
         {/* Mobile Menu Button */}
-        <div className="flex items-center gap-2 md:hidden">
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-2 text-muted-foreground hover:text-foreground"
-            aria-expanded={mobileOpen}
-            aria-controls={mobileMenuId}
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          >
-            {mobileOpen ? (
-              <X size={22} aria-hidden="true" />
-            ) : (
-              <Menu size={22} aria-hidden="true" />
-            )}
-          </button>
-        </div>
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="md:hidden p-2 text-muted-foreground hover:text-foreground transition-colors"
+          aria-expanded={mobileOpen}
+          aria-controls={mobileMenuId}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+        >
+          {mobileOpen ? (
+            <X size={20} aria-hidden="true" />
+          ) : (
+            <Menu size={20} aria-hidden="true" />
+          )}
+        </button>
       </div>
 
       {/* Mobile Menu */}
@@ -102,29 +94,28 @@ export function Nav() {
         <div
           id={mobileMenuId}
           ref={mobileMenuRef}
-          className="md:hidden bg-background border-t border-border px-6 sm:px-8 py-8 space-y-6"
+          className="md:hidden bg-background px-8 lg:px-16 py-12 space-y-8 border-t border-border/15"
           role="menu"
           aria-label="Mobile navigation"
         >
-          <div className="space-y-4" role="group" aria-label="Main links">
+          <div className="space-y-5">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setMobileOpen(false)}
-                className="block text-sm text-muted-foreground hover:text-foreground py-1 tracking-wide font-light"
+                className="block text-sm text-muted-foreground hover:text-foreground transition-colors tracking-wide"
                 role="menuitem"
               >
                 {link.label}
               </Link>
             ))}
           </div>
-
-          <div className="pt-6 border-t border-border" role="group" aria-label="Account">
+          <div className="pt-8 border-t border-border/15">
             <Link
               href="/access"
               onClick={() => setMobileOpen(false)}
-              className="block text-center px-6 py-3 bg-foreground text-background text-[11px] tracking-[0.2em] uppercase font-light"
+              className="text-sm text-foreground font-light tracking-wide"
               role="menuitem"
             >
               Account

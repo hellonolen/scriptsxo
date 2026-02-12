@@ -8,6 +8,8 @@
  * - Cookies (for middleware route protection)
  */
 
+import { SITECONFIG } from "@/lib/config";
+
 // Cookie names (must match middleware.ts)
 const SESSIONCOOKIE = "app_session";
 const ADMINCOOKIE = "app_admin";
@@ -149,6 +151,13 @@ export function isAuthenticated(): boolean {
 }
 
 /**
+ * Check if an email is in the admin whitelist
+ */
+export function isAdminEmail(email: string): boolean {
+  return SITECONFIG.auth.adminEmails.includes(email.toLowerCase());
+}
+
+/**
  * Check if user has admin privileges (client-side)
  */
 export function isAdmin(): boolean {
@@ -179,16 +188,23 @@ export function refreshSession(): void {
 }
 
 /**
- * Create a session object from auth data
+ * Create a session object from auth data.
+ * Automatically sets admin cookie if email is in the admin whitelist.
  */
 export function createSession(email: string, name?: string): Session {
   const now = Date.now();
-  return {
+  const session: Session = {
     email,
     name: name || email.split("@")[0],
     authenticatedAt: now,
     expiresAt: now + COOKIEMAXAGE * 1000,
   };
+
+  if (isAdminEmail(email)) {
+    setAdminCookie(createAdminSession(email));
+  }
+
+  return session;
 }
 
 /**

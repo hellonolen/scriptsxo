@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Fingerprint, ArrowRight, ShieldCheck } from "lucide-react";
+import { Fingerprint, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SITECONFIG } from "@/lib/config";
+import { createSession, setSessionCookie, isAdminEmail, createAdminSession, setAdminCookie } from "@/lib/auth";
 
 type AuthMode = "signin" | "register";
 
 export default function AccessPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -22,7 +25,16 @@ export default function AccessPage() {
     setError(null);
 
     try {
-      setError("Convex backend not connected yet. Passkey auth will work once deployed.");
+      // Create session and set cookie (passkey flow will replace this)
+      const session = createSession(email, name || undefined);
+      setSessionCookie(session);
+
+      // Auto-grant admin if email is in the whitelist
+      if (isAdminEmail(email)) {
+        setAdminCookie(createAdminSession(email));
+      }
+
+      router.push("/portal");
     } catch {
       setError("An error occurred. Please try again.");
     } finally {
@@ -32,55 +44,70 @@ export default function AccessPage() {
 
   return (
     <main className="min-h-screen flex">
-      {/* Left - Branding Panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#2C1810] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
+      {/* Left — Editorial Branding Panel */}
+      <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden bg-[#1E1037]">
+        <div className="absolute inset-0">
           <div
             className="absolute inset-0"
             style={{
-              backgroundImage: `radial-gradient(circle at 30% 40%, rgba(201, 169, 110, 0.3) 0%, transparent 60%),
-                               radial-gradient(circle at 70% 80%, rgba(201, 169, 110, 0.15) 0%, transparent 50%)`,
+              backgroundImage: `radial-gradient(ellipse at 20% 50%, rgba(124, 58, 237, 0.12) 0%, transparent 70%), radial-gradient(ellipse at 80% 80%, rgba(225, 29, 72, 0.06) 0%, transparent 70%)`,
             }}
           />
         </div>
-        <div className="relative z-10 flex flex-col justify-between p-16 w-full">
-          <div>
-            <Link href="/access" className="text-[#C9A96E] text-2xl tracking-[0.2em] font-light">
-              {SITECONFIG.brand.name}
-            </Link>
-          </div>
-          <div className="max-w-md">
-            <h1 className="text-4xl xl:text-5xl text-white/90 font-light leading-tight mb-6" style={{ fontFamily: "var(--font-heading)" }}>
-              Your prescriptions,{" "}
-              <span className="text-[#C9A96E] italic">effortlessly</span> managed.
+        <div className="relative z-10 flex flex-col justify-between p-16 xl:p-24 w-full">
+          <Link
+            href="/"
+            className="text-[13px] tracking-[0.35em] font-light uppercase"
+            style={{ color: "rgba(167, 139, 250, 0.7)" }}
+          >
+            {SITECONFIG.brand.name}
+          </Link>
+
+          <div className="max-w-lg">
+            <h1
+              className="text-5xl xl:text-[4.25rem] text-white/85 font-light leading-[1.08] tracking-[-0.02em]"
+              style={{ fontFamily: "var(--font-heading)" }}
+            >
+              Your prescriptions,
+              <br />
+              <em className="gradient-text-soft">effortlessly</em>
+              <br />
+              managed.
             </h1>
-            <p className="text-white/50 text-lg font-light leading-relaxed">
-              A private concierge experience for telehealth consultations
-              and prescription fulfillment.
+            <p className="text-white/50 text-base font-light leading-relaxed mt-10 max-w-sm">
+              A private concierge experience for telehealth consultations and
+              prescription fulfillment.
             </p>
           </div>
-          <div className="flex items-center gap-8 text-[10px] tracking-[0.25em] text-white/30 uppercase">
+
+          <div className="flex items-center gap-8 text-[10px] tracking-[0.25em] text-white/35 uppercase font-light">
             <span>HIPAA Secure</span>
-            <span className="w-px h-3 bg-white/20" />
+            <span className="w-5 h-px bg-white/10" />
             <span>Board Certified</span>
-            <span className="w-px h-3 bg-white/20" />
+            <span className="w-5 h-px bg-white/10" />
             <span>Encrypted</span>
           </div>
         </div>
       </div>
 
-      {/* Right - Auth Form */}
-      <div className="flex-1 flex items-center justify-center px-6 sm:px-12 py-16 bg-background">
+      {/* Right — Auth Form */}
+      <div className="flex-1 flex items-center justify-center px-8 sm:px-16 py-16 bg-background">
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
-          <div className="lg:hidden text-center mb-12">
-            <Link href="/access" className="text-foreground text-xl tracking-[0.2em] font-light">
+          <div className="lg:hidden mb-16">
+            <Link
+              href="/"
+              className="text-[13px] tracking-[0.35em] text-foreground font-light uppercase"
+            >
               {SITECONFIG.brand.name}
             </Link>
           </div>
 
-          <div className="mb-10">
-            <h2 className="text-3xl text-foreground mb-2" style={{ fontFamily: "var(--font-heading)" }}>
+          <div className="mb-12">
+            <h2
+              className="text-3xl lg:text-4xl font-light text-foreground tracking-[-0.02em] mb-3"
+              style={{ fontFamily: "var(--font-heading)" }}
+            >
               {mode === "signin" ? "Welcome back" : "Create account"}
             </h2>
             <p className="text-muted-foreground font-light">
@@ -90,7 +117,7 @@ export default function AccessPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {mode === "register" && (
               <Input
                 label="Full Name"
@@ -113,7 +140,7 @@ export default function AccessPage() {
             />
 
             {error && (
-              <div className="text-sm text-destructive bg-destructive/5 rounded-sm p-3 border border-destructive/10">
+              <div className="text-sm text-destructive/70 font-light bg-destructive/5 p-4">
                 {error}
               </div>
             )}
@@ -128,7 +155,7 @@ export default function AccessPage() {
                 <span className="spinner" />
               ) : (
                 <>
-                  <Fingerprint size={18} aria-hidden="true" />
+                  <Fingerprint size={16} aria-hidden="true" />
                   {mode === "signin"
                     ? "Sign In with Passkey"
                     : "Register with Passkey"}
@@ -137,7 +164,7 @@ export default function AccessPage() {
             </Button>
           </form>
 
-          <div className="mt-8 text-center">
+          <div className="mt-10">
             <button
               type="button"
               onClick={() => {
@@ -152,13 +179,13 @@ export default function AccessPage() {
             </button>
           </div>
 
-          <div className="mt-12 flex items-center justify-center gap-6 text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
-            <div className="flex items-center gap-1.5">
-              <ShieldCheck size={12} aria-hidden="true" />
+          <div className="mt-20 flex items-center gap-8 text-[10px] tracking-[0.25em] text-muted-foreground uppercase font-light">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={11} aria-hidden="true" />
               HIPAA
             </div>
-            <div className="flex items-center gap-1.5">
-              <Fingerprint size={12} aria-hidden="true" />
+            <div className="flex items-center gap-2">
+              <Fingerprint size={11} aria-hidden="true" />
               Passwordless
             </div>
           </div>

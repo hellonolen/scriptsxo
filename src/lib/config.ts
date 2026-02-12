@@ -26,6 +26,10 @@ export const SITECONFIG = {
     type: "Passkey" as const,
     sessionDays: 60,
     requireEmailVerification: false,
+    adminEmails: [
+      "hellonolen@gmail.com",
+      "nolen@doclish.com",
+    ],
   },
   billing: {
     provider: "Stripe" as const,

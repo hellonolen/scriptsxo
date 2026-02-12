@@ -17,10 +17,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const descriptionId = description ? `${inputId}-description` : undefined;
 
     const baseStyles =
-      "w-full px-4 py-3 bg-background border border-border rounded-md text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base";
+      "w-full px-0 py-3 bg-transparent border-0 border-b border-border/40 text-foreground placeholder-muted-foreground/30 focus:outline-none focus:border-foreground/40 transition-colors text-base font-light";
 
     const errorStyles = error
-      ? "border-destructive focus:ring-destructive focus:border-destructive"
+      ? "border-destructive/40 focus:border-destructive/60"
       : "";
 
     return (
@@ -28,18 +28,21 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-xs tracking-wider text-muted-foreground mb-2 uppercase"
+            className="block text-[10px] tracking-[0.25em] text-muted-foreground/50 mb-3 uppercase font-light"
           >
             {label}
             {props.required && (
-              <span className="text-destructive ml-1" aria-hidden="true">
+              <span className="text-destructive/50 ml-1" aria-hidden="true">
                 *
               </span>
             )}
           </label>
         )}
         {description && (
-          <p id={descriptionId} className="text-xs text-muted-foreground mb-2">
+          <p
+            id={descriptionId}
+            className="text-xs text-muted-foreground/40 mb-2 font-light"
+          >
             {description}
           </p>
         )}
@@ -55,7 +58,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && (
-          <p id={errorId} className="mt-2 text-sm text-destructive" role="alert">
+          <p
+            id={errorId}
+            className="mt-2 text-sm text-destructive/70 font-light"
+            role="alert"
+          >
             {error}
           </p>
         )}

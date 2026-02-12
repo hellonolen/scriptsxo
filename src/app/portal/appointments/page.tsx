@@ -1,89 +1,131 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { Calendar, ArrowLeft, Video, Clock } from "lucide-react";
-import { Nav } from "@/components/nav";
-import { Badge } from "@/components/ui/badge";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Appointments",
-  description: "View your upcoming and past telehealth appointments.",
+import { Video, Calendar, Clock, CheckCircle } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+
+/* ---------------------------------------------------------------------------
+   DATA
+   --------------------------------------------------------------------------- */
+
+const UPCOMING = {
+  title: "AI Consultation Follow-up",
+  date: "Feb 15, 2026",
+  time: "2:00 PM",
+  type: "Video Call",
 };
+
+const PAST_APPOINTMENTS = [
+  {
+    title: "AI Screening Consultation",
+    date: "Feb 7, 2026",
+    status: "Completed" as const,
+  },
+  {
+    title: "Initial Intake Review",
+    date: "Jan 20, 2026",
+    status: "Completed" as const,
+  },
+] as const;
+
+/* ---------------------------------------------------------------------------
+   PAGE
+   --------------------------------------------------------------------------- */
 
 export default function AppointmentsPage() {
   return (
-    <>
-      <Nav />
-      <main className="min-h-screen pt-24 pb-20 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-3 mb-8">
-            <Link href="/portal" className="text-muted-foreground hover:text-foreground">
-              <ArrowLeft size={20} aria-hidden="true" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tighter text-foreground">
-                Appointments
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Your upcoming and past consultations.
-              </p>
-            </div>
-          </div>
+    <AppShell>
+      <div className="p-6 lg:p-10 max-w-[1100px]">
 
-          {/* Upcoming */}
-          <h2 className="text-lg font-semibold text-foreground mb-4">Upcoming</h2>
-          <div className="bg-card border border-border rounded-lg p-6 mb-8">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Video size={22} className="text-primary" aria-hidden="true" />
+        {/* ---- HEADER ---- */}
+        <header className="mb-10">
+          <p className="eyebrow mb-2">Schedule</p>
+          <h1
+            className="text-3xl lg:text-4xl font-light text-foreground tracking-[-0.02em]"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            Your <span className="text-[#7C3AED]">Appointments</span>
+          </h1>
+        </header>
+
+        {/* ---- UPCOMING ---- */}
+        <section className="mb-10">
+          <p className="eyebrow mb-4 text-[#7C3AED]">Upcoming</p>
+
+          <div className="glass-card">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 flex items-center justify-center shrink-0" style={{ background: "rgba(124, 58, 237, 0.08)" }}>
+                  <Video size={20} className="text-[#7C3AED]" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-foreground">Follow-up Consultation</h3>
-                  <p className="text-sm text-muted-foreground">Dr. Martinez -- General Medicine</p>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                    <Calendar size={12} aria-hidden="true" />
-                    Feb 15, 2026
-                    <Clock size={12} aria-hidden="true" />
-                    2:00 PM EST
+                  <h3
+                    className="text-lg font-light text-foreground mb-1"
+                    style={{ fontFamily: "var(--font-heading)" }}
+                  >
+                    {UPCOMING.title}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground font-light">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Calendar size={13} aria-hidden="true" />
+                      {UPCOMING.date}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock size={13} aria-hidden="true" />
+                      {UPCOMING.time}
+                    </span>
                   </div>
+                  <span className="text-[9px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 text-[#0D6E8A] bg-[#0D6E8A]/8 inline-block mt-3">
+                    {UPCOMING.type}
+                  </span>
                 </div>
               </div>
-              <Badge variant="info">Scheduled</Badge>
             </div>
-            <div className="mt-4 pt-4 border-t border-border flex gap-3">
-              <button className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-[5px] hover:bg-primary/90 transition-colors">
+
+            {/* Actions */}
+            <div className="mt-6 pt-5 border-t border-border flex gap-3">
+              <button className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-[11px] tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(135deg, #7C3AED, #E11D48)" }}>
                 <Video size={14} aria-hidden="true" />
-                Join
+                Join Call
               </button>
-              <button className="inline-flex items-center gap-2 px-4 py-2 border border-border text-foreground text-sm rounded-[5px] hover:bg-muted transition-colors">
+              <button className="inline-flex items-center gap-2 px-5 py-2.5 border border-border text-foreground text-[11px] tracking-[0.15em] uppercase font-medium hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors">
                 Reschedule
               </button>
             </div>
           </div>
+        </section>
 
-          {/* Past */}
-          <h2 className="text-lg font-semibold text-foreground mb-4">Past Appointments</h2>
+        {/* ---- PAST ---- */}
+        <section>
+          <p className="eyebrow mb-4">Past</p>
+
           <div className="space-y-3">
-            {[
-              { date: "Feb 7, 2026", provider: "Dr. Johnson", type: "Urgent Care", status: "Completed" },
-              { date: "Jan 20, 2026", provider: "Dr. Martinez", type: "General Medicine", status: "Completed" },
-            ].map((appt, i) => (
-              <div key={i} className="bg-card border border-border rounded-lg p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-muted flex items-center justify-center">
-                    <Video size={14} className="text-muted-foreground" aria-hidden="true" />
+            {PAST_APPOINTMENTS.map((appt) => (
+              <div
+                key={appt.title}
+                className="glass-card flex items-center justify-between"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 bg-muted flex items-center justify-center shrink-0">
+                    <CheckCircle size={14} className="text-[#16A34A]" aria-hidden="true" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{appt.provider} -- {appt.type}</p>
-                    <p className="text-xs text-muted-foreground">{appt.date}</p>
+                    <p className="text-[14px] font-medium text-foreground">
+                      {appt.title}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground font-light">
+                      {appt.date}
+                    </p>
                   </div>
                 </div>
-                <Badge variant="success">{appt.status}</Badge>
+                <span className="text-[9px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 text-[#16A34A] bg-[#16A34A]/8">
+                  {appt.status}
+                </span>
               </div>
             ))}
           </div>
-        </div>
-      </main>
-    </>
+        </section>
+
+      </div>
+    </AppShell>
   );
 }
