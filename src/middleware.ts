@@ -20,16 +20,15 @@ const SECURITYHEADERS = {
   "X-Permitted-Cross-Domain-Policies": "none",
 };
 
-function getCSP(nonce: string): string {
-  const isProd = process.env.NODE_ENV === "production";
+function getCSP(): string {
   const directives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
-    `style-src 'self' 'nonce-${nonce}' 'unsafe-inline'`,
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: blob:",
-    "font-src 'self' data:",
+    "font-src 'self' data: https://fonts.gstatic.com",
     "media-src 'self'",
-    "connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://api.stripe.com",
+    "connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://api.stripe.com https://npiregistry.cms.hhs.gov https://api.phaxio.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -38,18 +37,11 @@ function getCSP(nonce: string): string {
   return directives.join("; ");
 }
 
-function generateNonce(): string {
-  const array = new Uint8Array(16);
-  crypto.getRandomValues(array);
-  return Buffer.from(array).toString("base64");
-}
-
-function applySecurityHeaders(response: NextResponse, nonce: string): void {
+function applySecurityHeaders(response: NextResponse): void {
   Object.entries(SECURITYHEADERS).forEach(([key, value]) => {
     response.headers.set(key, value);
   });
-  response.headers.set("Content-Security-Policy", getCSP(nonce));
-  response.headers.set("x-nonce", nonce);
+  response.headers.set("Content-Security-Policy", getCSP());
 
   if (process.env.NODE_ENV === "production") {
     response.headers.set(
@@ -120,8 +112,6 @@ function getSessionEmail(sessionCookie: string | undefined): string | null {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const nonce = generateNonce();
-
   // Skip middleware for static files and webhook endpoints
   if (
     pathname.startsWith("/_next") ||
@@ -130,7 +120,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/api/webhooks")
   ) {
     const response = NextResponse.next();
-    applySecurityHeaders(response, nonce);
+    applySecurityHeaders(response);
     return response;
   }
 
@@ -146,18 +136,18 @@ export function middleware(request: NextRequest) {
       loginUrl.searchParams.set("redirect", pathname);
       loginUrl.searchParams.set("reason", "auth_required");
       const response = NextResponse.redirect(loginUrl);
-      applySecurityHeaders(response, nonce);
+      applySecurityHeaders(response);
       return response;
     }
     if (!hasAdminAccess) {
       const portalUrl = new URL("/portal", request.url);
       portalUrl.searchParams.set("error", "admin_required");
       const response = NextResponse.redirect(portalUrl);
-      applySecurityHeaders(response, nonce);
+      applySecurityHeaders(response);
       return response;
     }
     const response = NextResponse.next();
-    applySecurityHeaders(response, nonce);
+    applySecurityHeaders(response);
     return response;
   }
 
@@ -167,11 +157,11 @@ export function middleware(request: NextRequest) {
       const loginUrl = new URL("/access", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       const response = NextResponse.redirect(loginUrl);
-      applySecurityHeaders(response, nonce);
+      applySecurityHeaders(response);
       return response;
     }
     const response = NextResponse.next();
-    applySecurityHeaders(response, nonce);
+    applySecurityHeaders(response);
     const email = getSessionEmail(sessionCookie);
     if (email) response.headers.set("x-user-email", email);
     return response;
@@ -183,11 +173,11 @@ export function middleware(request: NextRequest) {
       const loginUrl = new URL("/access", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       const response = NextResponse.redirect(loginUrl);
-      applySecurityHeaders(response, nonce);
+      applySecurityHeaders(response);
       return response;
     }
     const response = NextResponse.next();
-    applySecurityHeaders(response, nonce);
+    applySecurityHeaders(response);
     return response;
   }
 
@@ -197,11 +187,11 @@ export function middleware(request: NextRequest) {
       const loginUrl = new URL("/access", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       const response = NextResponse.redirect(loginUrl);
-      applySecurityHeaders(response, nonce);
+      applySecurityHeaders(response);
       return response;
     }
     const response = NextResponse.next();
-    applySecurityHeaders(response, nonce);
+    applySecurityHeaders(response);
     const email = getSessionEmail(sessionCookie);
     if (email) response.headers.set("x-user-email", email);
     return response;
@@ -215,17 +205,17 @@ export function middleware(request: NextRequest) {
       const response = NextResponse.redirect(
         new URL(redirectTo, request.url)
       );
-      applySecurityHeaders(response, nonce);
+      applySecurityHeaders(response);
       return response;
     }
     const response = NextResponse.next();
-    applySecurityHeaders(response, nonce);
+    applySecurityHeaders(response);
     return response;
   }
 
   // Public routes
   const response = NextResponse.next();
-  applySecurityHeaders(response, nonce);
+  applySecurityHeaders(response);
   return response;
 }
 
