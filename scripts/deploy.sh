@@ -79,13 +79,15 @@ if [ "$CONVEX_ONLY" = false ]; then
   log "Building Next.js for Cloudflare Pages..."
   CLOUDFLARE_PAGES=true npx @cloudflare/next-on-pages
 
+  # NOTE: .vercel/output/static is @cloudflare/next-on-pages internal build dir.
+  # This is NOT a Vercel dependency. We deploy to Cloudflare Pages ONLY.
   if [ ! -d ".vercel/output/static" ]; then
     fail "Build output not found at .vercel/output/static"
   fi
   ok "Build complete"
 
   log "Deploying to Cloudflare Pages..."
-  npx wrangler pages deploy .vercel/output/static --project-name scriptsxo
+  npx wrangler pages deploy .vercel/output/static --project-name scriptsxo --commit-dirty=true
   ok "Deployed to Cloudflare Pages"
 fi
 

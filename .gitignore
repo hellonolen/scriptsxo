@@ -123,7 +123,10 @@ next-env.d.ts
 .dev.vars
 
 # ==============================================================================
-# Vercel (banned - use Cloudflare)
+# Cloudflare Pages build output
+# @cloudflare/next-on-pages uses .vercel/output/static as its build dir.
+# This is NOT a Vercel dependency — it's Cloudflare's internal convention.
+# BANNED: Vercel, Netlify, Railway, Render. Cloudflare Pages ONLY.
 # ==============================================================================
 .vercel/
 

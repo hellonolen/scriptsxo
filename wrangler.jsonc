@@ -5,6 +5,8 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	// NOTE: This path is @cloudflare/next-on-pages internal convention, NOT a Vercel dependency.
+	// Cloudflare's tool outputs here. We do NOT use or deploy to Vercel.
 	"pages_build_output_dir": ".vercel/output/static",
 	"vars": {
 		"NEXT_PUBLIC_CONVEX_URL": "https://striped-caribou-797.convex.cloud",
