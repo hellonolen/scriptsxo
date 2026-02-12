@@ -146,13 +146,13 @@ export default function AdminProvidersPage() {
               placeholder="Search by name, NPI, or email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-background border border-border/70 rounded-md text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-border rounded-md text-sm text-foreground placeholder-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50"
             />
           </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2.5 bg-background border border-border/70 rounded-md text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+            className="px-4 py-2.5 bg-white border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -285,7 +285,7 @@ export default function AdminProvidersPage() {
                     <select
                       value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
-                      className="w-full px-0 py-3 bg-transparent border-0 border-b border-border/70 text-foreground focus:outline-none focus:border-foreground/40 transition-colors text-base font-light"
+                      className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors text-base font-light"
                     >
                       <option value="MD">MD - Doctor of Medicine</option>
                       <option value="DO">DO - Doctor of Osteopathy</option>

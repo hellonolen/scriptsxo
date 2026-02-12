@@ -79,7 +79,7 @@ export default function AdminFaxLogsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2.5 bg-background border border-border/70 rounded-md text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+            className="px-4 py-2.5 bg-white border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50"
           >
             <option value="all">All Statuses</option>
             <option value="queued">Queued</option>

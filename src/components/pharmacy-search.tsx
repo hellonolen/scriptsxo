@@ -69,7 +69,7 @@ export function PharmacySearch({ onSelect, className = "" }: PharmacySearchProps
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="w-full pl-9 pr-4 py-2.5 bg-background border border-border/70 rounded-md text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            className="w-full pl-9 pr-4 py-2.5 bg-white border border-border rounded-md text-sm text-foreground placeholder-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50"
           />
         </div>
         <input
@@ -77,14 +77,14 @@ export function PharmacySearch({ onSelect, className = "" }: PharmacySearchProps
           placeholder="State (FL)"
           value={state}
           onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
-          className="w-20 px-3 py-2.5 bg-background border border-border/70 rounded-md text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30 text-center"
+          className="w-20 px-3 py-2.5 bg-white border border-border rounded-md text-sm text-foreground placeholder-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 text-center"
         />
         <input
           type="text"
           placeholder="ZIP"
           value={zip}
           onChange={(e) => setZip(e.target.value.slice(0, 5))}
-          className="w-24 px-3 py-2.5 bg-background border border-border/70 rounded-md text-sm text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30 text-center"
+          className="w-24 px-3 py-2.5 bg-white border border-border rounded-md text-sm text-foreground placeholder-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 text-center"
         />
         <Button onClick={handleSearch} disabled={searching} size="sm">
           {searching ? "Searching..." : "Search"}

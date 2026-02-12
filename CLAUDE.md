@@ -19,6 +19,9 @@ Nolen (hellonolen@gmail.com, nolen@doclish.com)
 - Glassmorphism cards with backdrop-blur.
 - Use CSS classes (.gradient-text, .glass-card, etc.) instead of inline styles for backgrounds and gradients — Tailwind v4 layer system overrides inline styles.
 - Fonts: DM Sans (body), Playfair Display (headings). Use CSS variables (--font-dm-sans, --font-playfair).
+- INPUTS MUST BE VISIBLE: Full border (not bottom-only), solid opacity (no /30 /40 /50 on borders), white background, rounded-md, focus ring. Users must never feel lost looking for where to type. No invisible or ghost inputs.
+- Labels must be readable: text-xs font-medium text-muted-foreground. No /50 or /70 opacity on labels.
+- Placeholders at minimum /60 opacity. No lower.
 
 ## Tech Stack
 - Framework: Next.js 15+ (App Router)
