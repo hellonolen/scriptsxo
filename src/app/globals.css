@@ -1,0 +1,1057 @@
+@import "tailwindcss";
+
+@theme {
+  /* ==========================================================================
+     BRAND COLORS - ScriptsXO Luxury Concierge
+     Primary: Rich Espresso (#2C1810) - Luxury, grounded
+     Accent: Champagne Gold (#C9A96E) - Warmth, premium
+     ========================================================================== */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-muted: var(--brand-muted);
+  --color-brand-hover: var(--brand-hover);
+
+  /* Accent color (Champagne Gold) */
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-secondary-foreground: var(--brand-secondary-foreground);
+  --color-brand-secondary-muted: var(--brand-secondary-muted);
+  --color-brand-secondary-hover: var(--brand-secondary-hover);
+
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, -apple-system, blinkmacsystemfont, "Segoe UI", roboto, "Helvetica Neue", arial, "Noto Sans", sans-serif;
+  --font-heading: var(--font-playfair), Georgia, "Times New Roman", serif;
+
+  /* Theme Mapping for Tailwind 4 Utilities */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /* Chart colors for data visualization */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar colors */
+  --color-sidebar-background: var(--sidebar-background);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* ==============================================================================
+   CSS Variables - Light Mode (Default)
+   ============================================================================== */
+
+:root {
+  /* ==========================================================================
+     BRAND COLORS - Luxury Concierge Palette
+     Primary: Rich Espresso (#2C1810) - Deep, luxurious
+     Accent: Champagne Gold (#C9A96E) - Warm, premium
+     ========================================================================== */
+  --brand: #2C1810;
+  --brand-foreground: #FAF8F5;
+  --brand-muted: rgba(44, 24, 16, 0.08);
+  --brand-hover: #1A0E09;
+
+  /* Champagne Gold accent */
+  --brand-secondary: #C9A96E;
+  --brand-secondary-foreground: #2C1810;
+  --brand-secondary-muted: rgba(201, 169, 110, 0.15);
+  --brand-secondary-hover: #B8944F;
+
+  /* Light Mode - Warm cream, luxurious, editorial */
+  --background: #FAF8F5;
+  --foreground: #2C1810;
+
+  --card: #FFFFFF;
+  --card-foreground: #2C1810;
+
+  --popover: #FFFFFF;
+  --popover-foreground: #2C1810;
+
+  /* Primary - Deep espresso for buttons and CTAs */
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+
+  --secondary: #F5F0EA;
+  --secondary-foreground: #2C1810;
+
+  --muted: #F0EBE3;
+  --muted-foreground: #8B7E74;
+
+  /* Accent - Champagne gold highlights */
+  --accent: var(--brand-secondary-muted);
+  --accent-foreground: var(--brand-secondary);
+
+  --destructive: #C53030;
+  --destructive-foreground: #FAF8F5;
+
+  --border: #E8E0D6;
+  --input: #E8E0D6;
+  --ring: var(--brand-secondary);
+
+  --radius: 0.375rem;
+
+  /* Status colors - warm toned */
+  --success: #2D6A4F;
+  --success-foreground: #FAF8F5;
+  --warning: #B8860B;
+  --warning-foreground: #2C1810;
+  --info: #C9A96E;
+  --info-foreground: #2C1810;
+
+  /* Chart colors - sophisticated palette */
+  --chart-1: #C9A96E;
+  --chart-2: #2D6A4F;
+  --chart-3: #8B6F47;
+  --chart-4: #6B4C3B;
+  --chart-5: #C53030;
+
+  /* Sidebar colors */
+  --sidebar-background: #F5F0EA;
+  --sidebar-foreground: #6B5B50;
+  --sidebar-primary: #2C1810;
+  --sidebar-primary-foreground: #FAF8F5;
+  --sidebar-accent: #F0EBE3;
+  --sidebar-accent-foreground: #2C1810;
+  --sidebar-border: #E8E0D6;
+  --sidebar-ring: #C9A96E;
+}
+
+/* ==============================================================================
+   CSS Variables - Dark Mode
+   ============================================================================== */
+
+.dark {
+  /* Luxury dark mode - warm and rich */
+  --brand: #D4B896;
+  --brand-foreground: #1A100A;
+  --brand-muted: rgba(212, 184, 150, 0.15);
+  --brand-hover: #E5CDB0;
+
+  --brand-secondary: #C9A96E;
+  --brand-secondary-foreground: #1A100A;
+  --brand-secondary-muted: rgba(201, 169, 110, 0.15);
+  --brand-secondary-hover: #D4B87E;
+
+  --background: #1A100A;
+  --foreground: #F5F0EA;
+
+  --card: #251A12;
+  --card-foreground: #F5F0EA;
+
+  --popover: #251A12;
+  --popover-foreground: #F5F0EA;
+
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+
+  --secondary: #2E1E14;
+  --secondary-foreground: #F5F0EA;
+
+  --muted: #2E1E14;
+  --muted-foreground: #A89888;
+
+  --accent: var(--brand-muted);
+  --accent-foreground: var(--brand);
+
+  --destructive: #E53E3E;
+  --destructive-foreground: #F5F0EA;
+
+  --border: #3D2A1E;
+  --input: #2E1E14;
+  --ring: var(--brand-secondary);
+
+  --success: #48BB78;
+  --success-foreground: #F5F0EA;
+  --warning: #D69E2E;
+  --warning-foreground: #F5F0EA;
+  --info: #C9A96E;
+  --info-foreground: #F5F0EA;
+
+  --chart-1: #C9A96E;
+  --chart-2: #48BB78;
+  --chart-3: #D4B896;
+  --chart-4: #D69E2E;
+  --chart-5: #FC8181;
+
+  --sidebar-background: #251A12;
+  --sidebar-foreground: #C4B5A5;
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: #1A100A;
+  --sidebar-accent: var(--brand-muted);
+  --sidebar-accent-foreground: var(--brand);
+  --sidebar-border: #2E1E14;
+  --sidebar-ring: var(--brand-secondary);
+}
+
+/* ==============================================================================
+   Base Styles
+   ============================================================================== */
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-size: 18px;
+    @apply scroll-smooth;
+  }
+
+  @media (min-width: 768px) {
+    html {
+      font-size: 16px;
+    }
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Improved focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Selection styling */
+  ::selection {
+    @apply bg-primary/20 text-foreground;
+  }
+
+  /* Hide horizontal scrollbars */
+  html {
+    overflow-x: hidden;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Webkit scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 0px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--background);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--background);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--background) var(--background);
+  }
+}
+
+/* ==============================================================================
+   Typography
+   ============================================================================== */
+
+@layer base {
+  h1,
+  h2,
+  h3 {
+    @apply text-balance;
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    @apply scroll-m-20 text-4xl font-medium lg:text-5xl;
+  }
+
+  h2 {
+    @apply scroll-m-20 text-3xl font-medium first:mt-0;
+  }
+
+  h3 {
+    @apply scroll-m-20 text-2xl font-medium;
+  }
+
+  h4 {
+    @apply scroll-m-20 text-xl font-medium;
+    font-family: var(--font-heading);
+  }
+
+  p {
+    @apply text-pretty leading-relaxed text-base;
+  }
+
+  p:not(:first-child) {
+    @apply mt-6;
+  }
+
+  blockquote {
+    @apply mt-6 border-l-2 pl-6 italic;
+  }
+
+  code {
+    @apply relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold;
+  }
+
+  pre {
+    @apply mb-4 mt-6 overflow-x-auto rounded-lg border bg-black py-4;
+  }
+
+  pre code {
+    @apply bg-transparent p-0;
+  }
+
+  .text-sm {
+    font-size: 0.9375rem;
+  }
+
+  .text-xs {
+    font-size: 0.8125rem;
+  }
+
+  @media (min-width: 768px) {
+    .text-sm {
+      font-size: 0.875rem;
+    }
+    .text-xs {
+      font-size: 0.75rem;
+    }
+  }
+}
+
+/* ==============================================================================
+   Component Utilities
+   ============================================================================== */
+
+@layer components {
+  /* Glass morphism effect */
+  .glass {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-sm;
+  }
+
+  .dark .glass {
+    @apply bg-black/50 backdrop-blur-md border border-white/10 shadow-sm;
+  }
+
+  /* Section wrapper */
+  .section {
+    @apply relative w-full px-5 py-20 md:py-32 lg:py-48 max-w-7xl mx-auto;
+  }
+
+  /* Card surface */
+  .surface {
+    @apply rounded-2xl md:rounded-3xl border border-border bg-card p-6 md:p-12 shadow-sm transition-all;
+  }
+
+  /* Card with hover effect */
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
+  }
+
+  /* Layout Utilities */
+  .layout-stack {
+    @apply flex flex-col gap-8 md:gap-16 lg:gap-24;
+  }
+
+  .layout-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-12;
+  }
+
+  .layout-flex {
+    @apply flex flex-col md:flex-row items-center gap-8 md:gap-16;
+  }
+
+  /* Container with responsive padding */
+  .container-custom {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent;
+  }
+
+  /* Link styles */
+  .link {
+    @apply text-primary underline-offset-4 hover:underline;
+  }
+
+  /* Button gradient */
+  .btn-gradient {
+    @apply bg-gradient-to-r from-primary to-primary/80 text-primary-foreground;
+  }
+
+  /* Badge styles */
+  .badge-success {
+    @apply bg-green-500/15 text-green-600;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-500/15 text-yellow-600;
+  }
+
+  .badge-error {
+    @apply bg-red-500/15 text-red-600;
+  }
+
+  .badge-info {
+    @apply bg-blue-500/15 text-blue-600;
+  }
+
+  /* Form input focus ring */
+  .input-focus {
+    @apply focus:border-primary focus:ring-2 focus:ring-primary/20;
+  }
+
+  /* Prose styles for rich text content */
+  .prose-custom {
+    @apply max-w-none text-foreground leading-7;
+  }
+
+  .prose-custom :where(h1, h2, h3, h4, h5, h6) {
+    @apply font-semibold tracking-tight text-foreground;
+  }
+
+  .prose-custom :where(p) {
+    @apply my-4;
+  }
+
+  .prose-custom :where(a) {
+    @apply text-primary no-underline hover:underline;
+  }
+
+  .prose-custom :where(code) {
+    @apply rounded bg-muted px-1 py-0.5;
+  }
+
+  .prose-custom :where(pre) {
+    @apply bg-neutral-900 text-neutral-100 p-4 rounded-lg overflow-x-auto;
+  }
+
+  .prose-custom :where(ul, ol) {
+    @apply my-4 pl-6;
+  }
+
+  .prose-custom :where(li) {
+    @apply my-2;
+  }
+
+  .prose-custom :where(blockquote) {
+    @apply border-l-4 border-muted pl-4 italic;
+  }
+
+  /* Dashboard card */
+  .dashboard-card {
+    @apply rounded-lg border bg-card p-6 shadow-sm;
+  }
+
+  /* Stats card */
+  .stats-card {
+    @apply flex flex-col gap-2 rounded-sm border bg-card p-6;
+  }
+
+  .stats-card-value {
+    @apply text-2xl tracking-tight;
+    font-family: var(--font-heading);
+    font-weight: 500;
+  }
+
+  .stats-card-label {
+    @apply text-xs text-muted-foreground tracking-widest uppercase;
+  }
+
+  /* Avatar placeholder */
+  .avatar-placeholder {
+    @apply flex items-center justify-center rounded-full bg-muted text-muted-foreground font-medium;
+  }
+
+  /* Divider with text */
+  .divider-text {
+    @apply flex items-center gap-4;
+  }
+
+  .divider-text::before,
+  .divider-text::after {
+    content: "";
+    @apply flex-1 border-t border-border;
+  }
+}
+
+/* ==============================================================================
+   Utility Classes
+   ============================================================================== */
+
+@layer utilities {
+  /* Hide scrollbar but allow scrolling */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Custom scrollbar */
+  .scrollbar-custom {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-thumb {
+    @apply rounded-full;
+    background: color-mix(in srgb, var(--muted-foreground) 30%, transparent);
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted-foreground) 50%, transparent);
+  }
+
+  /* Text balance for better typography */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Text pretty for better line breaks */
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Truncate with multiple lines */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-4 {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Animation delays */
+  .animation-delay-150 {
+    animation-delay: 150ms;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+
+  .animation-delay-700 {
+    animation-delay: 700ms;
+  }
+
+  .animation-delay-1000 {
+    animation-delay: 1000ms;
+  }
+
+  /* Aspect ratios */
+  .aspect-video {
+    aspect-ratio: 16 / 9;
+  }
+
+  .aspect-square {
+    aspect-ratio: 1 / 1;
+  }
+
+  .aspect-portrait {
+    aspect-ratio: 3 / 4;
+  }
+
+  .aspect-wide {
+    aspect-ratio: 21 / 9;
+  }
+
+  /* Safe area insets for mobile */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* No tap highlight on mobile */
+  .no-tap-highlight {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* GPU acceleration */
+  .gpu {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  /* Full bleed for breaking out of containers */
+  .full-bleed {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+  }
+
+  /* Visually hidden but accessible to screen readers */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .not-sr-only {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+}
+
+/* ==============================================================================
+   Animations
+   ============================================================================== */
+
+@layer utilities {
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-in-out;
+  }
+
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.4s ease-out;
+  }
+
+  @keyframes fade-in-down {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-in-down {
+    animation: fade-in-down 0.4s ease-out;
+  }
+
+  @keyframes fade-in-left {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .animate-fade-in-left {
+    animation: fade-in-left 0.4s ease-out;
+  }
+
+  @keyframes fade-in-right {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .animate-fade-in-right {
+    animation: fade-in-right 0.4s ease-out;
+  }
+
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.2s ease-out;
+  }
+
+  @keyframes slide-in-right {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right 0.3s ease-out;
+  }
+
+  @keyframes slide-in-left {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+
+  .animate-slide-in-left {
+    animation: slide-in-left 0.3s ease-out;
+  }
+
+  @keyframes slide-in-bottom {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .animate-slide-in-bottom {
+    animation: slide-in-bottom 0.3s ease-out;
+  }
+
+  @keyframes slide-in-top {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+  }
+
+  .animate-slide-in-top {
+    animation: slide-in-top 0.3s ease-out;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes bounce-subtle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+
+  .animate-bounce-subtle {
+    animation: bounce-subtle 2s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--muted) 0%,
+      color-mix(in srgb, var(--muted-foreground) 10%, transparent) 50%,
+      var(--muted) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  .animate-spin-slow {
+    animation: spin 3s linear infinite;
+  }
+
+  @keyframes ping-subtle {
+    75%, 100% { transform: scale(1.5); opacity: 0; }
+  }
+
+  .animate-ping-subtle {
+    animation: ping-subtle 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-3deg); }
+    50% { transform: rotate(3deg); }
+  }
+
+  .animate-wiggle {
+    animation: wiggle 0.3s ease-in-out;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+}
+
+/* ==============================================================================
+   Print Styles
+   ============================================================================== */
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    @apply bg-white text-black;
+  }
+
+  a {
+    @apply text-black underline;
+  }
+
+  .print-break-before {
+    page-break-before: always;
+  }
+
+  .print-break-after {
+    page-break-after: always;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid;
+  }
+}
+
+/* ==============================================================================
+   Accessibility
+   ============================================================================== */
+
+@layer utilities {
+  .skip-link {
+    @apply sr-only;
+  }
+
+  .skip-link:focus {
+    @apply not-sr-only absolute top-4 left-4 z-50 rounded bg-primary px-4 py-2 text-primary-foreground;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  @media (prefers-contrast: high) {
+    :root {
+      --border: #000000;
+    }
+
+    .dark {
+      --border: #ffffff;
+    }
+  }
+}
+
+/* ==============================================================================
+   Third-party Component Overrides
+   ============================================================================== */
+
+/* Stripe Elements overrides */
+.StripeElement {
+  @apply rounded-md border border-input bg-background px-3 py-2;
+}
+
+.StripeElement--focus {
+  @apply border-primary ring-2;
+  --tw-ring-color: color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.StripeElement--invalid {
+  border-color: var(--destructive);
+}
+
+/* ==============================================================================
+   Loading States
+   ============================================================================== */
+
+@layer components {
+  .skeleton {
+    @apply rounded bg-muted;
+    background: linear-gradient(
+      90deg,
+      var(--muted) 0%,
+      color-mix(in srgb, var(--muted-foreground) 10%, transparent) 50%,
+      var(--muted) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  .spinner {
+    @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent;
+  }
+
+  .spinner-lg {
+    @apply h-8 w-8;
+  }
+
+  .progress-bar {
+    @apply h-2 w-full overflow-hidden rounded-full bg-muted;
+  }
+
+  .progress-bar-fill {
+    @apply h-full bg-primary transition-all duration-300;
+  }
+
+  .loading-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm;
+  }
+}
+
+/* ==============================================================================
+   Form Enhancements
+   ============================================================================== */
+
+@layer components {
+  .form-group {
+    @apply space-y-2;
+  }
+
+  .form-label {
+    @apply text-sm font-medium leading-none;
+  }
+
+  .form-label-required::after {
+    content: " *";
+    @apply text-destructive;
+  }
+
+  .form-description {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .form-error {
+    @apply text-sm text-destructive;
+  }
+
+  .input-with-icon {
+    @apply relative;
+  }
+
+  .input-with-icon input {
+    @apply pl-10;
+  }
+
+  .input-with-icon .input-icon {
+    @apply absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground;
+  }
+}
+
+/* ==============================================================================
+   Table Styles
+   ============================================================================== */
+
+@layer components {
+  .table-container {
+    @apply overflow-x-auto rounded-lg border;
+  }
+
+  .table-custom {
+    @apply w-full caption-bottom text-sm;
+  }
+
+  .table-custom thead {
+    @apply border-b bg-muted/50;
+  }
+
+  .table-custom th {
+    @apply h-12 px-4 text-left align-middle font-medium text-muted-foreground;
+  }
+
+  .table-custom tbody tr {
+    @apply border-b transition-colors hover:bg-muted/50;
+  }
+
+  .table-custom td {
+    @apply p-4 align-middle;
+  }
+
+  .table-custom tfoot {
+    @apply border-t bg-muted/50 font-medium;
+  }
+}
+
+/* ==============================================================================
+   Empty States
+   ============================================================================== */
+
+@layer components {
+  .empty-state {
+    @apply flex flex-col items-center justify-center gap-4 py-12 text-center;
+  }
+
+  .empty-state-icon {
+    @apply h-12 w-12 text-muted-foreground;
+  }
+
+  .empty-state-title {
+    @apply text-lg font-semibold;
+  }
+
+  .empty-state-description {
+    @apply text-sm text-muted-foreground max-w-sm;
+  }
+}

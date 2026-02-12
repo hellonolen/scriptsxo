@@ -1,0 +1,46 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": ".open-next/worker.js",
+	"name": "scriptsxo",
+	"workers_dev": true,
+	"vars": {
+		// Convex deployment URL (set after provisioning)
+		// "NEXT_PUBLIC_CONVEX_URL": "https://your-deployment.convex.cloud",
+		// "CONVEX_SITE_URL": "https://your-deployment.convex.site"
+	},
+	"compatibility_date": "2026-02-12",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	// Custom domain routes (uncomment when domain is configured)
+	// "routes": [
+	// 	{
+	// 		"pattern": "scriptsxo.com",
+	// 		"custom_domain": true
+	// 	},
+	// 	{
+	// 		"pattern": "www.scriptsxo.com",
+	// 		"custom_domain": true
+	// 	}
+	// ],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			// Self-reference service binding, the service name must match the worker name
+			// see https://opennext.js.org/cloudflare/caching
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "scriptsxo"
+		}
+	],
+	"r2_buckets": [
+		// Incremental cache for Next.js
+		{
+			"binding": "NEXT_INC_CACHE_R2_BUCKET",
+			"bucket_name": "scriptsxo-cache"
+		}
+	]
+}
