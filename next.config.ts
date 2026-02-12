@@ -4,8 +4,8 @@ import type { NextConfig } from "next";
  * NEXT.JS CONFIGURATION
  * ScriptsXO - Telehealth Prescription Fulfillment Platform
  *
- * Deployment: Cloudflare Workers via OpenNext
- * NOT compatible with: Vercel (banned)
+ * Deployment: Cloudflare Pages via @cloudflare/next-on-pages
+ * Storage: Cloudflare R2 (scriptsxo-assets bucket)
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
