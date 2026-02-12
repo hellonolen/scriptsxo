@@ -109,4 +109,34 @@ http.route({
   }),
 });
 
+/**
+ * Phaxio fax delivery callback endpoint.
+ * Receives status updates when faxes are sent/failed/confirmed.
+ */
+http.route({
+  path: "/phaxio-callback",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const body = await request.text();
+
+    try {
+      const data = JSON.parse(body);
+      const faxId = data.fax?.id?.toString();
+      const success = data.success;
+      const message = data.message;
+
+      if (faxId) {
+        // Look up fax log by phaxioFaxId and update status
+        // This will be handled by the faxLogs.updateStatus mutation
+        console.log(`[SXO-FAX] Phaxio callback: faxId=${faxId}, success=${success}, message=${message}`);
+      }
+
+      return new Response("OK", { status: 200 });
+    } catch (err) {
+      console.error("[SXO-FAX] Error processing Phaxio callback:", err);
+      return new Response("Processing error", { status: 500 });
+    }
+  }),
+});
+
 export default http;

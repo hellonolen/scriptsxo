@@ -17,7 +17,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const descriptionId = description ? `${inputId}-description` : undefined;
 
     const baseStyles =
-      "w-full px-0 py-3 bg-transparent border-0 border-b border-border/40 text-foreground placeholder-muted-foreground/30 focus:outline-none focus:border-foreground/40 transition-colors text-base font-light";
+      "w-full px-0 py-3 bg-transparent border-0 border-b border-border/70 text-foreground placeholder-muted-foreground/50 focus:outline-none focus:border-foreground/40 transition-colors text-base font-light";
 
     const errorStyles = error
       ? "border-destructive/40 focus:border-destructive/60"
@@ -28,7 +28,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-[10px] tracking-[0.25em] text-muted-foreground/50 mb-3 uppercase font-light"
+            className="block text-[10px] tracking-[0.25em] text-muted-foreground/70 mb-3 uppercase font-light"
           >
             {label}
             {props.required && (

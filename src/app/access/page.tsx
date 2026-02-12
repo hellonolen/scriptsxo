@@ -186,7 +186,7 @@ export default function AccessPage() {
             </div>
             <div className="flex items-center gap-2">
               <Fingerprint size={11} aria-hidden="true" />
-              Passwordless
+              Passkey
             </div>
           </div>
         </div>

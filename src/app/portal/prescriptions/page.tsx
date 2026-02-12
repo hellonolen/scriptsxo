@@ -1,10 +1,12 @@
 "use client";
 
-import { Pill, RefreshCw, Plus } from "lucide-react";
+import { useState } from "react";
+import { Pill, RefreshCw, Plus, FileDown, Send } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Badge } from "@/components/ui/badge";
 
 /* ---------------------------------------------------------------------------
-   DATA
+   DATA — placeholder until Convex patient data is connected
    --------------------------------------------------------------------------- */
 
 const PRESCRIPTIONS = [
@@ -16,6 +18,7 @@ const PRESCRIPTIONS = [
     refillDate: "Mar 8",
     screening: "AI-screened",
     pharmacy: "Alto Pharmacy",
+    faxStatus: "Sent",
   },
   {
     name: "Spironolactone",
@@ -25,6 +28,7 @@ const PRESCRIPTIONS = [
     refillDate: "Mar 22",
     screening: "AI-screened",
     pharmacy: "Alto Pharmacy",
+    faxStatus: "Confirmed",
   },
   {
     name: "Finasteride",
@@ -34,6 +38,7 @@ const PRESCRIPTIONS = [
     refillDate: "Feb 28",
     screening: "AI screening in progress",
     pharmacy: "—",
+    faxStatus: "—",
   },
 ] as const;
 
@@ -47,11 +52,26 @@ function statusClasses(status: string) {
   return "text-muted-foreground bg-muted";
 }
 
+function faxBadgeVariant(status: string) {
+  if (status === "Sent") return "info" as const;
+  if (status === "Confirmed") return "success" as const;
+  return "secondary" as const;
+}
+
 /* ---------------------------------------------------------------------------
    PAGE
    --------------------------------------------------------------------------- */
 
 export default function PrescriptionsPage() {
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const handleDownloadPdf = async (rxName: string) => {
+    setDownloading(rxName);
+    // TODO: Connect to Convex action api.actions.generatePrescriptionPdf.generate
+    // once patient auth provides a real prescriptionId
+    setTimeout(() => setDownloading(null), 1500);
+  };
+
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1100px]">
@@ -66,8 +86,11 @@ export default function PrescriptionsPage() {
             >
               Your <span className="text-[#7C3AED]">Prescriptions</span>
             </h1>
+            <p className="text-sm text-muted-foreground font-light mt-2">
+              Managed by ScriptsXO Telehealth
+            </p>
           </div>
-          <button className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-[11px] tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity self-start sm:self-auto" style={{ background: "linear-gradient(135deg, #7C3AED, #E11D48)" }}>
+          <button className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-[11px] tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity self-start sm:self-auto" style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}>
             <Plus size={14} aria-hidden="true" />
             Request New Prescription
           </button>
@@ -117,17 +140,37 @@ export default function PrescriptionsPage() {
                   <span className="text-muted-foreground">Pharmacy</span>
                   <span className="text-foreground font-light">{rx.pharmacy}</span>
                 </div>
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="text-muted-foreground">Fax Status</span>
+                  {rx.faxStatus !== "—" ? (
+                    <Badge variant={faxBadgeVariant(rx.faxStatus)} className="text-[9px] px-2 py-0.5">
+                      {rx.faxStatus}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground/50 font-light">—</span>
+                  )}
+                </div>
               </div>
 
-              {/* Refill CTA */}
-              {rx.status === "Active" && (
-                <div className="pt-4 border-t border-border">
-                  <button className="flex items-center gap-2 text-[10px] tracking-[0.12em] uppercase text-muted-foreground group-hover:text-[#7C3AED] transition-colors">
-                    <RefreshCw size={12} aria-hidden="true" />
-                    Request Refill
-                  </button>
-                </div>
-              )}
+              {/* Actions */}
+              <div className="pt-4 border-t border-border flex items-center gap-4">
+                {rx.status === "Active" && (
+                  <>
+                    <button
+                      onClick={() => handleDownloadPdf(rx.name)}
+                      disabled={downloading === rx.name}
+                      className="flex items-center gap-2 text-[10px] tracking-[0.12em] uppercase text-muted-foreground hover:text-[#7C3AED] transition-colors disabled:opacity-50"
+                    >
+                      <FileDown size={12} aria-hidden="true" />
+                      {downloading === rx.name ? "Generating..." : "Download PDF"}
+                    </button>
+                    <button className="flex items-center gap-2 text-[10px] tracking-[0.12em] uppercase text-muted-foreground group-hover:text-[#7C3AED] transition-colors">
+                      <RefreshCw size={12} aria-hidden="true" />
+                      Request Refill
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>

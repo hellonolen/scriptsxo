@@ -442,4 +442,24 @@ export default defineSchema({
   })
     .index("by_ownerId", ["ownerId"])
     .index("by_purpose", ["purpose"]),
+
+  // === FAX LOGS ===
+  faxLogs: defineTable({
+    prescriptionId: v.id("prescriptions"),
+    pharmacyId: v.id("pharmacies"),
+    faxNumber: v.string(),
+    status: v.string(), // "queued" | "sending" | "sent" | "failed" | "confirmed"
+    phaxioFaxId: v.optional(v.string()),
+    pdfStorageId: v.optional(v.string()),
+    pages: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+    attempts: v.number(),
+    sentAt: v.optional(v.number()),
+    confirmedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_prescriptionId", ["prescriptionId"])
+    .index("by_pharmacyId", ["pharmacyId"])
+    .index("by_status", ["status"])
+    .index("by_createdAt", ["createdAt"]),
 });

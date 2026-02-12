@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Zap,
+  Users,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { SITECONFIG } from "@/lib/config";
@@ -30,7 +31,10 @@ const PATIENT_NAV = [
 
 const ADMIN_NAV = [
   { href: "/admin", label: "Admin Panel", icon: LayoutDashboard },
-  { href: "/provider", label: "Provider View", icon: FileText },
+  { href: "/admin/providers", label: "Providers", icon: Users },
+  { href: "/admin/prescriptions", label: "Prescriptions", icon: Pill },
+  { href: "/admin/fax-logs", label: "Fax Logs", icon: FileText },
+  { href: "/provider", label: "Provider View", icon: Zap },
 ] as const;
 
 interface AppShellProps {

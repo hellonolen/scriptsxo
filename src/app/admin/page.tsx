@@ -12,6 +12,7 @@ import {
   Pill,
   UserCheck,
   Clock,
+  FileText,
 } from "lucide-react";
 import { Nav } from "@/components/nav";
 import { Badge } from "@/components/ui/badge";
@@ -72,6 +73,20 @@ const ADMIN_CARDS = [
     description: "Manage provider roster, credentials, and availability.",
     href: "/admin/providers",
     stat: "12 Active",
+  },
+  {
+    icon: Pill,
+    title: "Prescriptions",
+    description: "View all prescriptions, generate PDFs, and send faxes.",
+    href: "/admin/prescriptions",
+    stat: "View All",
+  },
+  {
+    icon: FileText,
+    title: "Fax Logs",
+    description: "Monitor fax delivery status and retry failed transmissions.",
+    href: "/admin/fax-logs",
+    stat: "View Logs",
   },
   {
     icon: ShieldCheck,
@@ -222,7 +237,7 @@ export default function AdminPage() {
           </div>
 
           {/* Navigation Cards */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {ADMIN_CARDS.map((card) => (
               <Link
                 key={card.title}

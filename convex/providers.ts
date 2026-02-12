@@ -146,3 +146,74 @@ export const updateStatus = mutation({
     return { success: true };
   },
 });
+
+export const getById = query({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.providerId);
+  },
+});
+
+export const listAll = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("providers")
+      .order("desc")
+      .collect();
+  },
+});
+
+export const update = mutation({
+  args: {
+    providerId: v.id("providers"),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    title: v.optional(v.string()),
+    email: v.optional(v.string()),
+    npiNumber: v.optional(v.string()),
+    deaNumber: v.optional(v.string()),
+    specialties: v.optional(v.array(v.string())),
+    licensedStates: v.optional(v.array(v.string())),
+    consultationRate: v.optional(v.number()),
+    maxDailyConsultations: v.optional(v.number()),
+    acceptingPatients: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { providerId, ...fields } = args;
+    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) {
+        updates[key] = value;
+      }
+    }
+
+    await ctx.db.patch(providerId, updates);
+    return { success: true };
+  },
+});
+
+export const remove = mutation({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.providerId, {
+      status: "inactive",
+      updatedAt: Date.now(),
+    });
+    return { success: true };
+  },
+});
+
+export const incrementQueue = mutation({
+  args: { providerId: v.id("providers") },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db.get(args.providerId);
+    if (!provider) throw new Error("Provider not found");
+    await ctx.db.patch(args.providerId, {
+      currentQueueSize: provider.currentQueueSize + 1,
+      updatedAt: Date.now(),
+    });
+    return { success: true };
+  },
+});

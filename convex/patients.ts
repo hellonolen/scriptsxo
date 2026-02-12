@@ -53,6 +53,13 @@ export const getByMemberId = query({
   },
 });
 
+export const getById = query({
+  args: { patientId: v.id("patients") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.patientId);
+  },
+});
+
 export const getByEmail = query({
   args: { email: v.string() },
   handler: async (ctx, args) => {

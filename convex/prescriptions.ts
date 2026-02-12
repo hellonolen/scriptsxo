@@ -167,3 +167,35 @@ export const getByPharmacy = query({
     return results;
   },
 });
+
+export const listAll = query({
+  args: {
+    status: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.status) {
+      return await ctx.db
+        .query("prescriptions")
+        .withIndex("by_status", (q) => q.eq("status", args.status!))
+        .order("desc")
+        .collect();
+    }
+    return await ctx.db
+      .query("prescriptions")
+      .order("desc")
+      .collect();
+  },
+});
+
+export const listRecent = query({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const maxResults = args.limit ?? 50;
+    return await ctx.db
+      .query("prescriptions")
+      .order("desc")
+      .take(maxResults);
+  },
+});
