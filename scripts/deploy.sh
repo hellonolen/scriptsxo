@@ -68,7 +68,7 @@ fi
 # ==============================================================================
 if [ "$FRONTEND_ONLY" = false ]; then
   log "Deploying Convex functions to production..."
-  npx convex deploy
+  npx convex deploy --cmd 'echo skip'
   ok "Convex deployed to prod:striped-caribou-797"
 fi
 

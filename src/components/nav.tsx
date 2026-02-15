@@ -46,7 +46,7 @@ export function Nav() {
       <div className="editorial-container h-20 flex items-center justify-between">
         {/* Logo */}
         <Link
-          href="/portal"
+          href="/dashboard"
           className="text-[13px] tracking-[0.35em] text-foreground font-light uppercase"
           aria-label={`${SITECONFIG.brand.name} home`}
         >

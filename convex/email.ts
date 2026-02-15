@@ -1,13 +1,95 @@
 // @ts-nocheck
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { action, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 /**
- * Email sending via Emailit.
+ * Email sending via EmailIt (https://api.emailit.com).
  * All emails are recorded as notifications for audit trail.
+ *
+ * ENV REQUIRED: EMAILIT_API_KEY (set via npx convex env set)
  */
 
-export const sendAppointmentReminder = mutation({
+const EMAILIT_API_URL = "https://api.emailit.com/v1/emails";
+const FROM_EMAIL = "noreply@scriptsxo.com";
+const FROM_NAME = "ScriptsXO";
+
+async function sendViaEmailIt(
+  to: string,
+  subject: string,
+  htmlBody: string,
+  textBody: string
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const apiKey = process.env.EMAILIT_API_KEY;
+  if (!apiKey) {
+    console.error("[EMAIL] EMAILIT_API_KEY not configured");
+    return { success: false, error: "EMAILIT_API_KEY not configured" };
+  }
+
+  try {
+    const response = await fetch(EMAILIT_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
+        to,
+        subject,
+        html: htmlBody,
+        text: textBody,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[EMAIL] EmailIt error: ${response.status} - ${errorText}`);
+      return { success: false, error: `EmailIt ${response.status}` };
+    }
+
+    const data = await response.json();
+    return { success: true, messageId: data.id || data.messageId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[EMAIL] Send failed: ${msg}`);
+    return { success: false, error: msg };
+  }
+}
+
+// ─── Internal mutation to record notification ────────────────
+
+export const recordNotification = internalMutation({
+  args: {
+    recipientEmail: v.string(),
+    recipientId: v.optional(v.id("members")),
+    type: v.string(),
+    subject: v.string(),
+    body: v.string(),
+    status: v.string(),
+    sentAt: v.optional(v.number()),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("notifications", {
+      recipientEmail: args.recipientEmail,
+      recipientId: args.recipientId,
+      type: args.type,
+      channel: "email",
+      subject: args.subject,
+      body: args.body,
+      status: args.status,
+      sentAt: args.sentAt,
+      readAt: undefined,
+      metadata: args.metadata,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+// ─── Appointment Reminder ────────────────────────────────────
+
+export const sendAppointmentReminder = action({
   args: {
     recipientEmail: v.string(),
     patientName: v.string(),
@@ -17,32 +99,34 @@ export const sendAppointmentReminder = mutation({
   },
   handler: async (ctx, args) => {
     const scheduledDate = new Date(args.scheduledAt).toLocaleString();
+    const subject = `Appointment Reminder: ${scheduledDate}`;
+    const textBody = `Hi ${args.patientName}, your ${args.consultationType} consultation with ${args.providerName} is scheduled for ${scheduledDate}.`;
+    const htmlBody = `<p>Hi ${args.patientName},</p><p>Your <strong>${args.consultationType}</strong> consultation with <strong>${args.providerName}</strong> is scheduled for <strong>${scheduledDate}</strong>.</p><p>Please log in to your ScriptsXO portal to prepare.</p>`;
 
-    await ctx.db.insert("notifications", {
+    const result = await sendViaEmailIt(args.recipientEmail, subject, htmlBody, textBody);
+
+    await ctx.runMutation(internal.email.recordNotification, {
       recipientEmail: args.recipientEmail,
-      recipientId: undefined,
       type: "appointment_reminder",
-      channel: "email",
-      subject: `Appointment Reminder: ${scheduledDate}`,
-      body: `Hi ${args.patientName}, your ${args.consultationType} consultation with ${args.providerName} is scheduled for ${scheduledDate}.`,
-      status: "pending",
-      sentAt: undefined,
-      readAt: undefined,
+      subject,
+      body: textBody,
+      status: result.success ? "sent" : "failed",
+      sentAt: result.success ? Date.now() : undefined,
       metadata: {
         scheduledAt: args.scheduledAt,
         providerName: args.providerName,
+        emailitMessageId: result.messageId,
+        error: result.error,
       },
-      createdAt: Date.now(),
     });
 
-    // TODO: Integrate with Emailit API
-    // const response = await fetch("https://api.emailit.com/v1/emails", { ... });
-
-    return { success: true, message: "Email queued for delivery" };
+    return { success: result.success, error: result.error };
   },
 });
 
-export const sendPrescriptionReady = mutation({
+// ─── Prescription Ready ─────────────────────────────────────
+
+export const sendPrescriptionReady = action({
   args: {
     recipientEmail: v.string(),
     patientName: v.string(),
@@ -50,28 +134,34 @@ export const sendPrescriptionReady = mutation({
     pharmacyName: v.string(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("notifications", {
+    const subject = `Your Prescription is Ready: ${args.medicationName}`;
+    const textBody = `Hi ${args.patientName}, your prescription for ${args.medicationName} is ready for pickup at ${args.pharmacyName}.`;
+    const htmlBody = `<p>Hi ${args.patientName},</p><p>Your prescription for <strong>${args.medicationName}</strong> is ready for pickup at <strong>${args.pharmacyName}</strong>.</p>`;
+
+    const result = await sendViaEmailIt(args.recipientEmail, subject, htmlBody, textBody);
+
+    await ctx.runMutation(internal.email.recordNotification, {
       recipientEmail: args.recipientEmail,
-      recipientId: undefined,
       type: "prescription_ready",
-      channel: "email",
-      subject: `Your Prescription is Ready: ${args.medicationName}`,
-      body: `Hi ${args.patientName}, your prescription for ${args.medicationName} is ready for pickup at ${args.pharmacyName}.`,
-      status: "pending",
-      sentAt: undefined,
-      readAt: undefined,
+      subject,
+      body: textBody,
+      status: result.success ? "sent" : "failed",
+      sentAt: result.success ? Date.now() : undefined,
       metadata: {
         medicationName: args.medicationName,
         pharmacyName: args.pharmacyName,
+        emailitMessageId: result.messageId,
+        error: result.error,
       },
-      createdAt: Date.now(),
     });
 
-    return { success: true, message: "Email queued for delivery" };
+    return { success: result.success, error: result.error };
   },
 });
 
-export const sendFollowUpReminder = mutation({
+// ─── Follow-Up Reminder ─────────────────────────────────────
+
+export const sendFollowUpReminder = action({
   args: {
     recipientEmail: v.string(),
     patientName: v.string(),
@@ -80,29 +170,34 @@ export const sendFollowUpReminder = mutation({
   },
   handler: async (ctx, args) => {
     const scheduledDate = new Date(args.scheduledFor).toLocaleString();
+    const subject = `Follow-Up Required: ${args.followUpType}`;
+    const textBody = `Hi ${args.patientName}, you have a ${args.followUpType} follow-up scheduled for ${scheduledDate}. Please log in to complete it.`;
+    const htmlBody = `<p>Hi ${args.patientName},</p><p>You have a <strong>${args.followUpType}</strong> follow-up scheduled for <strong>${scheduledDate}</strong>.</p><p>Please log in to your ScriptsXO portal to complete it.</p>`;
 
-    await ctx.db.insert("notifications", {
+    const result = await sendViaEmailIt(args.recipientEmail, subject, htmlBody, textBody);
+
+    await ctx.runMutation(internal.email.recordNotification, {
       recipientEmail: args.recipientEmail,
-      recipientId: undefined,
       type: "follow_up",
-      channel: "email",
-      subject: `Follow-Up Required: ${args.followUpType}`,
-      body: `Hi ${args.patientName}, you have a ${args.followUpType} follow-up scheduled for ${scheduledDate}. Please log in to complete it.`,
-      status: "pending",
-      sentAt: undefined,
-      readAt: undefined,
+      subject,
+      body: textBody,
+      status: result.success ? "sent" : "failed",
+      sentAt: result.success ? Date.now() : undefined,
       metadata: {
         followUpType: args.followUpType,
         scheduledFor: args.scheduledFor,
+        emailitMessageId: result.messageId,
+        error: result.error,
       },
-      createdAt: Date.now(),
     });
 
-    return { success: true, message: "Email queued for delivery" };
+    return { success: result.success, error: result.error };
   },
 });
 
-export const sendComplianceAlert = mutation({
+// ─── Compliance Alert ───────────────────────────────────────
+
+export const sendComplianceAlert = action({
   args: {
     recipientEmail: v.string(),
     subject: v.string(),
@@ -110,20 +205,24 @@ export const sendComplianceAlert = mutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("notifications", {
+    const htmlBody = `<p>${args.body.replace(/\n/g, "</p><p>")}</p>`;
+
+    const result = await sendViaEmailIt(args.recipientEmail, args.subject, htmlBody, args.body);
+
+    await ctx.runMutation(internal.email.recordNotification, {
       recipientEmail: args.recipientEmail,
-      recipientId: undefined,
       type: "compliance_alert",
-      channel: "email",
       subject: args.subject,
       body: args.body,
-      status: "pending",
-      sentAt: undefined,
-      readAt: undefined,
-      metadata: args.metadata,
-      createdAt: Date.now(),
+      status: result.success ? "sent" : "failed",
+      sentAt: result.success ? Date.now() : undefined,
+      metadata: {
+        ...args.metadata,
+        emailitMessageId: result.messageId,
+        error: result.error,
+      },
     });
 
-    return { success: true, message: "Compliance alert email queued" };
+    return { success: result.success, error: result.error };
   },
 });

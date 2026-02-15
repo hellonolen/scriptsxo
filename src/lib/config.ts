@@ -3,7 +3,7 @@ export const SITECONFIG = {
     name: "ScriptsXO",
     tagline: "Telehealth Prescriptions, Simplified",
     mission:
-      "Connecting patients with licensed physicians for convenient, compliant telehealth consultations and prescription fulfillment.",
+      "Connecting clients with licensed physicians for convenient, compliant telehealth consultations and prescription fulfillment.",
     domain: "scriptsxo.com",
     phone: "1-888-SXO-HEALTH",
     phoneNumber: "18887964325",
@@ -32,21 +32,26 @@ export const SITECONFIG = {
     ],
   },
   billing: {
-    provider: "Stripe" as const,
+    provider: "Whop" as const,
     currency: "USD",
-    consultationFee: 7500, // $75 in cents
+    membershipFee: 9700, // $97/month in cents
+    providerCallFee: 19700, // $197 per 15-min same-day provider call in cents
+    providerCallDuration: 15, // minutes
+    billingInterval: "monthly" as const,
+    cancelAnytime: true,
+    noRefund: true,
   },
   content: {
     stats: {
       providers: "50+",
       states: "Florida",
-      avgWait: "< 15 min",
+      avgWait: "3-8 min",
       satisfaction: "4.9/5",
     },
   },
   features: {
     enablePasskeys: true,
-    enableSubscriptions: false,
+    enableSubscriptions: true,
     enableInsurance: true,
     enableVideoConsultation: true,
     enableAITriage: true,
@@ -62,12 +67,12 @@ export const SITECONFIG = {
   },
   navigation: {
     main: [
-      { label: "Patient Portal", href: "/portal" },
+      { label: "Client Portal", href: "/portal" },
       { label: "Providers", href: "/provider" },
       { label: "Admin", href: "/admin" },
     ],
     footer: [
-      { label: "Patient Portal", href: "/portal" },
+      { label: "Client Portal", href: "/portal" },
       { label: "Providers", href: "/provider" },
       { label: "Pharmacy", href: "/pharmacy" },
       { label: "Admin", href: "/admin" },

@@ -23,6 +23,10 @@ export interface Session {
   name?: string;
   memberId?: string;
   userId?: string;
+  paymentStatus?: string; // "active" | "none" | "cancelled"
+  orgId?: string; // organization ID for B2B/B2E users
+  orgRole?: string; // "owner" | "admin" | "member"
+  role?: string; // "patient" | "provider" | "admin" | "staff"
   authenticatedAt: number;
   expiresAt: number;
 }

@@ -264,8 +264,10 @@ export const storeCredential = mutation({
       };
     }
 
-    // Enforce platform (device-only) type
-    if (args.deviceType && args.deviceType !== "platform") {
+    // Enforce platform/device-only authenticators
+    // WebAuthn reports "singleDevice" or "multiDevice"; legacy reports "platform"
+    const allowedDeviceTypes = ["platform", "singleDevice", "multiDevice"];
+    if (args.deviceType && !allowedDeviceTypes.includes(args.deviceType)) {
       return { success: false, error: "Only device-specific keys are allowed." };
     }
 
@@ -901,5 +903,127 @@ export const isStaff = query({
     );
 
     return !!staffMember;
+  },
+});
+
+// ============================================
+// WEBAUTHN CHALLENGE STORAGE
+// ============================================
+
+/**
+ * Store a WebAuthn challenge for later verification.
+ * Called by the webauthn action after generating registration/authentication options.
+ */
+export const storeWebAuthnChallenge = mutation({
+  args: {
+    challenge: v.string(),
+    email: v.string(),
+    type: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("authChallenges", {
+      challenge: args.challenge,
+      email: args.email.toLowerCase(),
+      type: args.type,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Consume a WebAuthn challenge (one-time use).
+ * Finds the most recent valid challenge for this email + type, deletes it, returns the value.
+ */
+export const consumeWebAuthnChallenge = mutation({
+  args: {
+    email: v.string(),
+    type: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const emailLower = args.email.toLowerCase();
+    const now = Date.now();
+
+    const all = await ctx.db
+      .query("authChallenges")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("email"), emailLower),
+          q.eq(q.field("type"), args.type),
+          q.gt(q.field("expiresAt"), now)
+        )
+      )
+      .collect();
+
+    if (all.length === 0) return null;
+
+    // Get most recent challenge
+    const sorted = all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const latest = sorted[0];
+
+    // Consume it (one-time use)
+    await ctx.db.delete(latest._id);
+
+    // Clean up any older challenges for this email + type
+    for (const old of sorted.slice(1)) {
+      await ctx.db.delete(old._id);
+    }
+
+    return latest.challenge;
+  },
+});
+
+/**
+ * Get full credential data for WebAuthn authentication verification.
+ * Returns publicKey, counter, and transports needed by @simplewebauthn/server.
+ */
+export const getCredentialForAuth = query({
+  args: {
+    credentialId: v.string(),
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const credential = await ctx.db
+      .query("passkeys")
+      .withIndex("by_credentialId", (q) => q.eq("credentialId", args.credentialId))
+      .first();
+
+    if (!credential) return null;
+
+    // Verify the credential belongs to this email
+    if (credential.email.toLowerCase() !== args.email.toLowerCase()) {
+      return null;
+    }
+
+    return {
+      credentialId: credential.credentialId,
+      publicKey: credential.publicKey,
+      counter: credential.counter,
+      transports: credential.transports,
+    };
+  },
+});
+
+/**
+ * Update credential counter and login count after successful WebAuthn authentication.
+ */
+export const updateCredentialAfterAuth = mutation({
+  args: {
+    credentialId: v.string(),
+    newCounter: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const credential = await ctx.db
+      .query("passkeys")
+      .withIndex("by_credentialId", (q) => q.eq("credentialId", args.credentialId))
+      .first();
+
+    if (!credential) return;
+
+    await ctx.db.patch(credential._id, {
+      counter: args.newCounter,
+      lastUsedAt: Date.now(),
+      loginCount: (credential.loginCount || 0) + 1,
+    });
   },
 });

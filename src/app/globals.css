@@ -55,7 +55,7 @@
 
 /* ==============================================================================
    DESIGN SYSTEM — ScriptsXO Avant-Garde
-   Deep violet + rose gradient. Rich sidebar. Glassmorphism. Bento grid.
+   Deep violet + teal gradient. Rich sidebar. Glassmorphism. Bento grid.
    ============================================================================== */
 
 :root {
@@ -65,11 +65,11 @@
   --brand-muted: rgba(91, 33, 182, 0.08);
   --brand-hover: #4C1D95;
 
-  /* Accent — Vivid Rose */
-  --brand-secondary: #E11D48;
+  /* Accent — Teal */
+  --brand-secondary: #2DD4BF;
   --brand-secondary-foreground: #FFFFFF;
-  --brand-secondary-muted: rgba(225, 29, 72, 0.08);
-  --brand-secondary-hover: #BE123C;
+  --brand-secondary-muted: rgba(45, 212, 191, 0.08);
+  --brand-secondary-hover: #14B8A6;
 
   /* Surfaces */
   --background: #F8F7FF;
@@ -113,7 +113,7 @@
 
   /* Charts */
   --chart-1: #7C3AED;
-  --chart-2: #E11D48;
+  --chart-2: #2DD4BF;
   --chart-3: #059669;
   --chart-4: #D97706;
   --chart-5: #0EA5E9;
@@ -135,10 +135,10 @@
   --brand-muted: rgba(167, 139, 250, 0.15);
   --brand-hover: #C4B5FD;
 
-  --brand-secondary: #FB7185;
+  --brand-secondary: #5EEAD4;
   --brand-secondary-foreground: #09090B;
-  --brand-secondary-muted: rgba(251, 113, 133, 0.15);
-  --brand-secondary-hover: #FDA4AF;
+  --brand-secondary-muted: rgba(94, 234, 212, 0.15);
+  --brand-secondary-hover: #99F6E4;
 
   --background: #0C0A14;
   --foreground: #F5F3FF;
@@ -176,7 +176,7 @@
   --info-foreground: #09090B;
 
   --chart-1: #A78BFA;
-  --chart-2: #FB7185;
+  --chart-2: #5EEAD4;
   --chart-3: #34D399;
   --chart-4: #FBBF24;
   --chart-5: #38BDF8;
@@ -284,7 +284,7 @@
     left: 20%;
     width: 500px;
     height: 500px;
-    background: radial-gradient(circle, rgba(225, 29, 72, 0.05) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(45, 212, 191, 0.05) 0%, transparent 70%);
     pointer-events: none;
     z-index: 0;
   }
@@ -320,7 +320,7 @@
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), transparent 40%, rgba(225, 29, 72, 0.08));
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), transparent 40%, rgba(45, 212, 191, 0.08));
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
@@ -344,7 +344,7 @@
 
   /* ---- Gradient button ---- */
   .btn-gradient {
-    background: linear-gradient(135deg, #7C3AED, #E11D48);
+    background: linear-gradient(135deg, #7C3AED, #2DD4BF);
     color: #FFFFFF;
     border: none;
     border-radius: 12px;
@@ -362,7 +362,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, #6D28D9, #BE123C);
+    background: linear-gradient(135deg, #6D28D9, #14B8A6);
     opacity: 0;
     transition: opacity 0.3s ease;
   }
@@ -386,7 +386,7 @@
     position: absolute;
     inset: -1px;
     border-radius: inherit;
-    background: linear-gradient(135deg, #7C3AED, #E11D48, #7C3AED);
+    background: linear-gradient(135deg, #7C3AED, #2DD4BF, #7C3AED);
     background-size: 200% 200%;
     animation: glow-rotate 4s ease infinite;
     opacity: 0.15;
@@ -471,9 +471,9 @@
     color: #7C3AED;
   }
 
-  .tag-rose {
-    background: rgba(225, 29, 72, 0.10);
-    color: #E11D48;
+  .tag-teal {
+    background: rgba(45, 212, 191, 0.10);
+    color: #2DD4BF;
   }
 
   /* ---- Editorial container ---- */
@@ -549,7 +549,7 @@
   .spinner { @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent; }
   .spinner-lg { @apply h-8 w-8; }
   .progress-bar { @apply h-2 w-full overflow-hidden rounded-full bg-muted; }
-  .progress-bar-fill { @apply h-full transition-all duration-300; background: linear-gradient(90deg, #7C3AED, #E11D48); }
+  .progress-bar-fill { @apply h-full transition-all duration-300; background: linear-gradient(90deg, #7C3AED, #2DD4BF); }
   .loading-overlay { @apply fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm; }
 
   /* ---- Prose ---- */

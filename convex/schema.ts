@@ -38,10 +38,16 @@ export default defineSchema({
   organizations: defineTable({
     name: v.string(),
     slug: v.string(),
-    type: v.string(), // "clinic" | "pharmacy" | "admin"
+    type: v.string(), // "clinic" | "pharmacy" | "admin" | "hospital"
     status: v.string(),
+    subscriptionTier: v.optional(v.string()), // "consumer" | "clinic" | "enterprise"
+    whopMembershipId: v.optional(v.string()),
+    maxProviders: v.optional(v.number()),
+    maxPatients: v.optional(v.number()),
     createdAt: v.number(),
-  }).index("by_slug", ["slug"]),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_type", ["type"]),
 
   // === MEMBERS (users of the system) ===
   members: defineTable({
@@ -53,6 +59,7 @@ export default defineSchema({
     lastName: v.optional(v.string()),
     dob: v.optional(v.string()),
     role: v.string(), // "patient" | "provider" | "pharmacist" | "admin" | "staff"
+    orgRole: v.optional(v.string()), // "owner" | "admin" | "member" — role within the org
     permissions: v.array(v.string()),
     status: v.string(),
     avatar: v.optional(v.string()),
@@ -99,7 +106,8 @@ export default defineSchema({
   })
     .index("by_memberId", ["memberId"])
     .index("by_email", ["email"])
-    .index("by_state", ["state"]),
+    .index("by_state", ["state"])
+    .index("by_created", ["createdAt"]),
 
   // === PROVIDERS (physicians, PAs, NPs) ===
   providers: defineTable({
@@ -243,7 +251,10 @@ export default defineSchema({
     .index("by_patientId", ["patientId"])
     .index("by_providerId", ["providerId"])
     .index("by_pharmacyId", ["pharmacyId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_patient_status", ["patientId", "status"])
+    .index("by_next_refill", ["nextRefillDate"])
+    .index("by_status_created", ["status", "createdAt"]),
 
   // === PHARMACIES ===
   pharmacies: defineTable({
@@ -286,7 +297,8 @@ export default defineSchema({
   })
     .index("by_prescriptionId", ["prescriptionId"])
     .index("by_patientId", ["patientId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_status_requested", ["status", "requestedAt"]),
 
   // === FOLLOW-UPS ===
   followUps: defineTable({
@@ -328,7 +340,8 @@ export default defineSchema({
   })
     .index("by_patientId", ["patientId"])
     .index("by_consultationId", ["consultationId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_patient_type", ["patientId", "type"]),
 
   // === COMPLIANCE ===
   complianceRecords: defineTable({
@@ -442,6 +455,37 @@ export default defineSchema({
   })
     .index("by_ownerId", ["ownerId"])
     .index("by_purpose", ["purpose"]),
+
+  // === AI CONVERSATIONS (persistent across pages) ===
+  aiConversations: defineTable({
+    email: v.string(),
+    messages: v.array(
+      v.object({
+        role: v.string(), // "user" | "assistant"
+        content: v.string(),
+        page: v.optional(v.string()), // which page the message was sent from
+        timestamp: v.number(),
+      })
+    ),
+    currentPage: v.optional(v.string()),
+    intakeId: v.optional(v.id("intakes")),
+    patientType: v.optional(v.string()), // "new" | "returning"
+    collectedData: v.optional(v.any()), // structured data collected across pages
+    orgId: v.optional(v.id("organizations")), // links conversation to org context
+    userRole: v.optional(v.string()), // captures role at time of conversation
+    model: v.optional(v.string()), // which LLM was used (for audit trail)
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"]),
+
+  // === SETTINGS (platform config, LLM preferences, feature flags) ===
+  settings: defineTable({
+    key: v.string(),
+    value: v.any(),
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.string()),
+  }).index("by_key", ["key"]),
 
   // === FAX LOGS ===
   faxLogs: defineTable({

@@ -10,10 +10,12 @@ The current codebase is the locked foundation. NEVER remove existing functionali
 Nolen (hellonolen@gmail.com, nolen@doclish.com)
 
 ## Design Rules
-- NO PINK anywhere in the UI. Gradients use violet-to-teal/cyan.
+- ABSOLUTE ZERO PINK: #E11D48, #BE123C, #FB7185, #FDA4AF, rose-*, pink-* are ALL BANNED. Never use any pink/rose hex code, Tailwind class, or rgba value. If you see pink in a gradient, replace with teal immediately.
+- ALL gradients are violet-to-teal: linear-gradient(135deg, #7C3AED, #2DD4BF). No exceptions.
 - NO emojis in code, UI, or responses.
 - Deep violet (#5B21B6, #7C3AED) is the primary brand color.
-- Teal (#2DD4BF, #67E8F9) is the accent gradient endpoint.
+- Teal (#2DD4BF, #67E8F9, #14B8A6) is the accent gradient endpoint. Brand secondary is teal, NOT pink.
+- NO decorative icons next to the ScriptsXO logo. The logo is text-only: "SCRIPTSXO" in uppercase tracking-wide.
 - Sidebar is deep purple (#1E1037) — this is NOT dark mode, just a rich panel.
 - Light mode is default. Never ship dark-only.
 - Glassmorphism cards with backdrop-blur.

@@ -18,7 +18,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy -y",
+    "convex:deploy": "convex deploy --cmd 'echo skip'",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -31,6 +31,11 @@
     "test:all": "npm run test:run && npm run test:e2e"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.2.2",
+    "@simplewebauthn/server": "^13.2.2",
+    "@stripe/stripe-js": "^8.7.0",
+    "@whop/checkout": "^0.0.52",
+    "@whop/sdk": "^0.0.27",
     "clsx": "^2.1.1",
     "convex": "^1.31.5",
     "framer-motion": "^12.26.2",
@@ -39,6 +44,7 @@
     "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "stripe": "^20.3.1",
     "tailwind-merge": "^3.4.0",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1",

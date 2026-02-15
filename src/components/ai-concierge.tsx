@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Mic, MicOff } from "lucide-react";
+import { Send, Mic, MicOff, Loader2 } from "lucide-react";
+import { useAction } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { getSessionCookie } from "@/lib/auth";
 
 interface Message {
   id: string;
@@ -14,14 +17,16 @@ interface AIConciergeProps {
   context?: string;
   placeholder?: string;
   welcomeMessage?: string;
+  intakeId?: string;
 }
 
 const DEFAULT_WELCOME =
-  "Welcome to ScriptsXO. I\u2019m your AI health concierge. I can help you with prescriptions, schedule consultations, screen for medication conflicts, or guide you through your intake. How can I help you today?";
+  "Welcome to ScriptsXO. I\u2019m your health concierge. I can help you with prescriptions, schedule consultations, screen for medication conflicts, or guide you through your intake. How can I help you today?";
 
 export function AIConcierge({
   placeholder = "Ask me anything about your care\u2026",
   welcomeMessage = DEFAULT_WELCOME,
+  intakeId,
 }: AIConciergeProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -34,8 +39,11 @@ export function AIConcierge({
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const chatAction = useAction(api.actions.aiChat.chat);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -47,7 +55,10 @@ export function AIConcierge({
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || isTyping) return;
+
+    const session = getSessionCookie();
+    const email = session?.email || "anonymous@scriptsxo.com";
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -59,20 +70,60 @@ export function AIConcierge({
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
+    setError(null);
 
-    // Placeholder response — will be replaced with Gemini API call via Convex action
-    setTimeout(() => {
+    try {
+      // Build conversation history (exclude welcome message)
+      const history = messages
+        .filter((m) => m.id !== "welcome")
+        .map((m) => ({
+          role: m.role as string,
+          content: m.content,
+        }));
+
+      const response = await chatAction({
+        message: text,
+        conversationHistory: history,
+        patientEmail: email,
+        intakeId: intakeId || undefined,
+      });
+
       const aiResponse: Message = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content:
-          "I understand your concern. Once our AI backend is connected, I\u2019ll provide personalized guidance based on your medical history, current prescriptions, and any potential drug interactions. For now, you can explore the intake flow to get started.",
+        content: response.content,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiResponse]);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to get response";
+
+      // Fallback response if API key not configured
+      if (errorMessage.includes("ANTHROPIC_API_KEY")) {
+        const fallback: Message = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content:
+            "The system is being configured. Once active, I\u2019ll provide personalized guidance based on your medical history, current prescriptions, and any potential drug interactions.",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, fallback]);
+      } else {
+        setError(errorMessage);
+        const errMsg: Message = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content:
+            "I apologize, but I\u2019m having trouble connecting right now. Please try again in a moment.",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errMsg]);
+      }
+    } finally {
       setIsTyping(false);
-    }, 1200);
-  }, [input]);
+    }
+  }, [input, isTyping, messages, chatAction, intakeId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -83,7 +134,6 @@ export function AIConcierge({
 
   const toggleVoice = () => {
     setIsListening((prev) => !prev);
-    // Vapi voice agent integration point
   };
 
   return (
@@ -104,7 +154,7 @@ export function AIConcierge({
             >
               {msg.role === "assistant" && (
                 <p className="text-[10px] tracking-[0.2em] uppercase text-[#7C3AED] font-medium mb-2">
-                  ScriptsXO AI
+                  ScriptsXO
                 </p>
               )}
               <p
@@ -136,14 +186,17 @@ export function AIConcierge({
         {isTyping && (
           <div>
             <p className="text-[10px] tracking-[0.2em] uppercase text-[#7C3AED] font-medium mb-2">
-              ScriptsXO AI
+              ScriptsXO
             </p>
-            <div className="flex gap-1.5">
-              <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-pulse" />
-              <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-pulse animation-delay-150" />
-              <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-pulse animation-delay-300" />
+            <div className="flex items-center gap-2">
+              <Loader2 size={14} className="text-[#7C3AED] animate-spin" />
+              <span className="text-xs text-muted-foreground">Thinking...</span>
             </div>
           </div>
+        )}
+
+        {error && (
+          <p className="text-xs text-destructive/70">{error}</p>
         )}
 
         <div ref={messagesEndRef} />
@@ -176,13 +229,14 @@ export function AIConcierge({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            className="flex-1 bg-transparent border-0 text-foreground placeholder-muted-foreground text-[15px] font-light focus:outline-none"
+            disabled={isTyping}
+            className="flex-1 bg-transparent border-0 text-foreground placeholder-muted-foreground text-[15px] font-light focus:outline-none disabled:opacity-50"
           />
 
           <button
             type="button"
             onClick={sendMessage}
-            disabled={!input.trim()}
+            disabled={!input.trim() || isTyping}
             className="p-3 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
             aria-label="Send message"
           >

@@ -1,61 +1,188 @@
 "use client";
 
-import { useState } from "react";
-import { Pill, RefreshCw, Plus, FileDown, Send } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Pill, Plus, FileDown } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { Badge } from "@/components/ui/badge";
+import { getSessionCookie } from "@/lib/auth";
+import { useQuery, useAction } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 /* ---------------------------------------------------------------------------
-   DATA — placeholder until Convex patient data is connected
+   STATUS TRACKER CONSTANTS
    --------------------------------------------------------------------------- */
 
-const PRESCRIPTIONS = [
-  {
-    name: "Tretinoin Cream",
-    strength: "0.025%",
-    directions: "Apply nightly",
-    status: "Active" as const,
-    refillDate: "Mar 8",
-    screening: "AI-screened",
-    pharmacy: "Alto Pharmacy",
-    faxStatus: "Sent",
-  },
-  {
-    name: "Spironolactone",
-    strength: "50mg",
-    directions: "Once daily",
-    status: "Active" as const,
-    refillDate: "Mar 22",
-    screening: "AI-screened",
-    pharmacy: "Alto Pharmacy",
-    faxStatus: "Confirmed",
-  },
-  {
-    name: "Finasteride",
-    strength: "1mg",
-    directions: "Once daily",
-    status: "Pending review" as const,
-    refillDate: "Feb 28",
-    screening: "AI screening in progress",
-    pharmacy: "—",
-    faxStatus: "—",
-  },
+const STATUS_STEPS = [
+  { key: "submitted", label: "Submitted" },
+  { key: "approved", label: "Approved" },
+  { key: "preparing", label: "Preparing" },
+  { key: "sent", label: "Sent" },
+  { key: "received", label: "Received" },
 ] as const;
+
+type TrackerStep = (typeof STATUS_STEPS)[number]["key"];
+
+const COMPLETED_COLOR = "#7C3AED";
+const CURRENT_COLOR = "#2DD4BF";
+const UPCOMING_COLOR = "#D4D4D8";
+
+/**
+ * Maps a prescription's database status to the tracker step index.
+ * Returns the 0-based index of the CURRENT step.
+ */
+function resolveStepIndex(
+  dbStatus: string
+): number {
+  switch (dbStatus) {
+    case "draft":
+    case "pending_review":
+      return 0; // Submitted
+    case "signed":
+      return 1; // Approved
+    case "filling":
+      return 2; // Preparing
+    case "sent":
+    case "ready":
+    case "delivered":
+      return 3; // Sent
+    case "picked_up":
+      return 4; // Received
+    case "cancelled":
+      return -1; // Cancelled -- handled separately
+    default:
+      return 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   STATUS TRACKER COMPONENT
+   --------------------------------------------------------------------------- */
+
+function StatusTracker({ status }: { status: string }) {
+  const currentIndex = resolveStepIndex(status);
+  const isCancelled = status === "cancelled";
+
+  if (isCancelled) {
+    return (
+      <div className="flex items-center gap-2 mt-1">
+        <span
+          className="text-[9px] tracking-[0.12em] uppercase font-medium px-2.5 py-1"
+          style={{ color: "#DC2626", background: "rgba(220, 38, 38, 0.08)" }}
+        >
+          Cancelled
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full" role="group" aria-label="Prescription order status">
+      {/* Dots and connecting lines */}
+      <div className="flex items-center w-full">
+        {STATUS_STEPS.map((step, index) => {
+          const isCompleted = index < currentIndex;
+          const isCurrent = index === currentIndex;
+          const dotColor = isCompleted
+            ? COMPLETED_COLOR
+            : isCurrent
+              ? CURRENT_COLOR
+              : UPCOMING_COLOR;
+
+          return (
+            <div key={step.key} className="flex items-center flex-1 last:flex-none">
+              {/* Dot */}
+              <div className="relative flex items-center justify-center">
+                <span
+                  className="block rounded-full transition-all duration-300"
+                  style={{
+                    width: isCurrent ? 10 : 7,
+                    height: isCurrent ? 10 : 7,
+                    backgroundColor: dotColor,
+                    boxShadow: isCurrent
+                      ? `0 0 0 3px rgba(45, 212, 191, 0.18)`
+                      : "none",
+                  }}
+                  aria-hidden="true"
+                />
+                {/* Screen reader text */}
+                <span className="sr-only">
+                  {step.label}:{" "}
+                  {isCompleted ? "completed" : isCurrent ? "current step" : "upcoming"}
+                </span>
+              </div>
+
+              {/* Connecting line (skip after last dot) */}
+              {index < STATUS_STEPS.length - 1 && (
+                <div
+                  className="flex-1 mx-1 transition-colors duration-300"
+                  style={{
+                    height: 2,
+                    backgroundColor:
+                      index < currentIndex ? COMPLETED_COLOR : UPCOMING_COLOR,
+                  }}
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Labels */}
+      <div className="flex w-full mt-2">
+        {STATUS_STEPS.map((step, index) => {
+          const isCompleted = index < currentIndex;
+          const isCurrent = index === currentIndex;
+
+          return (
+            <div
+              key={step.key}
+              className="flex-1 last:flex-none"
+              style={{ minWidth: index === STATUS_STEPS.length - 1 ? "auto" : undefined }}
+            >
+              <span
+                className="block text-center transition-colors duration-300"
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "0.06em",
+                  fontWeight: isCurrent ? 600 : 400,
+                  color: isCompleted
+                    ? COMPLETED_COLOR
+                    : isCurrent
+                      ? CURRENT_COLOR
+                      : "#A1A1AA",
+                  transform: index === 0 ? "translateX(-2px)" : index === STATUS_STEPS.length - 1 ? "translateX(2px)" : undefined,
+                }}
+              >
+                {step.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /* ---------------------------------------------------------------------------
    HELPERS
    --------------------------------------------------------------------------- */
 
-function statusClasses(status: string) {
-  if (status === "Active") return "text-[#16A34A] bg-[#16A34A]/8";
-  if (status === "Pending review") return "text-[#CA8A04] bg-[#CA8A04]/8";
-  return "text-muted-foreground bg-muted";
-}
-
-function faxBadgeVariant(status: string) {
-  if (status === "Sent") return "info" as const;
-  if (status === "Confirmed") return "success" as const;
-  return "secondary" as const;
+/** Human-readable status label for the badge */
+function getStatusBadge(status: string): { label: string; isActive: boolean } {
+  switch (status) {
+    case "signed":
+    case "sent":
+    case "ready":
+    case "delivered":
+    case "picked_up":
+      return { label: "Active", isActive: true };
+    case "cancelled":
+      return { label: "Cancelled", isActive: false };
+    case "filling":
+      return { label: "Preparing", isActive: true };
+    default:
+      return { label: status.replace("_", " "), isActive: false };
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -63,14 +190,58 @@ function faxBadgeVariant(status: string) {
    --------------------------------------------------------------------------- */
 
 export default function PrescriptionsPage() {
+  const [email, setEmail] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
 
-  const handleDownloadPdf = async (rxName: string) => {
-    setDownloading(rxName);
-    // TODO: Connect to Convex action api.actions.generatePrescriptionPdf.generate
-    // once patient auth provides a real prescriptionId
-    setTimeout(() => setDownloading(null), 1500);
+  useEffect(() => {
+    const session = getSessionCookie();
+    if (session?.email) {
+      setEmail(session.email);
+    }
+  }, []);
+
+  // Fetch client data
+  const patient = useQuery(
+    api.patients.getByEmail,
+    email ? { email } : "skip"
+  );
+
+  // Fetch prescriptions
+  const prescriptions = useQuery(
+    api.prescriptions.getByPatient,
+    patient ? { patientId: patient._id } : "skip"
+  );
+
+  // Action for generating PDF
+  const generatePdf = useAction(api.actions.generatePrescriptionPdf.generate);
+
+  const handleDownloadPdf = async (prescriptionId: string) => {
+    setDownloading(prescriptionId);
+    try {
+      await generatePdf({ prescriptionId });
+    } catch (error) {
+      console.error("Failed to generate PDF:", error);
+    } finally {
+      setDownloading(prescriptionId);
+      setTimeout(() => setDownloading(null), 1500);
+    }
   };
+
+  // Loading state
+  if (patient === undefined || prescriptions === undefined) {
+    return (
+      <AppShell>
+        <div className="p-6 lg:p-10 max-w-[1100px]">
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "#7C3AED", borderTopColor: "transparent" }} />
+              <p className="text-sm text-muted-foreground">Loading prescriptions...</p>
+            </div>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -96,84 +267,110 @@ export default function PrescriptionsPage() {
           </button>
         </header>
 
-        {/* ---- PRESCRIPTION GRID ---- */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {PRESCRIPTIONS.map((rx) => (
-            <div key={rx.name} className="glass-card group">
-              {/* Status + Refill */}
-              <div className="flex items-center justify-between mb-5">
-                <span
-                  className={`text-[9px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 ${statusClasses(rx.status)}`}
-                >
-                  {rx.status}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  Refill {rx.refillDate}
-                </span>
-              </div>
+        {/* ---- PRESCRIPTION LIST ---- */}
+        {prescriptions && prescriptions.length > 0 ? (
+          <div className="space-y-4">
+            {prescriptions.map((rx) => {
+              const badge = getStatusBadge(rx.status);
 
-              {/* Medication name */}
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-10 h-10 flex items-center justify-center shrink-0" style={{ background: "rgba(124, 58, 237, 0.08)" }}>
-                  <Pill size={16} className="text-[#7C3AED]" aria-hidden="true" />
-                </div>
-                <div>
-                  <h3
-                    className="text-lg font-light text-foreground"
-                    style={{ fontFamily: "var(--font-heading)" }}
-                  >
-                    {rx.name}
-                  </h3>
-                  <p className="text-sm text-muted-foreground font-light">
-                    {rx.strength} &middot; {rx.directions}
-                  </p>
-                </div>
-              </div>
+              return (
+                <div key={rx._id} className="glass-card group">
+                  <div className="flex flex-col lg:flex-row lg:items-start gap-5">
 
-              {/* Meta */}
-              <div className="space-y-2 mb-5">
-                <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-muted-foreground">Screening</span>
-                  <span className="text-foreground font-light">{rx.screening}</span>
-                </div>
-                <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-muted-foreground">Pharmacy</span>
-                  <span className="text-foreground font-light">{rx.pharmacy}</span>
-                </div>
-                <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-muted-foreground">Fax Status</span>
-                  {rx.faxStatus !== "—" ? (
-                    <Badge variant={faxBadgeVariant(rx.faxStatus)} className="text-[9px] px-2 py-0.5">
-                      {rx.faxStatus}
-                    </Badge>
-                  ) : (
-                    <span className="text-muted-foreground/50 font-light">—</span>
+                    {/* Left: Medication info */}
+                    <div className="flex-1 min-w-0">
+                      {/* Status badge + Refill */}
+                      <div className="flex items-center justify-between mb-4">
+                        <span
+                          className={`text-[9px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 ${
+                            badge.isActive
+                              ? "text-[#16A34A] bg-[#16A34A]/8"
+                              : "text-[#CA8A04] bg-[#CA8A04]/8"
+                          }`}
+                        >
+                          {badge.label}
+                        </span>
+                        {rx.nextRefillDate && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Refill {new Date(rx.nextRefillDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Medication name + details */}
+                      <div className="flex items-start gap-3 mb-4">
+                        <div className="w-10 h-10 flex items-center justify-center shrink-0" style={{ background: "rgba(124, 58, 237, 0.08)" }}>
+                          <Pill size={16} className="text-[#7C3AED]" aria-hidden="true" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3
+                            className="text-lg font-light text-foreground truncate"
+                            style={{ fontFamily: "var(--font-heading)" }}
+                          >
+                            {rx.medicationName}
+                          </h3>
+                          <p className="text-sm text-muted-foreground font-light">
+                            {rx.dosage} &middot; {rx.directions}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Meta row */}
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[12px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">Form</span>
+                          <span className="text-foreground font-light">{rx.form}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">Qty</span>
+                          <span className="text-foreground font-light">{rx.quantity}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">Refills</span>
+                          <span className="text-foreground font-light">
+                            {rx.refillsAuthorized - rx.refillsUsed} left
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Status Tracker */}
+                    <div className="lg:w-[320px] shrink-0 pt-1">
+                      <p className="text-[9px] tracking-[0.15em] uppercase font-medium text-muted-foreground mb-3">
+                        Order Status
+                      </p>
+                      <StatusTracker status={rx.status} />
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  {(rx.status === "signed" || rx.status === "sent" || rx.status === "ready") && (
+                    <div className="pt-4 mt-4 border-t border-border flex items-center gap-4">
+                      <button
+                        onClick={() => handleDownloadPdf(rx._id)}
+                        disabled={downloading === rx._id}
+                        className="flex items-center gap-2 text-[10px] tracking-[0.12em] uppercase text-muted-foreground hover:text-[#7C3AED] transition-colors disabled:opacity-50"
+                      >
+                        <FileDown size={12} aria-hidden="true" />
+                        {downloading === rx._id ? "Generating..." : "Download PDF"}
+                      </button>
+                    </div>
                   )}
                 </div>
-              </div>
-
-              {/* Actions */}
-              <div className="pt-4 border-t border-border flex items-center gap-4">
-                {rx.status === "Active" && (
-                  <>
-                    <button
-                      onClick={() => handleDownloadPdf(rx.name)}
-                      disabled={downloading === rx.name}
-                      className="flex items-center gap-2 text-[10px] tracking-[0.12em] uppercase text-muted-foreground hover:text-[#7C3AED] transition-colors disabled:opacity-50"
-                    >
-                      <FileDown size={12} aria-hidden="true" />
-                      {downloading === rx.name ? "Generating..." : "Download PDF"}
-                    </button>
-                    <button className="flex items-center gap-2 text-[10px] tracking-[0.12em] uppercase text-muted-foreground group-hover:text-[#7C3AED] transition-colors">
-                      <RefreshCw size={12} aria-hidden="true" />
-                      Request Refill
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="glass-card text-center py-20">
+            <Pill size={48} className="text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-light text-foreground mb-2" style={{ fontFamily: "var(--font-heading)" }}>
+              No Prescriptions Yet
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Start a consultation with a provider to receive your first prescription.
+            </p>
+          </div>
+        )}
 
       </div>
     </AppShell>

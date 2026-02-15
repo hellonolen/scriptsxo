@@ -189,9 +189,105 @@ export const getQueue = query({
   },
 });
 
+/**
+ * Get consultation queue for a provider by their email.
+ * Used by the provider dashboard hook.
+ */
+export const getProviderQueue = query({
+  args: { providerEmail: v.string() },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db
+      .query("providers")
+      .withIndex("by_email", (q) => q.eq("email", args.providerEmail.toLowerCase()))
+      .first();
+
+    if (!provider) return [];
+
+    return await ctx.db
+      .query("consultations")
+      .withIndex("by_providerId", (q) => q.eq("providerId", provider._id))
+      .order("desc")
+      .collect();
+  },
+});
+
 export const getById = query({
   args: { consultationId: v.id("consultations") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.consultationId);
+  },
+});
+
+/**
+ * Create a consultation from a completed intake.
+ * Assigns a provider and links the intake + optional recording.
+ */
+export const createFromIntake = mutation({
+  args: {
+    intakeId: v.id("intakes"),
+    patientId: v.id("patients"),
+    recording: v.optional(v.string()),
+    patientState: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Get available providers for the patient's state
+    const providers = await ctx.db
+      .query("providers")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
+
+    const stateProviders = providers.filter(
+      (p) => p.licensedStates.includes(args.patientState) && p.acceptingPatients
+    );
+
+    if (stateProviders.length === 0) {
+      throw new Error(
+        `No active providers licensed in ${args.patientState}. Please contact support.`
+      );
+    }
+
+    // Pick provider with lowest queue
+    const sorted = [...stateProviders].sort(
+      (a, b) => a.currentQueueSize - b.currentQueueSize
+    );
+    const provider = sorted[0];
+
+    const consultationId = await ctx.db.insert("consultations", {
+      patientId: args.patientId,
+      providerId: provider._id,
+      intakeId: args.intakeId,
+      triageId: undefined,
+      type: "video",
+      status: "in_progress",
+      scheduledAt: now,
+      startedAt: now,
+      endedAt: undefined,
+      duration: undefined,
+      roomUrl: undefined,
+      roomToken: undefined,
+      notes: undefined,
+      diagnosis: undefined,
+      diagnosisCodes: undefined,
+      treatmentPlan: undefined,
+      followUpRequired: false,
+      followUpDate: undefined,
+      aiSummary: undefined,
+      aiSuggestedQuestions: undefined,
+      recording: args.recording,
+      patientState: args.patientState,
+      cost: provider.consultationRate,
+      paymentStatus: "paid",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Increment provider queue
+    await ctx.db.patch(provider._id, {
+      currentQueueSize: provider.currentQueueSize + 1,
+    });
+
+    return { consultationId, providerId: provider._id };
   },
 });

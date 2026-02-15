@@ -199,3 +199,39 @@ export const listRecent = query({
       .take(maxResults);
   },
 });
+
+export const requestRefill = mutation({
+  args: {
+    prescriptionId: v.id("prescriptions"),
+    patientId: v.id("patients"),
+  },
+  handler: async (ctx, args) => {
+    const rx = await ctx.db.get(args.prescriptionId);
+    if (!rx) {
+      throw new Error("Prescription not found");
+    }
+
+    if (rx.patientId !== args.patientId) {
+      throw new Error("Prescription does not belong to this patient");
+    }
+
+    if (rx.refillsUsed >= rx.refillsAuthorized) {
+      throw new Error("No refills remaining");
+    }
+
+    if (rx.expiresAt <= Date.now()) {
+      throw new Error("Prescription has expired");
+    }
+
+    const now = Date.now();
+    const requestId = await ctx.db.insert("refillRequests", {
+      prescriptionId: args.prescriptionId,
+      patientId: args.patientId,
+      status: "requested",
+      requestedAt: now,
+      createdAt: now,
+    });
+
+    return requestId;
+  },
+});

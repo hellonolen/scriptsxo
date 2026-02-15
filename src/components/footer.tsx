@@ -6,9 +6,9 @@ import { SITECONFIG } from "@/lib/config";
 
 const FOOTER_SECTIONS = [
   {
-    title: "Patients",
+    title: "Clients",
     links: [
-      { href: "/portal", label: "Patient Portal" },
+      { href: "/portal", label: "Client Portal" },
       { href: "/portal/prescriptions", label: "My Prescriptions" },
       { href: "/portal/appointments", label: "Appointments" },
       { href: "/portal/messages", label: "Messages" },
@@ -29,7 +29,7 @@ const FOOTER_SECTIONS = [
       { href: "/pharmacy", label: "Pharmacy Portal" },
       { href: "/admin", label: "Admin Dashboard" },
       { href: "/admin/compliance", label: "Compliance" },
-      { href: "/admin/agents", label: "AI Agents" },
+      { href: "/admin/agents", label: "System Agents" },
     ],
   },
 ];

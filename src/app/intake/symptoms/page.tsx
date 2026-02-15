@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Heart,
   Stethoscope,
@@ -9,10 +9,15 @@ import {
   FileCheck,
   ArrowRight,
   ArrowLeft,
+  CreditCard,
 } from "lucide-react";
-import { Nav } from "@/components/nav";
+import { AppShell } from "@/components/app-shell";
+import { useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 const INTAKE_STEPS = [
+  { label: "Payment", icon: CreditCard },
   { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
   { label: "Verification", icon: ScanLine },
@@ -46,13 +51,26 @@ const RELATED_SYMPTOMS = [
 ] as const;
 
 export default function SymptomsPage() {
+  const router = useRouter();
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [duration, setDuration] = useState("");
   const [severity, setSeverity] = useState(5);
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [previousTreatments, setPreviousTreatments] = useState("");
+  const [intakeId, setIntakeId] = useState<Id<"intakes"> | null>(null);
 
-  const currentStep = 1;
+  const updateIntakeStep = useMutation(api.intake.updateStep);
+
+  const currentStep = 2;
+
+  useEffect(() => {
+    const storedIntakeId = localStorage.getItem("sxo_intake_id");
+    if (!storedIntakeId) {
+      router.push("/intake/medical-history");
+      return;
+    }
+    setIntakeId(storedIntakeId as Id<"intakes">);
+  }, [router]);
 
   function toggleSymptom(symptom: string) {
     setSelectedSymptoms((prev) =>
@@ -76,22 +94,39 @@ export default function SymptomsPage() {
     return "text-destructive";
   }
 
+  async function handleContinue() {
+    if (!intakeId) return;
+
+    await updateIntakeStep({
+      intakeId,
+      stepName: "symptoms",
+      data: {
+        chiefComplaint,
+        duration,
+        severity,
+        relatedSymptoms: selectedSymptoms,
+        previousTreatments,
+      },
+    });
+
+    router.push("/intake/id-verification");
+  }
+
   return (
-    <>
-      <Nav />
+    <AppShell>
       <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
         <div className="max-w-[1400px] mx-auto">
           {/* Progress bar */}
           <div className="max-w-2xl mb-12">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                Step 2 of 4
+                Step 3 of 5
               </span>
             </div>
             <div className="w-full h-px bg-border relative">
               <div
                 className="absolute top-0 left-0 h-px bg-brand-secondary transition-all duration-500"
-                style={{ width: "50%" }}
+                style={{ width: "60%" }}
               />
             </div>
             {/* Step indicators */}
@@ -171,14 +206,14 @@ export default function SymptomsPage() {
                 Chief Complaint
               </h2>
               <div className="h-px bg-border mb-4" />
-              <label className="block text-xs tracking-wider text-muted-foreground mb-3 uppercase">
+              <label className="block text-xs font-medium tracking-wider text-muted-foreground mb-3 uppercase">
                 What brings you in today? <span className="text-destructive">*</span>
               </label>
               <textarea
                 placeholder="Please describe your primary concern in as much detail as you feel comfortable sharing..."
                 value={chiefComplaint}
                 onChange={(e) => setChiefComplaint(e.target.value)}
-                className="w-full px-4 py-3 bg-background border border-border rounded-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors min-h-[140px] resize-y text-base font-light"
+                className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors min-h-[140px] resize-y text-base font-light"
                 required
               />
             </section>
@@ -192,13 +227,13 @@ export default function SymptomsPage() {
                 Symptom Duration
               </h2>
               <div className="h-px bg-border mb-4" />
-              <label className="block text-xs tracking-wider text-muted-foreground mb-3 uppercase">
+              <label className="block text-xs font-medium tracking-wider text-muted-foreground mb-3 uppercase">
                 How long have you experienced these symptoms? <span className="text-destructive">*</span>
               </label>
               <select
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
-                className="w-full px-4 py-3 bg-background border border-border rounded-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
+                className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
                 required
               >
                 <option value="">Select duration</option>
@@ -219,7 +254,7 @@ export default function SymptomsPage() {
                 Severity
               </h2>
               <div className="h-px bg-border mb-4" />
-              <label className="block text-xs tracking-wider text-muted-foreground mb-5 uppercase">
+              <label className="block text-xs font-medium tracking-wider text-muted-foreground mb-5 uppercase">
                 Rate the severity of your symptoms
               </label>
               <div className="space-y-4">
@@ -275,7 +310,7 @@ export default function SymptomsPage() {
                       key={symptom}
                       type="button"
                       onClick={() => toggleSymptom(symptom)}
-                      className={`px-4 py-3 text-sm font-light rounded-sm border transition-all duration-200 text-left ${
+                      className={`px-4 py-3 text-sm font-light rounded-md border transition-all duration-200 text-left ${
                         isSelected
                           ? "border-brand-secondary bg-brand-secondary-muted text-foreground"
                           : "border-border bg-card text-muted-foreground hover:border-border hover:bg-muted/50"
@@ -298,37 +333,37 @@ export default function SymptomsPage() {
                 Previous Treatments
               </h2>
               <div className="h-px bg-border mb-4" />
-              <label className="block text-xs tracking-wider text-muted-foreground mb-3 uppercase">
+              <label className="block text-xs font-medium tracking-wider text-muted-foreground mb-3 uppercase">
                 What have you already tried?
               </label>
               <textarea
                 placeholder="Describe any over-the-counter medications, home remedies, or prior treatments you have attempted..."
                 value={previousTreatments}
                 onChange={(e) => setPreviousTreatments(e.target.value)}
-                className="w-full px-4 py-3 bg-background border border-border rounded-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors min-h-[120px] resize-y text-base font-light"
+                className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors min-h-[120px] resize-y text-base font-light"
               />
             </section>
 
             {/* Navigation */}
             <div className="flex justify-between pt-6 border-t border-border">
-              <Link
-                href="/intake/medical-history"
-                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-sm"
+              <button
+                onClick={() => router.push("/intake/medical-history")}
+                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
               >
                 <ArrowLeft size={16} aria-hidden="true" />
                 Back
-              </Link>
-              <Link
-                href="/intake/id-verification"
-                className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-sm"
+              </button>
+              <button
+                onClick={handleContinue}
+                className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-md"
               >
                 Continue
                 <ArrowRight size={16} aria-hidden="true" />
-              </Link>
+              </button>
             </div>
           </div>
         </div>
       </main>
-    </>
+    </AppShell>
   );
 }

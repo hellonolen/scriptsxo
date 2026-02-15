@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Heart,
   Stethoscope,
@@ -12,85 +13,90 @@ import {
   Check,
   Pencil,
   ShieldCheck,
+  CreditCard,
 } from "lucide-react";
-import { Nav } from "@/components/nav";
+import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 const INTAKE_STEPS = [
+  { label: "Payment", icon: CreditCard },
   { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
   { label: "Verification", icon: ScanLine },
   { label: "Review", icon: FileCheck },
 ] as const;
 
-const REVIEW_SECTIONS = [
-  {
-    title: "Medical History",
-    href: "/intake/medical-history",
-    icon: Heart,
-    items: [
-      { label: "Name", value: "Jane Doe" },
-      { label: "Date of Birth", value: "March 15, 1988" },
-      { label: "Gender", value: "Female" },
-      { label: "Phone", value: "(555) 123-4567" },
-      { label: "Conditions", value: "Hypertension, High Cholesterol" },
-      { label: "Medications", value: "Lisinopril 10mg daily, Atorvastatin 20mg daily" },
-      { label: "Allergies", value: "Penicillin (rash)" },
-      { label: "Surgeries", value: "Appendectomy (2015)" },
-      { label: "Family History", value: "Heart Disease, Diabetes" },
-    ],
-  },
-  {
-    title: "Current Symptoms",
-    href: "/intake/symptoms",
-    icon: Stethoscope,
-    items: [
-      { label: "Chief Complaint", value: "Persistent headaches for the past week, worsening in the evenings" },
-      { label: "Duration", value: "1 - 2 weeks" },
-      { label: "Severity", value: "6 / 10" },
-      { label: "Related Symptoms", value: "Fatigue, Insomnia, Nausea" },
-      { label: "Previous Treatments", value: "Over-the-counter ibuprofen with limited relief" },
-    ],
-  },
-  {
-    title: "Identity Verification",
-    href: "/intake/id-verification",
-    icon: ScanLine,
-    items: [
-      { label: "Government ID (Front)", value: "drivers-license-front.jpg" },
-      { label: "Government ID (Back)", value: "drivers-license-back.jpg" },
-      { label: "Insurance Card", value: "insurance-card.jpg" },
-    ],
-  },
-] as const;
-
 export default function IntakeReviewPage() {
+  const router = useRouter();
   const [finalConsent, setFinalConsent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [intakeId, setIntakeId] = useState<Id<"intakes"> | null>(null);
 
-  const currentStep = 3;
+  const updateIntakeStep = useMutation(api.intake.updateStep);
+  const completeIntake = useMutation(api.intake.complete);
+  const intakeData = useQuery(
+    api.intake.getById,
+    intakeId ? { intakeId } : "skip"
+  );
 
-  function handleSubmit() {
-    if (!finalConsent) return;
+  const currentStep = 4;
+
+  useEffect(() => {
+    const storedIntakeId = localStorage.getItem("sxo_intake_id");
+    if (!storedIntakeId) {
+      router.push("/intake/medical-history");
+      return;
+    }
+    setIntakeId(storedIntakeId as Id<"intakes">);
+  }, [router]);
+
+  async function handleSubmit() {
+    if (!finalConsent || !intakeId) return;
     setIsSubmitting(true);
-    // Simulate submission delay
-    setTimeout(() => {
-      setIsSubmitting(false);
+
+    try {
+      await updateIntakeStep({
+        intakeId,
+        stepName: "consent",
+        data: true,
+      });
+
+      await completeIntake({ intakeId });
       setIsSubmitted(true);
-    }, 1500);
+    } catch (error) {
+      console.error("Failed to submit intake:", error);
+      setIsSubmitting(false);
+    }
   }
 
+  if (!intakeData) {
+    return (
+      <AppShell>
+        <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
+          <div className="max-w-[1400px] mx-auto">
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </main>
+      </AppShell>
+    );
+  }
+
+  const medicalHistory = intakeData.medicalHistory as any;
+  const currentSymptoms = intakeData.currentSymptoms as any;
+
   return (
-    <>
-      <Nav />
+    <AppShell>
       <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
         <div className="max-w-[1400px] mx-auto">
           {/* Progress bar */}
           <div className="max-w-2xl mb-12">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                Step 4 of 4
+                Step 5 of 5
               </span>
             </div>
             <div className="w-full h-px bg-border relative">
@@ -170,8 +176,8 @@ export default function IntakeReviewPage() {
           {/* Success state */}
           {isSubmitted ? (
             <div className="max-w-2xl">
-              <div className="border border-border rounded-sm p-10 bg-card text-center">
-                <div className="w-14 h-14 rounded-sm bg-brand-secondary-muted flex items-center justify-center mx-auto mb-6">
+              <div className="border border-border rounded-md p-10 bg-card text-center">
+                <div className="w-14 h-14 rounded-md bg-brand-secondary-muted flex items-center justify-center mx-auto mb-6">
                   <Check
                     size={24}
                     className="text-brand-secondary"
@@ -189,70 +195,244 @@ export default function IntakeReviewPage() {
                   connected with a licensed provider shortly.
                 </p>
                 <Link
-                  href="/consultation/waiting-room"
-                  className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-sm"
+                  href={`/consultation?intakeId=${intakeId}`}
+                  className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-md"
                 >
-                  Enter Waiting Room
+                  Enter Consultation
                   <ArrowRight size={16} aria-hidden="true" />
                 </Link>
               </div>
             </div>
           ) : (
             <div className="max-w-2xl space-y-8">
-              {/* Review sections */}
-              {REVIEW_SECTIONS.map((section) => {
-                const SectionIcon = section.icon;
-                return (
-                  <section
-                    key={section.title}
-                    className="border border-border rounded-sm bg-card overflow-hidden"
-                  >
-                    {/* Section header */}
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
-                      <div className="flex items-center gap-3">
-                        <SectionIcon
-                          size={16}
-                          className="text-brand-secondary"
-                          aria-hidden="true"
-                        />
-                        <h2
-                          className="text-base font-light text-foreground"
-                          style={{ fontFamily: "var(--font-heading)" }}
-                        >
-                          {section.title}
-                        </h2>
-                      </div>
-                      <Link
-                        href={section.href}
-                        className="inline-flex items-center gap-1.5 text-[11px] tracking-[0.1em] text-brand-secondary uppercase font-light hover:text-brand-secondary-hover transition-colors"
+              {/* Medical History Section */}
+              {medicalHistory && (
+                <section className="border border-border rounded-md bg-card overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+                    <div className="flex items-center gap-3">
+                      <Heart
+                        size={16}
+                        className="text-brand-secondary"
+                        aria-hidden="true"
+                      />
+                      <h2
+                        className="text-base font-light text-foreground"
+                        style={{ fontFamily: "var(--font-heading)" }}
                       >
-                        <Pencil size={12} aria-hidden="true" />
-                        Edit
-                      </Link>
+                        Medical History
+                      </h2>
                     </div>
+                    <Link
+                      href="/intake/medical-history"
+                      className="inline-flex items-center gap-1.5 text-[11px] tracking-[0.1em] text-brand-secondary uppercase font-light hover:text-brand-secondary-hover transition-colors"
+                    >
+                      <Pencil size={12} aria-hidden="true" />
+                      Edit
+                    </Link>
+                  </div>
+                  <div className="divide-y divide-border">
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                      <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                        Name
+                      </span>
+                      <span className="text-sm font-light text-foreground">
+                        {medicalHistory.firstName} {medicalHistory.lastName}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                      <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                        Date of Birth
+                      </span>
+                      <span className="text-sm font-light text-foreground">
+                        {medicalHistory.dob}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                      <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                        Gender
+                      </span>
+                      <span className="text-sm font-light text-foreground">
+                        {medicalHistory.gender}
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                      <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                        Phone
+                      </span>
+                      <span className="text-sm font-light text-foreground">
+                        {medicalHistory.phone}
+                      </span>
+                    </div>
+                    {medicalHistory.conditions?.length > 0 && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                          Conditions
+                        </span>
+                        <span className="text-sm font-light text-foreground">
+                          {medicalHistory.conditions.join(", ")}
+                        </span>
+                      </div>
+                    )}
+                    {medicalHistory.medications?.length > 0 && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                          Medications
+                        </span>
+                        <span className="text-sm font-light text-foreground">
+                          {medicalHistory.medications.join(", ")}
+                        </span>
+                      </div>
+                    )}
+                    {medicalHistory.allergies?.length > 0 && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                          Allergies
+                        </span>
+                        <span className="text-sm font-light text-foreground">
+                          {medicalHistory.allergies.join(", ")}
+                        </span>
+                      </div>
+                    )}
+                    {medicalHistory.surgeries && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                          Surgeries
+                        </span>
+                        <span className="text-sm font-light text-foreground">
+                          {medicalHistory.surgeries}
+                        </span>
+                      </div>
+                    )}
+                    {medicalHistory.familyHistory?.length > 0 && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                          Family History
+                        </span>
+                        <span className="text-sm font-light text-foreground">
+                          {medicalHistory.familyHistory.join(", ")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
 
-                    {/* Section items */}
-                    <div className="divide-y divide-border">
-                      {section.items.map((item) => (
-                        <div
-                          key={item.label}
-                          className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4"
-                        >
-                          <span className="text-xs tracking-wider text-muted-foreground uppercase font-light sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
-                            {item.label}
-                          </span>
-                          <span className="text-sm font-light text-foreground">
-                            {item.value}
-                          </span>
-                        </div>
-                      ))}
+              {/* Current Symptoms Section */}
+              {currentSymptoms && (
+                <section className="border border-border rounded-md bg-card overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+                    <div className="flex items-center gap-3">
+                      <Stethoscope
+                        size={16}
+                        className="text-brand-secondary"
+                        aria-hidden="true"
+                      />
+                      <h2
+                        className="text-base font-light text-foreground"
+                        style={{ fontFamily: "var(--font-heading)" }}
+                      >
+                        Current Symptoms
+                      </h2>
                     </div>
-                  </section>
-                );
-              })}
+                    <Link
+                      href="/intake/symptoms"
+                      className="inline-flex items-center gap-1.5 text-[11px] tracking-[0.1em] text-brand-secondary uppercase font-light hover:text-brand-secondary-hover transition-colors"
+                    >
+                      <Pencil size={12} aria-hidden="true" />
+                      Edit
+                    </Link>
+                  </div>
+                  <div className="divide-y divide-border">
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                      <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                        Chief Complaint
+                      </span>
+                      <span className="text-sm font-light text-foreground">
+                        {currentSymptoms.chiefComplaint || intakeData.chiefComplaint}
+                      </span>
+                    </div>
+                    {currentSymptoms.duration && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                          Duration
+                        </span>
+                        <span className="text-sm font-light text-foreground">
+                          {currentSymptoms.duration}
+                        </span>
+                      </div>
+                    )}
+                    {currentSymptoms.severity && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                          Severity
+                        </span>
+                        <span className="text-sm font-light text-foreground">
+                          {currentSymptoms.severity} / 10
+                        </span>
+                      </div>
+                    )}
+                    {currentSymptoms.relatedSymptoms?.length > 0 && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                          Related Symptoms
+                        </span>
+                        <span className="text-sm font-light text-foreground">
+                          {currentSymptoms.relatedSymptoms.join(", ")}
+                        </span>
+                      </div>
+                    )}
+                    {currentSymptoms.previousTreatments && (
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                          Previous Treatments
+                        </span>
+                        <span className="text-sm font-light text-foreground">
+                          {currentSymptoms.previousTreatments}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Identity Verification Section */}
+              <section className="border border-border rounded-md bg-card overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+                  <div className="flex items-center gap-3">
+                    <ScanLine
+                      size={16}
+                      className="text-brand-secondary"
+                      aria-hidden="true"
+                    />
+                    <h2
+                      className="text-base font-light text-foreground"
+                      style={{ fontFamily: "var(--font-heading)" }}
+                    >
+                      Identity Verification
+                    </h2>
+                  </div>
+                  <Link
+                    href="/intake/id-verification"
+                    className="inline-flex items-center gap-1.5 text-[11px] tracking-[0.1em] text-brand-secondary uppercase font-light hover:text-brand-secondary-hover transition-colors"
+                  >
+                    <Pencil size={12} aria-hidden="true" />
+                    Edit
+                  </Link>
+                </div>
+                <div className="divide-y divide-border">
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-0 px-6 py-4">
+                    <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">
+                      Status
+                    </span>
+                    <span className="text-sm font-light text-foreground">
+                      {intakeData.idVerified ? "Verified via Stripe Identity" : "Pending verification"}
+                    </span>
+                  </div>
+                </div>
+              </section>
 
               {/* HIPAA notice */}
-              <div className="flex items-start gap-4 p-5 bg-card border border-border rounded-sm">
+              <div className="flex items-start gap-4 p-5 bg-card border border-border rounded-md">
                 <ShieldCheck
                   size={18}
                   className="text-brand-secondary mt-0.5 flex-shrink-0"
@@ -309,7 +489,7 @@ export default function IntakeReviewPage() {
               <div className="flex justify-between pt-6 border-t border-border">
                 <Link
                   href="/intake/id-verification"
-                  className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-sm"
+                  className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
                 >
                   <ArrowLeft size={16} aria-hidden="true" />
                   Back
@@ -317,7 +497,7 @@ export default function IntakeReviewPage() {
                 <Button
                   onClick={handleSubmit}
                   disabled={!finalConsent || isSubmitting}
-                  className={`inline-flex items-center gap-2 px-8 py-3 text-[11px] tracking-[0.15em] uppercase font-light rounded-sm h-auto transition-all duration-300 ${
+                  className={`inline-flex items-center gap-2 px-8 py-3 text-[11px] tracking-[0.15em] uppercase font-light rounded-md h-auto transition-all duration-300 ${
                     finalConsent
                       ? "bg-foreground text-background hover:bg-foreground/90"
                       : "bg-muted text-muted-foreground cursor-not-allowed"
@@ -340,6 +520,6 @@ export default function IntakeReviewPage() {
           )}
         </div>
       </main>
-    </>
+    </AppShell>
   );
 }

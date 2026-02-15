@@ -54,6 +54,9 @@ function applySecurityHeaders(response: NextResponse): void {
 // Patient-facing protected routes
 const PROTECTEDROUTES = ["/portal", "/consultation"];
 
+// Routes that require both auth AND active payment
+const PAIDROUTES = ["/dashboard", "/start"];
+
 // Admin routes
 const ADMINROUTES = ["/admin"];
 
@@ -110,6 +113,26 @@ function getSessionEmail(sessionCookie: string | undefined): string | null {
   }
 }
 
+function hasActivePayment(sessionCookie: string | undefined): boolean {
+  if (!sessionCookie) return false;
+  try {
+    const session = JSON.parse(decodeURIComponent(sessionCookie));
+    return session.paymentStatus === "active";
+  } catch {
+    return false;
+  }
+}
+
+function hasProviderRole(sessionCookie: string | undefined): boolean {
+  if (!sessionCookie) return false;
+  try {
+    const session = JSON.parse(decodeURIComponent(sessionCookie));
+    return session.role === "provider" || session.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   // Skip middleware for static files and webhook endpoints
@@ -119,6 +142,13 @@ export function middleware(request: NextRequest) {
     pathname.includes(".") ||
     pathname.startsWith("/api/webhooks")
   ) {
+    const response = NextResponse.next();
+    applySecurityHeaders(response);
+    return response;
+  }
+
+  // Skip auth checks on localhost for development
+  if (process.env.NODE_ENV === "development") {
     const response = NextResponse.next();
     applySecurityHeaders(response);
     return response;
@@ -178,6 +208,30 @@ export function middleware(request: NextRequest) {
     }
     const response = NextResponse.next();
     applySecurityHeaders(response);
+    return response;
+  }
+
+  // Paid routes — require valid session AND active payment (admins/providers exempt)
+  if (matchesRoute(pathname, PAIDROUTES)) {
+    if (!hasValidSession) {
+      const loginUrl = new URL("/access", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      const response = NextResponse.redirect(loginUrl);
+      applySecurityHeaders(response);
+      return response;
+    }
+    // Admins and providers bypass the paywall
+    const isExempt = hasAdminAccess || hasProviderRole(sessionCookie);
+    if (!isExempt && !hasActivePayment(sessionCookie)) {
+      const payUrl = new URL("/pay", request.url);
+      const response = NextResponse.redirect(payUrl);
+      applySecurityHeaders(response);
+      return response;
+    }
+    const response = NextResponse.next();
+    applySecurityHeaders(response);
+    const email = getSessionEmail(sessionCookie);
+    if (email) response.headers.set("x-user-email", email);
     return response;
   }
 

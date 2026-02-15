@@ -143,3 +143,101 @@ export const setPrimaryPharmacy = mutation({
     return { success: true };
   },
 });
+
+// === CMS Queries ===
+
+const ACTIVE_RX_STATUSES = ["signed", "sent", "filling", "ready"];
+
+export const getFullRecord = query({
+  args: { patientId: v.id("patients") },
+  handler: async (ctx, args) => {
+    const patient = await ctx.db.get(args.patientId);
+    if (!patient) {
+      throw new Error("Patient not found");
+    }
+
+    const prescriptions = await ctx.db
+      .query("prescriptions")
+      .withIndex("by_patientId", (q) => q.eq("patientId", args.patientId))
+      .order("desc")
+      .collect();
+
+    const consultations = await ctx.db
+      .query("consultations")
+      .withIndex("by_patientId", (q) => q.eq("patientId", args.patientId))
+      .order("desc")
+      .collect();
+
+    const billing = await ctx.db
+      .query("billingRecords")
+      .withIndex("by_patientId", (q) => q.eq("patientId", args.patientId))
+      .order("desc")
+      .collect();
+
+    const latestIntake = await ctx.db
+      .query("intakes")
+      .withIndex("by_patientId", (q) => q.eq("patientId", args.patientId))
+      .order("desc")
+      .first();
+
+    const activeRxCount = prescriptions.filter((rx) =>
+      ACTIVE_RX_STATUSES.includes(rx.status)
+    ).length;
+
+    const totalRefills = prescriptions.reduce(
+      (sum, rx) => sum + (rx.refillsUsed ?? 0),
+      0
+    );
+
+    const totalSpent = billing
+      .filter((record) => record.status === "paid")
+      .reduce((sum, record) => sum + record.amount, 0);
+
+    return {
+      patient,
+      prescriptions,
+      consultations,
+      billing,
+      latestIntake,
+      stats: {
+        activeRxCount,
+        totalRefills,
+        lifetimeConsultations: consultations.length,
+        totalSpent,
+        memberSince: patient.createdAt,
+      },
+    };
+  },
+});
+
+export const list = query({
+  args: {
+    paginationOpts: v.any(),
+    state: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.state) {
+      return await ctx.db
+        .query("patients")
+        .withIndex("by_state", (q) => q.eq("state", args.state))
+        .order("desc")
+        .paginate(args.paginationOpts);
+    }
+
+    return await ctx.db
+      .query("patients")
+      .withIndex("by_created")
+      .order("desc")
+      .paginate(args.paginationOpts);
+  },
+});
+
+export const search = query({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("patients")
+      .withIndex("by_email", (q) => q.eq("email", args.email.toLowerCase()))
+      .first();
+  },
+});

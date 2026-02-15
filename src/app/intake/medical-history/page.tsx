@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Heart,
   ArrowRight,
@@ -11,12 +11,18 @@ import {
   Stethoscope,
   ScanLine,
   FileCheck,
+  CreditCard,
 } from "lucide-react";
-import { Nav } from "@/components/nav";
+import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { getSessionCookie } from "@/lib/auth";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 const INTAKE_STEPS = [
+  { label: "Payment", icon: CreditCard },
   { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
   { label: "Verification", icon: ScanLine },
@@ -57,6 +63,7 @@ const GENDER_OPTIONS = [
 ] as const;
 
 export default function MedicalHistoryPage() {
+  const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
@@ -77,7 +84,43 @@ export default function MedicalHistoryPage() {
     []
   );
 
-  const currentStep = 0;
+  const [intakeId, setIntakeId] = useState<Id<"intakes"> | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const createIntake = useMutation(api.intake.create);
+  const getOrCreateMember = useMutation(api.members.getOrCreate);
+  const updateIntakeStep = useMutation(api.intake.updateStep);
+
+  const currentStep = 1;
+
+  useEffect(() => {
+    async function initialize() {
+      const session = getSessionCookie();
+      if (!session?.email) {
+        router.push("/access");
+        return;
+      }
+
+      // Get or create member
+      await getOrCreateMember({ email: session.email });
+
+      // Check localStorage for existing intake
+      const storedIntakeId = localStorage.getItem("sxo_intake_id");
+      if (storedIntakeId) {
+        setIntakeId(storedIntakeId as Id<"intakes">);
+      } else {
+        // Create new intake
+        const newIntakeId = await createIntake({
+          email: session.email,
+        });
+        setIntakeId(newIntakeId);
+        localStorage.setItem("sxo_intake_id", newIntakeId);
+      }
+      setLoading(false);
+    }
+
+    initialize();
+  }, [router, createIntake, getOrCreateMember]);
 
   function toggleCondition(condition: string) {
     setSelectedConditions((prev) =>
@@ -129,22 +172,56 @@ export default function MedicalHistoryPage() {
     }
   }
 
+  async function handleContinue() {
+    if (!intakeId) return;
+
+    await updateIntakeStep({
+      intakeId,
+      stepName: "medical_history",
+      data: {
+        firstName,
+        lastName,
+        dob: dateOfBirth,
+        gender,
+        phone,
+        conditions: selectedConditions,
+        medications,
+        allergies,
+        surgeries,
+        familyHistory: selectedFamilyHistory,
+      },
+    });
+
+    router.push("/intake/symptoms");
+  }
+
+  if (loading) {
+    return (
+      <AppShell>
+        <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
+          <div className="max-w-[1400px] mx-auto">
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </main>
+      </AppShell>
+    );
+  }
+
   return (
-    <>
-      <Nav />
+    <AppShell>
       <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
         <div className="max-w-[1400px] mx-auto">
           {/* Progress bar */}
           <div className="max-w-2xl mb-12">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                Step 1 of 4
+                Step 2 of 5
               </span>
             </div>
             <div className="w-full h-px bg-border relative">
               <div
                 className="absolute top-0 left-0 h-px bg-brand-secondary transition-all duration-500"
-                style={{ width: "25%" }}
+                style={{ width: "40%" }}
               />
             </div>
             {/* Step indicators */}
@@ -231,7 +308,7 @@ export default function MedicalHistoryPage() {
                   placeholder="Jane"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  className="rounded-sm"
+                  className="rounded-md border border-border bg-white"
                 />
                 <Input
                   label="Last Name"
@@ -239,7 +316,7 @@ export default function MedicalHistoryPage() {
                   placeholder="Doe"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  className="rounded-sm"
+                  className="rounded-md border border-border bg-white"
                 />
                 <Input
                   label="Date of Birth"
@@ -247,16 +324,16 @@ export default function MedicalHistoryPage() {
                   type="date"
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="rounded-sm"
+                  className="rounded-md border border-border bg-white"
                 />
                 <div className="w-full">
-                  <label className="block text-xs tracking-wider text-muted-foreground mb-2 uppercase">
+                  <label className="block text-xs font-medium tracking-wider text-muted-foreground mb-2 uppercase">
                     Gender <span className="text-destructive ml-1">*</span>
                   </label>
                   <select
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
-                    className="w-full px-4 py-3 bg-background border border-border rounded-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
+                    className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
                     required
                   >
                     <option value="">Select</option>
@@ -275,7 +352,7 @@ export default function MedicalHistoryPage() {
                     placeholder="(555) 123-4567"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="rounded-sm"
+                    className="rounded-md border border-border bg-white"
                   />
                 </div>
               </div>
@@ -302,7 +379,7 @@ export default function MedicalHistoryPage() {
                       key={condition}
                       type="button"
                       onClick={() => toggleCondition(condition)}
-                      className={`px-4 py-3 text-sm font-light rounded-sm border transition-all duration-200 text-left ${
+                      className={`px-4 py-3 text-sm font-light rounded-md border transition-all duration-200 text-left ${
                         isSelected
                           ? "border-brand-secondary bg-brand-secondary-muted text-foreground"
                           : "border-border bg-card text-muted-foreground hover:border-border hover:bg-muted/50"
@@ -337,14 +414,14 @@ export default function MedicalHistoryPage() {
                     value={medicationInput}
                     onChange={(e) => setMedicationInput(e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, addMedication)}
-                    className="w-full px-4 py-3 bg-background border border-border rounded-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
+                    className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
                   />
                 </div>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={addMedication}
-                  className="rounded-sm shrink-0"
+                  className="rounded-md shrink-0"
                   aria-label="Add medication"
                 >
                   <Plus size={16} aria-hidden="true" />
@@ -356,7 +433,7 @@ export default function MedicalHistoryPage() {
                   {medications.map((med) => (
                     <div
                       key={med}
-                      className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-sm"
+                      className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-md"
                     >
                       <span className="text-sm font-light text-foreground">
                         {med}
@@ -400,14 +477,14 @@ export default function MedicalHistoryPage() {
                     value={allergyInput}
                     onChange={(e) => setAllergyInput(e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, addAllergy)}
-                    className="w-full px-4 py-3 bg-background border border-border rounded-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
+                    className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
                   />
                 </div>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={addAllergy}
-                  className="rounded-sm shrink-0"
+                  className="rounded-md shrink-0"
                   aria-label="Add allergy"
                 >
                   <Plus size={16} aria-hidden="true" />
@@ -419,7 +496,7 @@ export default function MedicalHistoryPage() {
                   {allergies.map((allergy) => (
                     <div
                       key={allergy}
-                      className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-sm"
+                      className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-md"
                     >
                       <span className="text-sm font-light text-foreground">
                         {allergy}
@@ -456,7 +533,7 @@ export default function MedicalHistoryPage() {
                 placeholder="Describe any previous surgeries or major procedures, including approximate dates..."
                 value={surgeries}
                 onChange={(e) => setSurgeries(e.target.value)}
-                className="w-full px-4 py-3 bg-background border border-border rounded-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors min-h-[120px] resize-y text-base font-light"
+                className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors min-h-[120px] resize-y text-base font-light"
               />
             </section>
 
@@ -482,7 +559,7 @@ export default function MedicalHistoryPage() {
                       key={condition}
                       type="button"
                       onClick={() => toggleFamilyCondition(condition)}
-                      className={`px-4 py-3 text-sm font-light rounded-sm border transition-all duration-200 text-left ${
+                      className={`px-4 py-3 text-sm font-light rounded-md border transition-all duration-200 text-left ${
                         isSelected
                           ? "border-brand-secondary bg-brand-secondary-muted text-foreground"
                           : "border-border bg-card text-muted-foreground hover:border-border hover:bg-muted/50"
@@ -498,24 +575,24 @@ export default function MedicalHistoryPage() {
 
             {/* Navigation */}
             <div className="flex justify-between pt-6 border-t border-border">
-              <Link
-                href="/intake"
-                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-sm"
+              <button
+                onClick={() => router.push("/intake")}
+                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
               >
                 <ArrowLeft size={16} aria-hidden="true" />
                 Back
-              </Link>
-              <Link
-                href="/intake/symptoms"
-                className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-sm"
+              </button>
+              <button
+                onClick={handleContinue}
+                className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-md"
               >
                 Continue
                 <ArrowRight size={16} aria-hidden="true" />
-              </Link>
+              </button>
             </div>
           </div>
         </div>
       </main>
-    </>
+    </AppShell>
   );
 }

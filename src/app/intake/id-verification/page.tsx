@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Heart,
   Stethoscope,
@@ -9,235 +9,116 @@ import {
   FileCheck,
   ArrowRight,
   ArrowLeft,
-  Upload,
   ShieldCheck,
-  X,
-  FileImage,
+  CheckCircle2,
+  XCircle,
+  CreditCard,
 } from "lucide-react";
-import { Nav } from "@/components/nav";
+import { AppShell } from "@/components/app-shell";
+import { useAction } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { getSessionCookie } from "@/lib/auth";
+import { loadStripe } from "@stripe/stripe-js";
 
 const INTAKE_STEPS = [
+  { label: "Payment", icon: CreditCard },
   { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
   { label: "Verification", icon: ScanLine },
   { label: "Review", icon: FileCheck },
 ] as const;
 
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-
-interface FilePreview {
-  name: string;
-  size: string;
-  type: string;
-  url: string | null;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function createPreview(file: File): FilePreview {
-  return {
-    name: file.name,
-    size: formatFileSize(file.size),
-    type: file.type,
-    url: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
-  };
-}
-
 export default function IDVerificationPage() {
-  const [idFront, setIdFront] = useState<FilePreview | null>(null);
-  const [idBack, setIdBack] = useState<FilePreview | null>(null);
-  const [insurance, setInsurance] = useState<FilePreview | null>(null);
+  const router = useRouter();
   const [consent, setConsent] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<"idle" | "verifying" | "verified" | "failed">("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [sessionId, setSessionId] = useState("");
 
-  const [dragOverFront, setDragOverFront] = useState(false);
-  const [dragOverBack, setDragOverBack] = useState(false);
-  const [dragOverInsurance, setDragOverInsurance] = useState(false);
+  const createVerificationSession = useAction(api.actions.stripeIdentity.createVerificationSession);
+  const checkVerificationStatus = useAction(api.actions.stripeIdentity.checkVerificationStatus);
 
-  const frontRef = useRef<HTMLInputElement>(null);
-  const backRef = useRef<HTMLInputElement>(null);
-  const insuranceRef = useRef<HTMLInputElement>(null);
+  const currentStep = 3;
 
-  const currentStep = 2;
+  useEffect(() => {
+    const storedIntakeId = localStorage.getItem("sxo_intake_id");
+    if (!storedIntakeId) {
+      router.push("/intake/medical-history");
+    }
+  }, [router]);
 
-  const handleFile = useCallback(
-    (
-      file: File,
-      setter: (preview: FilePreview | null) => void
-    ) => {
-      if (!ACCEPTED_TYPES.includes(file.type)) return;
-      if (file.size > MAX_FILE_SIZE) return;
-      setter(createPreview(file));
-    },
-    []
-  );
+  async function handleVerifyIdentity() {
+    if (!consent) return;
 
-  function handleDrop(
-    event: React.DragEvent,
-    setter: (preview: FilePreview | null) => void,
-    dragSetter: (v: boolean) => void
-  ) {
-    event.preventDefault();
-    dragSetter(false);
-    const file = event.dataTransfer.files[0];
-    if (file) handleFile(file, setter);
+    const session = getSessionCookie();
+    if (!session?.email) {
+      setErrorMessage("No session found. Please sign in again.");
+      return;
+    }
+
+    setVerificationStatus("verifying");
+    setErrorMessage("");
+
+    try {
+      // Create Stripe Identity session
+      const { verificationSessionId, clientSecret } = await createVerificationSession({
+        patientEmail: session.email,
+      });
+
+      setSessionId(verificationSessionId);
+
+      // Load Stripe.js
+      const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+      if (!stripe) {
+        throw new Error("Failed to load Stripe");
+      }
+
+      // Open Stripe Identity modal
+      const { error } = await stripe.verifyIdentity(clientSecret);
+
+      if (error) {
+        setVerificationStatus("failed");
+        setErrorMessage(error.message || "Verification failed");
+        return;
+      }
+
+      // Check verification status
+      const result = await checkVerificationStatus({
+        verificationSessionId,
+        patientEmail: session.email,
+      });
+
+      if (result.success) {
+        setVerificationStatus("verified");
+      } else {
+        setVerificationStatus("failed");
+        setErrorMessage(result.lastError?.message || "Verification was not completed");
+      }
+    } catch (err) {
+      setVerificationStatus("failed");
+      setErrorMessage(err instanceof Error ? err.message : "Verification failed");
+    }
   }
 
-  function handleDragOver(
-    event: React.DragEvent,
-    dragSetter: (v: boolean) => void
-  ) {
-    event.preventDefault();
-    dragSetter(true);
-  }
-
-  function handleDragLeave(dragSetter: (v: boolean) => void) {
-    dragSetter(false);
-  }
-
-  function handleInputChange(
-    event: React.ChangeEvent<HTMLInputElement>,
-    setter: (preview: FilePreview | null) => void
-  ) {
-    const file = event.target.files?.[0];
-    if (file) handleFile(file, setter);
-  }
-
-  function clearFile(
-    setter: (preview: FilePreview | null) => void,
-    ref: React.RefObject<HTMLInputElement | null>
-  ) {
-    setter(null);
-    if (ref.current) ref.current.value = "";
-  }
-
-  function renderUploadZone(
-    label: string,
-    description: string,
-    preview: FilePreview | null,
-    setter: (v: FilePreview | null) => void,
-    ref: React.RefObject<HTMLInputElement | null>,
-    isDragOver: boolean,
-    dragSetter: (v: boolean) => void,
-    isRequired: boolean
-  ) {
-    return (
-      <div>
-        <label className="block text-xs tracking-wider text-muted-foreground mb-3 uppercase">
-          {label}
-          {isRequired && <span className="text-destructive ml-1">*</span>}
-          {!isRequired && (
-            <span className="text-muted-foreground/60 ml-1 normal-case tracking-normal">
-              (optional)
-            </span>
-          )}
-        </label>
-
-        {preview ? (
-          <div className="border border-border rounded-sm p-5 bg-card">
-            <div className="flex items-start gap-4">
-              {preview.url ? (
-                <div className="w-20 h-14 rounded-sm overflow-hidden bg-muted flex-shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={preview.url}
-                    alt={`Preview of ${preview.name}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="w-20 h-14 rounded-sm bg-muted flex items-center justify-center flex-shrink-0">
-                  <FileImage
-                    size={20}
-                    className="text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-light text-foreground truncate">
-                  {preview.name}
-                </p>
-                <p className="text-xs text-muted-foreground font-light mt-1">
-                  {preview.size}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => clearFile(setter, ref)}
-                className="text-muted-foreground hover:text-destructive transition-colors p-1 flex-shrink-0"
-                aria-label={`Remove ${preview.name}`}
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div
-            onDrop={(e) => handleDrop(e, setter, dragSetter)}
-            onDragOver={(e) => handleDragOver(e, dragSetter)}
-            onDragLeave={() => handleDragLeave(dragSetter)}
-            className={`border-2 border-dashed rounded-sm p-8 text-center transition-all duration-200 cursor-pointer ${
-              isDragOver
-                ? "border-brand-secondary bg-brand-secondary-muted"
-                : "border-border hover:border-muted-foreground/30"
-            }`}
-            onClick={() => ref.current?.click()}
-            role="button"
-            tabIndex={0}
-            aria-label={`Upload ${label}`}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                ref.current?.click();
-              }
-            }}
-          >
-            <Upload
-              size={20}
-              className="mx-auto mb-3 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <p className="text-sm font-light text-foreground mb-1">
-              {description}
-            </p>
-            <p className="text-xs text-muted-foreground font-light">
-              Drag and drop or click to browse. JPEG, PNG, or PDF up to 10MB.
-            </p>
-            <input
-              ref={ref}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
-              onChange={(e) => handleInputChange(e, setter)}
-              className="hidden"
-              aria-label={label}
-            />
-          </div>
-        )}
-      </div>
-    );
+  function handleContinue() {
+    router.push("/intake/review");
   }
 
   return (
-    <>
-      <Nav />
+    <AppShell>
       <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
         <div className="max-w-[1400px] mx-auto">
           {/* Progress bar */}
           <div className="max-w-2xl mb-12">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                Step 3 of 4
+                Step 4 of 5
               </span>
             </div>
             <div className="w-full h-px bg-border relative">
               <div
                 className="absolute top-0 left-0 h-px bg-brand-secondary transition-all duration-500"
-                style={{ width: "75%" }}
+                style={{ width: "80%" }}
               />
             </div>
             {/* Step indicators */}
@@ -301,70 +182,86 @@ export default function IDVerificationPage() {
               Identity Verification
             </h1>
             <p className="text-muted-foreground font-light">
-              Upload a government-issued photo ID. This is required for
-              telehealth prescriptions to comply with federal and state
-              regulations.
+              Federal and state regulations require identity verification for telehealth prescriptions. We use Stripe Identity for secure, HIPAA-compliant verification.
             </p>
           </div>
 
-          {/* Upload zones */}
+          {/* Content */}
           <div className="max-w-2xl space-y-10">
-            {/* Government ID */}
-            <section>
-              <h2
-                className="text-lg font-light text-foreground mb-1"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Government-Issued ID
-              </h2>
-              <div className="h-px bg-border mb-6" />
-              <div className="space-y-5">
-                {renderUploadZone(
-                  "ID Front",
-                  "Upload the front of your driver's license, state ID, or passport",
-                  idFront,
-                  setIdFront,
-                  frontRef,
-                  dragOverFront,
-                  setDragOverFront,
-                  true
-                )}
-                {renderUploadZone(
-                  "ID Back",
-                  "Upload the back of your ID (not required for passports)",
-                  idBack,
-                  setIdBack,
-                  backRef,
-                  dragOverBack,
-                  setDragOverBack,
-                  true
-                )}
+            {/* Verification status display */}
+            {verificationStatus === "verified" && (
+              <div className="border border-green-500 rounded-md p-6 bg-green-50">
+                <div className="flex items-start gap-4">
+                  <CheckCircle2 size={24} className="text-green-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h2
+                      className="text-lg font-light text-green-900 mb-2"
+                      style={{ fontFamily: "var(--font-heading)" }}
+                    >
+                      Identity Verified
+                    </h2>
+                    <p className="text-sm text-green-800 font-light">
+                      Your identity has been successfully verified. You can now proceed to review your intake.
+                    </p>
+                  </div>
+                </div>
               </div>
-            </section>
+            )}
 
-            {/* Insurance Card */}
-            <section>
-              <h2
-                className="text-lg font-light text-foreground mb-1"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Insurance Card
-              </h2>
-              <div className="h-px bg-border mb-6" />
-              {renderUploadZone(
-                "Insurance Card",
-                "Upload a photo of your insurance card (front preferred)",
-                insurance,
-                setInsurance,
-                insuranceRef,
-                dragOverInsurance,
-                setDragOverInsurance,
-                false
-              )}
-            </section>
+            {verificationStatus === "failed" && (
+              <div className="border border-destructive rounded-md p-6 bg-destructive/5">
+                <div className="flex items-start gap-4">
+                  <XCircle size={24} className="text-destructive flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h2
+                      className="text-lg font-light text-destructive mb-2"
+                      style={{ fontFamily: "var(--font-heading)" }}
+                    >
+                      Verification Failed
+                    </h2>
+                    <p className="text-sm text-destructive font-light">
+                      {errorMessage || "Verification could not be completed. Please try again."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            {/* Security note */}
-            <div className="flex items-start gap-4 p-5 bg-card border border-border rounded-sm">
+            {/* Verification explanation */}
+            {verificationStatus === "idle" && (
+              <section className="space-y-6">
+                <div>
+                  <h2
+                    className="text-lg font-light text-foreground mb-1"
+                    style={{ fontFamily: "var(--font-heading)" }}
+                  >
+                    What to Expect
+                  </h2>
+                  <div className="h-px bg-border mb-4" />
+                  <ul className="space-y-3 text-sm text-muted-foreground font-light">
+                    <li className="flex gap-3">
+                      <span className="text-brand-secondary">1.</span>
+                      <span>Click "Verify Identity" to open the Stripe Identity modal</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="text-brand-secondary">2.</span>
+                      <span>Upload a photo of your government-issued ID (driver's license, passport, or state ID)</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="text-brand-secondary">3.</span>
+                      <span>Take a selfie to match your ID photo</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="text-brand-secondary">4.</span>
+                      <span>Verification typically completes in seconds</span>
+                    </li>
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {/* Security notice */}
+            <div className="flex items-start gap-4 p-5 bg-card border border-border rounded-md">
               <ShieldCheck
                 size={18}
                 className="text-brand-secondary mt-0.5 flex-shrink-0"
@@ -372,55 +269,74 @@ export default function IDVerificationPage() {
               />
               <div>
                 <p className="text-sm font-light text-foreground">
-                  Your documents are encrypted and HIPAA-compliant
+                  Your identity data is encrypted and HIPAA-compliant
                 </p>
                 <p className="text-xs text-muted-foreground font-light mt-1">
-                  All uploads are transmitted over TLS encryption and stored in
-                  HIPAA-compliant infrastructure. Your ID is only used for identity
-                  verification and is never shared with third parties.
+                  Stripe Identity handles verification using bank-level encryption. Your ID images are stored securely and never shared with third parties. ScriptsXO only receives a verification status.
                 </p>
               </div>
             </div>
 
             {/* Consent */}
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                id="id-consent"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded-sm border-border text-primary focus:ring-primary accent-brand-secondary"
-              />
-              <label
-                htmlFor="id-consent"
-                className="text-sm text-muted-foreground font-light leading-relaxed cursor-pointer"
-              >
-                I confirm that the uploaded documents are authentic and belong to
-                me. I consent to ScriptsXO verifying my identity for the purpose
-                of telehealth consultation and prescription services.
-              </label>
-            </div>
+            {verificationStatus === "idle" && (
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="id-consent"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded-sm border-border text-primary focus:ring-primary accent-brand-secondary"
+                />
+                <label
+                  htmlFor="id-consent"
+                  className="text-sm text-muted-foreground font-light leading-relaxed cursor-pointer"
+                >
+                  I confirm that the identity documents I provide are authentic and belong to me. I consent to ScriptsXO verifying my identity through Stripe Identity for the purpose of telehealth consultation and prescription services.
+                </label>
+              </div>
+            )}
 
             {/* Navigation */}
             <div className="flex justify-between pt-6 border-t border-border">
-              <Link
-                href="/intake/symptoms"
-                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-sm"
+              <button
+                onClick={() => router.push("/intake/symptoms")}
+                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
               >
                 <ArrowLeft size={16} aria-hidden="true" />
                 Back
-              </Link>
-              <Link
-                href="/intake/review"
-                className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-sm"
-              >
-                Continue
-                <ArrowRight size={16} aria-hidden="true" />
-              </Link>
+              </button>
+
+              {verificationStatus === "verified" ? (
+                <button
+                  onClick={handleContinue}
+                  className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-md"
+                >
+                  Continue to Review
+                  <ArrowRight size={16} aria-hidden="true" />
+                </button>
+              ) : verificationStatus === "verifying" ? (
+                <div className="inline-flex items-center gap-2 px-8 py-3 bg-muted text-muted-foreground text-[11px] tracking-[0.15em] uppercase font-light rounded-md">
+                  <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Verifying...
+                </div>
+              ) : (
+                <button
+                  onClick={handleVerifyIdentity}
+                  disabled={!consent}
+                  className={`inline-flex items-center gap-2 px-8 py-3 text-[11px] tracking-[0.15em] uppercase font-light rounded-md transition-all duration-300 ${
+                    consent
+                      ? "bg-foreground text-background hover:bg-foreground/90"
+                      : "bg-muted text-muted-foreground cursor-not-allowed"
+                  }`}
+                >
+                  Verify Identity
+                  <ShieldCheck size={16} aria-hidden="true" />
+                </button>
+              )}
             </div>
           </div>
         </div>
       </main>
-    </>
+    </AppShell>
   );
 }
