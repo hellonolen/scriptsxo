@@ -191,6 +191,7 @@ function getStatusBadge(status: string): { label: string; isActive: boolean } {
 
 export default function PrescriptionsPage() {
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -198,6 +199,7 @@ export default function PrescriptionsPage() {
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
 
   // Fetch client data
@@ -222,13 +224,18 @@ export default function PrescriptionsPage() {
     } catch (error) {
       console.error("Failed to generate PDF:", error);
     } finally {
-      setDownloading(prescriptionId);
-      setTimeout(() => setDownloading(null), 1500);
+      setDownloading(null);
     }
   };
 
-  // Loading state
-  if (patient === undefined || prescriptions === undefined) {
+  // Loading state — only show spinner while genuinely loading.
+  // When session has been checked and email is null, queries are skipped — not loading.
+  // When patient is null (not found), prescriptions are skipped — treat as empty, not loading.
+  const isLoading = !sessionChecked
+    || (email !== null && patient === undefined)
+    || (patient && prescriptions === undefined);
+
+  if (isLoading) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">

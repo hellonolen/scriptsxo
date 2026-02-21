@@ -4,7 +4,7 @@ import { mutation, query } from "./_generated/server";
 
 export const create = mutation({
   args: {
-    memberId: v.id("members"),
+    memberId: v.optional(v.id("members")),
     email: v.string(),
     firstName: v.string(),
     lastName: v.string(),

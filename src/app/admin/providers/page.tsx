@@ -82,10 +82,7 @@ export default function AdminProvidersPage() {
 
   const handleAddProvider = async () => {
     try {
-      // We need a memberId — for now create a placeholder member
-      // In production, this would come from the auth/invite flow
       await createProvider({
-        memberId: "" as any, // Will need to be created in production
         email: form.email,
         firstName: form.firstName,
         lastName: form.lastName,

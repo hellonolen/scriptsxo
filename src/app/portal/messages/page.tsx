@@ -13,6 +13,7 @@ import { api } from "../../../../convex/_generated/api";
 
 export default function MessagesPage() {
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -21,6 +22,7 @@ export default function MessagesPage() {
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
 
   // Fetch conversations
@@ -52,8 +54,12 @@ export default function MessagesPage() {
     }
   };
 
-  // Loading state
-  if (conversations === undefined) {
+  // Loading state — only show spinner while genuinely loading.
+  // When session has been checked and email is null, the query is skipped (undefined) — not loading.
+  const isLoading = !sessionChecked
+    || (email !== null && conversations === undefined);
+
+  if (isLoading) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">

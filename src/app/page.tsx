@@ -9,6 +9,7 @@ import { SITECONFIG } from "@/lib/config";
 import {
   createSession,
   setSessionCookie,
+  getSessionCookie,
   isAdminEmail,
   createAdminSession,
   setAdminCookie,
@@ -82,11 +83,20 @@ export default function HomePage() {
     if (step !== "routing" || !routingEmail) return;
     if (patient === undefined || membership === undefined) return;
 
+    // Update session cookie with payment status before routing
+    const currentSession = getSessionCookie();
+    if (currentSession) {
+      const paymentStatus = membership?.isPaid === true ? "active" : "none";
+      setSessionCookie({ ...currentSession, paymentStatus });
+    }
+
     const hasPaid = membership?.isPaid === true;
     if (patient && hasPaid) {
       router.push("/dashboard");
-    } else {
+    } else if (patient) {
       router.push("/intake/payment");
+    } else {
+      router.push("/dashboard");
     }
   }, [step, routingEmail, patient, membership, router]);
 

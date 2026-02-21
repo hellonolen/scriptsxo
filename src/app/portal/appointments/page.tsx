@@ -15,6 +15,7 @@ import { SITECONFIG, formatPrice } from "@/lib/config";
 
 export default function AppointmentsPage() {
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
   const [callReason, setCallReason] = useState("");
   const [noRefundChecked, setNoRefundChecked] = useState(false);
@@ -24,6 +25,7 @@ export default function AppointmentsPage() {
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
 
   // Fetch patient data
@@ -38,8 +40,14 @@ export default function AppointmentsPage() {
     patient ? { patientId: patient._id } : "skip"
   );
 
-  // Loading state
-  if (patient === undefined || consultations === undefined) {
+  // Loading state — only show spinner while genuinely loading.
+  // When session has been checked and email is null, queries are skipped (undefined) — not loading.
+  // When patient is null (not found), consultations will be skipped — treat as empty, not loading.
+  const isLoading = !sessionChecked
+    || (email !== null && patient === undefined)
+    || (patient && consultations === undefined);
+
+  if (isLoading) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">

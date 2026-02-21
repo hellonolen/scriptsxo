@@ -15,6 +15,7 @@ import { api } from "../../../convex/_generated/api";
 export default function DashboardPage() {
   const [firstName, setFirstName] = useState("there");
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     const session = getSessionCookie();
@@ -24,6 +25,7 @@ export default function DashboardPage() {
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
 
   // Fetch client data
@@ -92,7 +94,14 @@ export default function DashboardPage() {
     });
 
   // If loading (only wait for patient query; prescriptions/consultations are skipped when patient is null)
-  if (patient === undefined || (patient && (prescriptions === undefined || consultations === undefined))) {
+  // When session hasn't been checked yet, or when email exists but patient query hasn't returned yet,
+  // or when patient exists but dependent queries haven't returned yet — show spinner.
+  // When sessionChecked is true and email is null, skip the spinner (no session = show CTA).
+  const isLoading = !sessionChecked
+    || (email !== null && patient === undefined)
+    || (patient && (prescriptions === undefined || consultations === undefined));
+
+  if (isLoading) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1200px]">

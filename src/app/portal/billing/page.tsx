@@ -14,12 +14,14 @@ import { formatPrice } from "@/lib/config";
 
 export default function BillingPage() {
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     const session = getSessionCookie();
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
 
   // Fetch patient data
@@ -34,8 +36,14 @@ export default function BillingPage() {
     patient ? { patientId: patient._id } : "skip"
   );
 
-  // Loading state
-  if (patient === undefined || billingRecords === undefined) {
+  // Loading state — only show spinner while genuinely loading.
+  // When session has been checked and email is null, queries are skipped — not loading.
+  // When patient is null (not found), billing is skipped — treat as empty, not loading.
+  const isLoading = !sessionChecked
+    || (email !== null && patient === undefined)
+    || (patient && billingRecords === undefined);
+
+  if (isLoading) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">
@@ -80,7 +88,7 @@ export default function BillingPage() {
                     Payment on file
                   </p>
                   <p className="text-[12px] text-muted-foreground font-light">
-                    Managed via Stripe
+                    Managed via Whop
                   </p>
                 </div>
               </div>

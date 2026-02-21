@@ -14,7 +14,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { SITECONFIG, formatPrice } from "@/lib/config";
-import { getSessionCookie } from "@/lib/auth";
+import { getSessionCookie, setSessionCookie } from "@/lib/auth";
 
 /* ---------------------------------------------------------------------------
    CONSTANTS
@@ -106,10 +106,7 @@ function PayPageInner() {
         // Update the session cookie with paymentStatus
         const session = getSessionCookie();
         if (session) {
-          const updated = { ...session, paymentStatus: "active" as const };
-          const cookieValue = encodeURIComponent(JSON.stringify(updated));
-          const expires = new Date(updated.expiresAt).toUTCString();
-          document.cookie = `app_session=${cookieValue}; path=/; expires=${expires}; SameSite=Lax; Secure`;
+          setSessionCookie({ ...session, paymentStatus: "active" });
         }
         router.replace("/dashboard/messages");
       } else {

@@ -73,12 +73,29 @@ export default function IntakeReviewPage() {
     }
   }
 
-  if (!intakeData) {
+  // Show spinner only while genuinely loading (intakeId set but query hasn't returned yet).
+  // When intakeId is null (no stored ID), the useEffect redirects to medical-history.
+  // When intakeData is null (not found in DB), show a "not found" message instead of infinite spinner.
+  if (intakeId && intakeData === undefined) {
     return (
       <AppShell>
         <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
           <div className="max-w-[1400px] mx-auto">
             <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </main>
+      </AppShell>
+    );
+  }
+
+  if (!intakeData) {
+    return (
+      <AppShell>
+        <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
+          <div className="max-w-[1400px] mx-auto">
+            <p className="text-muted-foreground">
+              Intake not found. Please start a new intake.
+            </p>
           </div>
         </main>
       </AppShell>
