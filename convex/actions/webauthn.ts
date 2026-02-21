@@ -12,7 +12,7 @@
  */
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -171,7 +171,7 @@ export const getAuthenticationOptions = action({
     });
 
     if (credentials.length === 0) {
-      throw new Error(
+      throw new ConvexError(
         "No passkeys registered for this email. Please create an account first."
       );
     }

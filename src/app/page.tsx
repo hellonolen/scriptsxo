@@ -151,10 +151,13 @@ export default function HomePage() {
       setStatusText("Signing you in...");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "";
+      const convexData = (err as Record<string, unknown>)?.data;
+      const fullMessage = typeof convexData === "string" ? convexData : message;
       // No passkeys → show registration form
       if (
-        message.includes("No passkeys") ||
-        message.includes("no credentials")
+        fullMessage.includes("No passkeys") ||
+        fullMessage.includes("no credentials") ||
+        fullMessage.includes("No passkeys registered")
       ) {
         setStep("name");
         setError("");
