@@ -103,8 +103,6 @@ export default function HomePage() {
       message.includes("The operation either timed out")
     ) {
       setError("Authentication was cancelled. Please try again.");
-    } else if (message.includes("SecurityError") || message.includes("RP ID")) {
-      setError("Domain configuration error. Please contact support.");
     } else {
       setError(message);
     }

@@ -91,8 +91,8 @@ export default function DashboardPage() {
       };
     });
 
-  // If loading
-  if (patient === undefined || prescriptions === undefined || consultations === undefined) {
+  // If loading (only wait for patient query; prescriptions/consultations are skipped when patient is null)
+  if (patient === undefined || (patient && (prescriptions === undefined || consultations === undefined))) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1200px]">
