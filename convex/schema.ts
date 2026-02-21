@@ -505,5 +505,6 @@ export default defineSchema({
     .index("by_prescriptionId", ["prescriptionId"])
     .index("by_pharmacyId", ["pharmacyId"])
     .index("by_status", ["status"])
-    .index("by_createdAt", ["createdAt"]),
+    .index("by_createdAt", ["createdAt"])
+    .index("by_phaxioFaxId", ["phaxioFaxId"]),
 });

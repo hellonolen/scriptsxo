@@ -210,7 +210,7 @@ export const callMultimodal = action({
     temperature: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<LLMResponse> => {
-    const apiKey = getApiKey();
+    const apiKey = getGeminiKey();
     const model = args.model || "gemini-2.0-flash";
     const maxTokens = args.maxTokens || 2048;
     const temperature = args.temperature ?? 0.2;

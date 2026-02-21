@@ -98,3 +98,45 @@ export const getByPrescription = query({
       .collect();
   },
 });
+
+export const getByPhaxioFaxId = query({
+  args: {
+    phaxioFaxId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("faxLogs")
+      .withIndex("by_phaxioFaxId", (q) => q.eq("phaxioFaxId", args.phaxioFaxId))
+      .first();
+  },
+});
+
+export const updateByPhaxioFaxId = mutation({
+  args: {
+    phaxioFaxId: v.string(),
+    status: v.string(),
+    pages: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const faxLog = await ctx.db
+      .query("faxLogs")
+      .withIndex("by_phaxioFaxId", (q) => q.eq("phaxioFaxId", args.phaxioFaxId))
+      .first();
+
+    if (!faxLog) {
+      console.warn(`[FAX] No fax log found for phaxioFaxId: ${args.phaxioFaxId}`);
+      return { success: false, error: "Fax log not found" };
+    }
+
+    const updates: Record<string, unknown> = { status: args.status };
+    if (args.pages !== undefined) updates.pages = args.pages;
+    if (args.errorMessage !== undefined) updates.errorMessage = args.errorMessage;
+    if (args.status === "sent") updates.sentAt = Date.now();
+    if (args.status === "confirmed") updates.confirmedAt = Date.now();
+    if (args.status === "failed") updates.attempts = faxLog.attempts + 1;
+
+    await ctx.db.patch(faxLog._id, updates);
+    return { success: true };
+  },
+});
