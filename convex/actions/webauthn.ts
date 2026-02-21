@@ -49,46 +49,52 @@ export const getRegistrationOptions = action({
     userName: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const email = args.email.toLowerCase();
-    const { rpID } = getConfig();
+    try {
+      const email = args.email.toLowerCase();
+      const { rpID } = getConfig();
 
-    // Ensure a member record exists (creates one with role "patient" if new)
-    await ctx.runMutation(api.members.getOrCreate, {
-      email,
-      name: args.userName || email.split("@")[0],
-    });
+      // Ensure a member record exists (creates one with role "patient" if new)
+      await ctx.runMutation(api.members.getOrCreate, {
+        email,
+        name: args.userName || email.split("@")[0],
+      });
 
-    // Get existing credentials to exclude (prevent duplicate device registration)
-    const existingCreds = await ctx.runQuery(api.passkeys.getCredentials, {
-      email,
-    });
+      // Get existing credentials to exclude (prevent duplicate device registration)
+      const existingCreds = await ctx.runQuery(api.passkeys.getCredentials, {
+        email,
+      });
 
-    const options = await generateRegistrationOptions({
-      rpName: RP_NAME,
-      rpID,
-      userName: email,
-      userDisplayName: args.userName || email.split("@")[0],
-      excludeCredentials: existingCreds.map((cred) => ({
-        id: cred.credentialId,
-        transports: cred.transports,
-      })),
-      authenticatorSelection: {
-        authenticatorAttachment: "platform",
-        requireResidentKey: true,
-        residentKey: "required",
-        userVerification: "required",
-      },
-      timeout: 300000,
-    });
+      const options = await generateRegistrationOptions({
+        rpName: RP_NAME,
+        rpID,
+        userName: email,
+        userDisplayName: args.userName || email.split("@")[0],
+        excludeCredentials: existingCreds.map((cred) => ({
+          id: cred.credentialId,
+          transports: cred.transports,
+        })),
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          requireResidentKey: true,
+          residentKey: "required",
+          userVerification: "required",
+        },
+        timeout: 300000,
+      });
 
-    // Store the challenge for later verification
-    await ctx.runMutation(api.passkeys.storeWebAuthnChallenge, {
-      challenge: options.challenge,
-      email,
-      type: "webauthn_registration",
-    });
+      // Store the challenge for later verification
+      await ctx.runMutation(api.passkeys.storeWebAuthnChallenge, {
+        challenge: options.challenge,
+        email,
+        type: "webauthn_registration",
+      });
 
-    return options;
+      return options;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Registration setup failed";
+      console.error("[SXO-WEBAUTHN] getRegistrationOptions error:", message);
+      throw new ConvexError(message);
+    }
   },
 });
 
@@ -102,54 +108,60 @@ export const verifyAndStoreRegistration = action({
     response: v.string(), // JSON-stringified RegistrationResponseJSON
   },
   handler: async (ctx, args) => {
-    const email = args.email.toLowerCase();
-    const { rpID, origin } = getConfig();
+    try {
+      const email = args.email.toLowerCase();
+      const { rpID, origin } = getConfig();
 
-    // Consume the stored challenge (one-time use)
-    const expectedChallenge = await ctx.runMutation(
-      api.passkeys.consumeWebAuthnChallenge,
-      { email, type: "webauthn_registration" }
-    );
+      // Consume the stored challenge (one-time use)
+      const expectedChallenge = await ctx.runMutation(
+        api.passkeys.consumeWebAuthnChallenge,
+        { email, type: "webauthn_registration" }
+      );
 
-    if (!expectedChallenge) {
-      return {
-        success: false,
-        error: "Challenge expired or not found. Please try again.",
-      };
+      if (!expectedChallenge) {
+        return {
+          success: false,
+          error: "Challenge expired or not found. Please try again.",
+        };
+      }
+
+      const registrationResponse = JSON.parse(args.response);
+
+      const verification = await verifyRegistrationResponse({
+        response: registrationResponse,
+        expectedChallenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+      });
+
+      if (!verification.verified || !verification.registrationInfo) {
+        return { success: false, error: "Verification failed. Please try again." };
+      }
+
+      const { credential, credentialDeviceType, credentialBackedUp } =
+        verification.registrationInfo;
+
+      // Store the credential in Convex
+      const result = await ctx.runMutation(api.passkeys.storeCredential, {
+        email,
+        credentialId: credential.id,
+        publicKey: uint8ArrayToBase64Url(credential.publicKey),
+        counter: credential.counter,
+        deviceType: credentialDeviceType,
+        backedUp: credentialBackedUp,
+        transports: credential.transports,
+      });
+
+      if (!result.success) {
+        return { success: false, error: result.error };
+      }
+
+      return { success: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Registration verification failed";
+      console.error("[SXO-WEBAUTHN] verifyAndStoreRegistration error:", message);
+      throw new ConvexError(message);
     }
-
-    const registrationResponse = JSON.parse(args.response);
-
-    const verification = await verifyRegistrationResponse({
-      response: registrationResponse,
-      expectedChallenge,
-      expectedOrigin: origin,
-      expectedRPID: rpID,
-    });
-
-    if (!verification.verified || !verification.registrationInfo) {
-      return { success: false, error: "Verification failed. Please try again." };
-    }
-
-    const { credential, credentialDeviceType, credentialBackedUp } =
-      verification.registrationInfo;
-
-    // Store the credential in Convex
-    const result = await ctx.runMutation(api.passkeys.storeCredential, {
-      email,
-      credentialId: credential.id,
-      publicKey: uint8ArrayToBase64Url(credential.publicKey),
-      counter: credential.counter,
-      deviceType: credentialDeviceType,
-      backedUp: credentialBackedUp,
-      transports: credential.transports,
-    });
-
-    if (!result.success) {
-      return { success: false, error: result.error };
-    }
-
-    return { success: true };
   },
 });
 
@@ -176,24 +188,31 @@ export const getAuthenticationOptions = action({
       );
     }
 
-    const options = await generateAuthenticationOptions({
-      rpID,
-      allowCredentials: credentials.map((cred) => ({
-        id: cred.credentialId,
-        transports: cred.transports,
-      })),
-      userVerification: "required",
-      timeout: 300000,
-    });
+    try {
+      const options = await generateAuthenticationOptions({
+        rpID,
+        allowCredentials: credentials.map((cred) => ({
+          id: cred.credentialId,
+          transports: cred.transports,
+        })),
+        userVerification: "required",
+        timeout: 300000,
+      });
 
-    // Store the challenge
-    await ctx.runMutation(api.passkeys.storeWebAuthnChallenge, {
-      challenge: options.challenge,
-      email,
-      type: "webauthn_authentication",
-    });
+      // Store the challenge
+      await ctx.runMutation(api.passkeys.storeWebAuthnChallenge, {
+        challenge: options.challenge,
+        email,
+        type: "webauthn_authentication",
+      });
 
-    return options;
+      return options;
+    } catch (err) {
+      if (err instanceof ConvexError) throw err;
+      const message = err instanceof Error ? err.message : "Authentication setup failed";
+      console.error("[SXO-WEBAUTHN] getAuthenticationOptions error:", message);
+      throw new ConvexError(message);
+    }
   },
 });
 
@@ -207,58 +226,65 @@ export const verifyAuthentication = action({
     response: v.string(), // JSON-stringified AuthenticationResponseJSON
   },
   handler: async (ctx, args) => {
-    const email = args.email.toLowerCase();
-    const { rpID, origin } = getConfig();
+    try {
+      const email = args.email.toLowerCase();
+      const { rpID, origin } = getConfig();
 
-    // Consume the stored challenge
-    const expectedChallenge = await ctx.runMutation(
-      api.passkeys.consumeWebAuthnChallenge,
-      { email, type: "webauthn_authentication" }
-    );
+      // Consume the stored challenge
+      const expectedChallenge = await ctx.runMutation(
+        api.passkeys.consumeWebAuthnChallenge,
+        { email, type: "webauthn_authentication" }
+      );
 
-    if (!expectedChallenge) {
-      return {
-        success: false,
-        error: "Challenge expired or not found. Please try again.",
-      };
+      if (!expectedChallenge) {
+        return {
+          success: false,
+          error: "Challenge expired or not found. Please try again.",
+        };
+      }
+
+      const authResponse = JSON.parse(args.response);
+      const credentialId = authResponse.id;
+
+      // Get the full credential data for verification
+      const credential = await ctx.runQuery(
+        api.passkeys.getCredentialForAuth,
+        { credentialId, email }
+      );
+
+      if (!credential) {
+        return { success: false, error: "Credential not recognized." };
+      }
+
+      const verification = await verifyAuthenticationResponse({
+        response: authResponse,
+        expectedChallenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+        credential: {
+          id: credential.credentialId,
+          publicKey: base64UrlToUint8Array(credential.publicKey),
+          counter: credential.counter,
+          transports: credential.transports,
+        },
+      });
+
+      if (!verification.verified) {
+        return { success: false, error: "Authentication failed." };
+      }
+
+      // Update counter and login count
+      await ctx.runMutation(api.passkeys.updateCredentialAfterAuth, {
+        credentialId: credential.credentialId,
+        newCounter: verification.authenticationInfo.newCounter,
+      });
+
+      return { success: true, email };
+    } catch (err) {
+      if (err instanceof ConvexError) throw err;
+      const message = err instanceof Error ? err.message : "Authentication verification failed";
+      console.error("[SXO-WEBAUTHN] verifyAuthentication error:", message);
+      throw new ConvexError(message);
     }
-
-    const authResponse = JSON.parse(args.response);
-    const credentialId = authResponse.id;
-
-    // Get the full credential data for verification
-    const credential = await ctx.runQuery(
-      api.passkeys.getCredentialForAuth,
-      { credentialId, email }
-    );
-
-    if (!credential) {
-      return { success: false, error: "Credential not recognized." };
-    }
-
-    const verification = await verifyAuthenticationResponse({
-      response: authResponse,
-      expectedChallenge,
-      expectedOrigin: origin,
-      expectedRPID: rpID,
-      credential: {
-        id: credential.credentialId,
-        publicKey: base64UrlToUint8Array(credential.publicKey),
-        counter: credential.counter,
-        transports: credential.transports,
-      },
-    });
-
-    if (!verification.verified) {
-      return { success: false, error: "Authentication failed." };
-    }
-
-    // Update counter and login count
-    await ctx.runMutation(api.passkeys.updateCredentialAfterAuth, {
-      credentialId: credential.credentialId,
-      newCounter: verification.authenticationInfo.newCounter,
-    });
-
-    return { success: true, email };
   },
 });

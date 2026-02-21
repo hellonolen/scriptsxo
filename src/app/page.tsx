@@ -91,8 +91,10 @@ export default function HomePage() {
   }, [step, routingEmail, patient, membership, router]);
 
   function handleAuthError(err: unknown) {
-    const message =
+    const rawMessage =
       err instanceof Error ? err.message : "An unexpected error occurred";
+    const convexData = (err as Record<string, unknown>)?.data;
+    const message = typeof convexData === "string" ? convexData : rawMessage;
 
     if (
       message.includes("NotAllowed") ||
@@ -101,6 +103,8 @@ export default function HomePage() {
       message.includes("The operation either timed out")
     ) {
       setError("Authentication was cancelled. Please try again.");
+    } else if (message.includes("SecurityError") || message.includes("RP ID")) {
+      setError("Domain configuration error. Please contact support.");
     } else {
       setError(message);
     }
