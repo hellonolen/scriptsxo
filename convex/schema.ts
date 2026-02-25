@@ -34,6 +34,17 @@ export default defineSchema({
     rateLimitKey: v.optional(v.string()),
   }).index("by_challenge", ["challenge"]),
 
+  // === MAGIC LINK CODES (email-based auth fallback) ===
+  magicLinks: defineTable({
+    email: v.string(),
+    code: v.string(),
+    expiresAt: v.number(),
+    consumed: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_email_code", ["email", "code"]),
+
   // === ORGANIZATIONS ===
   organizations: defineTable({
     name: v.string(),
@@ -486,6 +497,58 @@ export default defineSchema({
     updatedAt: v.number(),
     updatedBy: v.optional(v.string()),
   }).index("by_key", ["key"]),
+
+  // === CREDENTIAL VERIFICATIONS (agentic role verification pipeline) ===
+  credentialVerifications: defineTable({
+    memberId: v.id("members"),
+    email: v.string(),
+    selectedRole: v.string(), // "patient" | "provider" | "pharmacy"
+    status: v.string(), // "pending" | "in_progress" | "verified" | "rejected" | "expired"
+    currentStep: v.string(), // e.g. "role_selected" | "npi_check" | "license_scan" | "dea_entry" | "compliance_review" | "stripe_identity" | "ncpdp_check" | "complete"
+    completedSteps: v.array(v.string()),
+
+    // === Provider-specific verification data ===
+    providerNpi: v.optional(v.string()),
+    providerNpiResult: v.optional(v.any()), // NPI Registry response data
+    providerLicenseFileId: v.optional(v.string()), // file storage ID for license scan
+    providerLicenseScanResult: v.optional(v.any()), // Gemini OCR result
+    providerDeaNumber: v.optional(v.string()),
+    providerTitle: v.optional(v.string()), // "MD" | "DO" | "PA" | "NP" | "APRN"
+    providerSpecialties: v.optional(v.array(v.string())),
+    providerLicensedStates: v.optional(v.array(v.string())),
+
+    // === Patient-specific verification data ===
+    patientStripeSessionId: v.optional(v.string()),
+    patientStripeStatus: v.optional(v.string()), // "requires_input" | "processing" | "verified" | "canceled"
+    patientIdScanResult: v.optional(v.any()), // Gemini or Stripe result
+
+    // === Pharmacy-specific verification data ===
+    pharmacyNcpdpId: v.optional(v.string()),
+    pharmacyNpi: v.optional(v.string()),
+    pharmacyName: v.optional(v.string()),
+    pharmacyRegistryResult: v.optional(v.any()), // lookup result
+
+    // === Compliance / AI review ===
+    complianceSummary: v.optional(v.any()), // compliance agent output
+    complianceRecordIds: v.optional(v.array(v.string())), // IDs of created complianceRecords
+
+    // === Error tracking ===
+    errors: v.optional(v.array(v.object({
+      step: v.string(),
+      message: v.string(),
+      timestamp: v.number(),
+    }))),
+    retryCount: v.optional(v.number()),
+
+    // === Timestamps ===
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_memberId", ["memberId"])
+    .index("by_email", ["email"])
+    .index("by_status", ["status"])
+    .index("by_selectedRole", ["selectedRole"]),
 
   // === FAX LOGS ===
   faxLogs: defineTable({
