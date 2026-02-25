@@ -215,18 +215,116 @@ if (event.actorMemberId != null) record.actorMemberId = event.actorMemberId;
 
 ---
 
-## OPERATIONAL NOTES (ACTION REQUIRED)
+### BUG-002 (HIGH) — Failed security events not persisted in prod due to Convex transactional rollback
 
-### Bootstrap not yet run in prod
+**Found:** Final Production Lockdown — Objective 3 (audit trail integrity check).
 
-No `isPlatformOwner: true` member exists in production. The seed bootstrap is currently **open**.
+**Repro:**
+```
+# Self-revoke attempt — handler fires logSecurityEvent then throws FORBIDDEN
+npx convex run platformAdmin:revokePlatformOwner '{
+  "callerId": "kd79gqkkgw5512hsg77zbhr0c581kk5p",
+  "targetMemberId": "kd79gqkkgw5512hsg77zbhr0c581kk5p",
+  "confirmationPhrase": "REVOKE_PLATFORM_OWNER"
+}' --prod
+→ ConvexError: FORBIDDEN "Cannot revoke your own platform owner status."
 
-**Action:** After creating your member account in prod, run:
-```bash
-npx convex run platformAdmin:seed '{"email":"hellonolen@gmail.com"}' --prod
+# securityEvents table after: still only 1 row (the seed) — FORBIDDEN attempt NOT logged
+npx convex run platformAdmin:listSecurityEvents '{"callerId": "..."}' --prod
+→ [ { action: "PLATFORM_OWNER_SEED", success: true } ]
 ```
 
-This locks the bootstrap permanently. Until this is done, anyone with `CONVEX_DEPLOY_KEY` (which is already protected by Convex's infrastructure auth) could call `seed` directly.
+**Root cause:** Convex mutations are fully ACID-transactional. When a mutation handler calls `ctx.db.insert("securityEvents", ...)` and then throws a `ConvexError`, the entire transaction rolls back — including the insert. Unit tests with mock DB do not simulate this rollback, so Phase 4/5 tests passed incorrectly.
+
+**Impact:** All failed/blocked security events (wrong phrase, self-revoke, non-owner escalation) are NOT persisted to prod `securityEvents`. Only successful mutations (seed, role change, confirmed grant) are logged. The audit trail is incomplete for adversarial attempts in production.
+
+**Fix required:** Replace synchronous `ctx.db.insert` in `logSecurityEvent` with `ctx.scheduler.runAfter(0, internal.lib.securityAudit.persistEvent, record)`. Scheduled functions run in their own transaction context and survive the parent mutation's rollback.
+
+**Status:** Open — not yet fixed. Security controls (FORBIDDEN/UNAUTHORIZED) still work correctly; only audit logging of failed attempts is affected.
+
+**Files affected:** `convex/lib/securityAudit.ts`, all callers in `convex/platformAdmin.ts`
+
+---
+
+## FINAL PRODUCTION LOCKDOWN
+
+**Executed:** 2026-02-25 post-report
+
+### Objective 1 — Lock Platform Owner Seed ✅ COMPLETE
+
+```bash
+npx convex run platformAdmin:seed '{"email":"hellonolen@gmail.com"}' --prod
+→ {"memberId":"kd79gqkkgw5512hsg77zbhr0c581kk5p","success":true}
+
+# Verified isPlatformOwner=true on member record
+# Second seed attempt:
+→ ConvexError: FORBIDDEN "Bootstrap already completed. Use requestPlatformOwnerGrant."
+```
+
+Bootstrap is permanently locked. `hellonolen@gmail.com` is the sole platform owner.
+
+### Objective 2 — Verify Owner Immutability ✅ PASS
+
+| Test | Result |
+|------|--------|
+| Self-revoke (correct phrase) | ✅ FORBIDDEN — "Cannot revoke your own platform owner status." |
+| Non-owner escalation (forged callerId) | ✅ Schema rejects — ArgumentValidationError at v.id("members") |
+| Grant replay (invalid requestId format) | ✅ Schema rejects — ArgumentValidationError at v.id("pendingPlatformOwnerGrants") |
+| Cooldown logic | ✅ Covered by unit tests (Phase 4, 12/12 PASS) |
+
+**Note:** Failed events not persisted to securityEvents in prod (see BUG-002).
+
+### Objective 3 — Verify Audit Trail Integrity ⚠️ PARTIAL
+
+```json
+{
+  "action": "PLATFORM_OWNER_SEED",
+  "success": true,
+  "timestamp": 1772058654811,
+  "actorMemberId": "kd79gqkkgw5512hsg77zbhr0c581kk5p",
+  "targetId": "kd79gqkkgw5512hsg77zbhr0c581kk5p",
+  "targetType": "member",
+  "reason": "Bootstrap seed — first platform owner established."
+}
+```
+
+Seed event: all required fields present, no schema errors. ✅
+
+**Gap:** Failed-attempt events not persisted (BUG-002). Fix required before audit compliance claim.
+
+### Objective 4 — Verify Production Hardening ✅ PASS
+
+| Check | Result |
+|-------|--------|
+| HSTS | `max-age=31536000; includeSubDomains; preload` ✅ |
+| CSP `frame-ancestors` | `'none'` ✅ |
+| X-Frame-Options | `DENY` ✅ |
+| X-Content-Type-Options | `nosniff` ✅ |
+| Referrer-Policy | `strict-origin-when-cross-origin` ✅ |
+| Permissions-Policy | camera/mic self-only, geolocation disabled ✅ |
+| devBypassVerification backend | Removed from exports ✅ |
+| devBypassVerification frontend | Localhost-only gated (`hostname === "localhost"`) ✅ |
+| NEXT_PUBLIC_ secrets | CONVEX_URL + Stripe publishable key (both safe to expose) ✅ |
+
+### Objective 5 — Tag Stable Build ✅ COMPLETE
+
+```
+git tag v1-platform-secure
+```
+
+Tag `v1-platform-secure` marks HEAD after seed lock + full verification suite.
+
+---
+
+## OPERATIONAL NOTES
+
+### Bootstrap complete — no action needed
+
+Bootstrap seed has been run. `hellonolen@gmail.com` (`kd79gqkkgw5512hsg77zbhr0c581kk5p`) is the platform owner. Further owner grants require `platformAdmin:requestPlatformOwnerGrant` + 60s cooldown + `confirmPlatformOwnerGrant` from the existing owner.
+
+### Open Security Item — BUG-002 (fix before compliance audit)
+
+Failed security events are not persisted in production. Fix: use `ctx.scheduler.runAfter(0, ...)` for audit logging so it survives parent mutation rollback. See BUG-002 above.
 
 ---
 
