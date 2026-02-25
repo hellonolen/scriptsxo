@@ -5,7 +5,8 @@
  */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireAnyCap, CAP } from "./lib/capabilities";
+import { requireAnyCap, requireCap, CAP } from "./lib/capabilities";
+import { logSecurityEvent } from "./lib/securityAudit";
 
 /**
  * Get or create a member record.
@@ -79,6 +80,7 @@ export const getById = query({
 /**
  * Update a member's verified role.
  * Called by the credential verification orchestrator after agentic verification passes.
+ * All role changes are audited to securityEvents.
  */
 export const updateRole = mutation({
   args: {
@@ -87,13 +89,25 @@ export const updateRole = mutation({
     callerId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Allow if caller has USER_MANAGE cap, or if the caller is the subject member
-    const callerIsSelf = args.callerId === (args.memberId as string);
-    if (!callerIsSelf) {
-      await requireAnyCap(ctx, args.callerId, [CAP.USER_MANAGE]);
+    // Role changes always require USER_MANAGE — no self-promotion allowed.
+    try {
+      await requireCap(ctx, args.callerId, CAP.USER_MANAGE);
+    } catch (err) {
+      await logSecurityEvent(ctx, {
+        action: "ROLE_CHANGE",
+        actorMemberId: args.callerId ?? null,
+        targetId: args.memberId,
+        targetType: "member",
+        success: false,
+        reason: "Caller lacks USER_MANAGE capability.",
+      });
+      throw err;
     }
+
     const member = await ctx.db.get(args.memberId);
     if (!member) throw new Error("Member not found");
+
+    const previousRole = member.role;
 
     // Assign role-appropriate permissions
     const permissionsByRole: Record<string, string[]> = {
@@ -111,15 +125,26 @@ export const updateRole = mutation({
       lastLoginAt: Date.now(),
     });
 
+    await logSecurityEvent(ctx, {
+      action: "ROLE_CHANGE",
+      actorMemberId: args.callerId ?? null,
+      targetId: args.memberId,
+      targetType: "member",
+      diff: { role: { from: previousRole, to: args.role } },
+      success: true,
+    });
+
     return { success: true, role: args.role };
   },
 });
 
 /**
  * Update member profile.
+ * Caller must be the subject themselves OR have USER_MANAGE.
  */
 export const updateProfile = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     memberId: v.id("members"),
     name: v.optional(v.string()),
     firstName: v.optional(v.string()),
@@ -128,6 +153,11 @@ export const updateProfile = mutation({
     dob: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Allow: caller is the profile owner, OR caller has USER_MANAGE
+    const callerIsSelf = args.callerId === (args.memberId as string);
+    if (!callerIsSelf) {
+      await requireCap(ctx, args.callerId, CAP.USER_MANAGE);
+    }
     const updates: Record<string, unknown> = {};
     if (args.name !== undefined) updates.name = args.name;
     if (args.firstName !== undefined) updates.firstName = args.firstName;
@@ -137,6 +167,57 @@ export const updateProfile = mutation({
     updates.lastLoginAt = Date.now();
 
     await ctx.db.patch(args.memberId, updates);
+    return { success: true };
+  },
+});
+
+/**
+ * Update per-member capability overrides (capAllow / capDeny).
+ * Requires USER_MANAGE. Every change is audited.
+ */
+export const updateCapOverrides = mutation({
+  args: {
+    callerId: v.optional(v.id("members")),
+    memberId: v.id("members"),
+    capAllow: v.optional(v.array(v.string())),
+    capDeny: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    try {
+      await requireCap(ctx, args.callerId, CAP.USER_MANAGE);
+    } catch (err) {
+      await logSecurityEvent(ctx, {
+        action: "MEMBER_CAP_OVERRIDE_CHANGE",
+        actorMemberId: args.callerId ?? null,
+        targetId: args.memberId,
+        targetType: "member",
+        success: false,
+        reason: "Caller lacks USER_MANAGE capability.",
+      });
+      throw err;
+    }
+
+    const member = await ctx.db.get(args.memberId);
+    if (!member) throw new Error("Member not found");
+
+    const updates: Record<string, unknown> = {};
+    if (args.capAllow !== undefined) updates.capAllow = args.capAllow;
+    if (args.capDeny !== undefined) updates.capDeny = args.capDeny;
+
+    await ctx.db.patch(args.memberId, updates);
+
+    await logSecurityEvent(ctx, {
+      action: "MEMBER_CAP_OVERRIDE_CHANGE",
+      actorMemberId: args.callerId ?? null,
+      targetId: args.memberId,
+      targetType: "member",
+      diff: {
+        capAllow: { from: member.capAllow ?? [], to: args.capAllow ?? member.capAllow ?? [] },
+        capDeny:  { from: member.capDeny  ?? [], to: args.capDeny  ?? member.capDeny  ?? [] },
+      },
+      success: true,
+    });
+
     return { success: true };
   },
 });

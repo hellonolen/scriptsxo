@@ -19,6 +19,7 @@ import { useAction } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { getSessionCookie } from "@/lib/auth";
 import { loadStripe } from "@stripe/stripe-js";
+import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
   { label: "Payment", icon: CreditCard },
@@ -34,6 +35,7 @@ export default function IDVerificationPage() {
   const [verificationStatus, setVerificationStatus] = useState<"idle" | "verifying" | "verified" | "failed">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [isDevMode, setIsDevMode] = useState(false);
 
   const createVerificationSession = useAction(api.actions.stripeIdentity.createVerificationSession);
   const checkVerificationStatus = useAction(api.actions.stripeIdentity.checkVerificationStatus);
@@ -41,14 +43,32 @@ export default function IDVerificationPage() {
   const currentStep = 3;
 
   useEffect(() => {
-    const storedIntakeId = localStorage.getItem("sxo_intake_id");
+    setIsDevMode(isDev());
+    const storedIntakeId = isDev()
+      ? DevIntakeStore.getId()
+      : localStorage.getItem("sxo_intake_id");
     if (!storedIntakeId) {
       router.push("/intake/medical-history");
     }
   }, [router]);
 
+  /** Dev mode: simulate identity verification */
+  function handleDevVerify() {
+    setVerificationStatus("verifying");
+    setTimeout(() => {
+      DevIntakeStore.updateStep("id_verification", true);
+      setVerificationStatus("verified");
+    }, 1500);
+  }
+
   async function handleVerifyIdentity() {
     if (!consent) return;
+
+    // Dev mode: simulate verification
+    if (isDevMode) {
+      handleDevVerify();
+      return;
+    }
 
     const session = getSessionCookie();
     if (!session?.email) {
@@ -92,7 +112,7 @@ export default function IDVerificationPage() {
         setVerificationStatus("verified");
       } else {
         setVerificationStatus("failed");
-        setErrorMessage(result.lastError?.message || "Verification was not completed");
+        setErrorMessage((result.lastError as any)?.message || "Verification was not completed");
       }
     } catch (err) {
       setVerificationStatus("failed");
@@ -182,8 +202,16 @@ export default function IDVerificationPage() {
               Identity Verification
             </h1>
             <p className="text-muted-foreground font-light">
-              Federal and state regulations require identity verification for telehealth prescriptions. We use Stripe Identity for secure, HIPAA-compliant verification.
+              Federal and state regulations require identity verification for telehealth prescriptions.
+              {isDevMode
+                ? " In dev mode, verification is simulated automatically."
+                : " We use Stripe Identity for secure, HIPAA-compliant verification."}
             </p>
+            {isDevMode && (
+              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] text-xs font-medium">
+                DEV MODE
+              </div>
+            )}
           </div>
 
           {/* Content */}

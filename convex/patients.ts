@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAnyCap, CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     memberId: v.id("members"),
     email: v.string(),
     dateOfBirth: v.string(),
@@ -26,6 +28,7 @@ export const create = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.PATIENT_MANAGE]);
     const now = Date.now();
     return await ctx.db.insert("patients", {
       ...args,
@@ -72,10 +75,12 @@ export const getByEmail = query({
 
 export const update = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     patientId: v.id("patients"),
     updates: v.any(),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.PATIENT_MANAGE]);
     await ctx.db.patch(args.patientId, { ...args.updates, updatedAt: Date.now() });
     return { success: true };
   },
@@ -83,10 +88,12 @@ export const update = mutation({
 
 export const verifyId = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     patientId: v.id("patients"),
     status: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.PATIENT_MANAGE]);
     const updates: Record<string, unknown> = {
       idVerificationStatus: args.status,
       updatedAt: Date.now(),
@@ -101,9 +108,11 @@ export const verifyId = mutation({
 
 export const signConsent = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     patientId: v.id("patients"),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.PATIENT_MANAGE]);
     await ctx.db.patch(args.patientId, {
       consentSignedAt: Date.now(),
       updatedAt: Date.now(),
@@ -114,12 +123,14 @@ export const signConsent = mutation({
 
 export const updateInsurance = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     patientId: v.id("patients"),
     insuranceProvider: v.string(),
     insurancePolicyNumber: v.string(),
     insuranceGroupNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.PATIENT_MANAGE]);
     await ctx.db.patch(args.patientId, {
       insuranceProvider: args.insuranceProvider,
       insurancePolicyNumber: args.insurancePolicyNumber,
@@ -132,10 +143,12 @@ export const updateInsurance = mutation({
 
 export const setPrimaryPharmacy = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     patientId: v.id("patients"),
     pharmacyId: v.id("pharmacies"),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.PATIENT_MANAGE]);
     await ctx.db.patch(args.patientId, {
       primaryPharmacy: args.pharmacyId,
       updatedAt: Date.now(),

@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireCap, requireAnyCap, CAP } from "./lib/capabilities";
 
 export const createCheck = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     entityType: v.string(),
     entityId: v.string(),
     checkType: v.string(),
@@ -13,6 +15,7 @@ export const createCheck = mutation({
     checkedBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.AUDIT_VIEW);
     return await ctx.db.insert("complianceRecords", {
       ...args,
       checkedAt: Date.now(),
@@ -22,12 +25,14 @@ export const createCheck = mutation({
 
 export const verifyPatientId = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     patientId: v.id("patients"),
     status: v.string(),
     details: v.optional(v.any()),
     checkedBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.PATIENT_MANAGE, CAP.AUDIT_VIEW]);
     const patient = await ctx.db.get(args.patientId);
     if (!patient) throw new Error("Patient not found");
 
@@ -59,6 +64,7 @@ export const verifyPatientId = mutation({
 
 export const checkProviderLicense = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     providerId: v.id("providers"),
     state: v.string(),
     status: v.string(),
@@ -66,6 +72,7 @@ export const checkProviderLicense = mutation({
     expiresAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.PROVIDER_MANAGE, CAP.AUDIT_VIEW]);
     await ctx.db.insert("complianceRecords", {
       entityType: "provider",
       entityId: args.providerId,

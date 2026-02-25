@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireCap, requireAnyCap, CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     patientId: v.id("patients"),
     providerId: v.id("providers"),
     intakeId: v.optional(v.id("intakes")),
@@ -14,6 +16,7 @@ export const create = mutation({
     cost: v.number(),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.CONSULT_START, CAP.CONSULT_JOIN]);
     const now = Date.now();
     return await ctx.db.insert("consultations", {
       ...args,
@@ -41,12 +44,14 @@ export const create = mutation({
 
 export const schedule = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     consultationId: v.id("consultations"),
     scheduledAt: v.number(),
     roomUrl: v.optional(v.string()),
     roomToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
     await ctx.db.patch(args.consultationId, {
       scheduledAt: args.scheduledAt,
       roomUrl: args.roomUrl,
@@ -60,9 +65,11 @@ export const schedule = mutation({
 
 export const start = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     consultationId: v.id("consultations"),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
     await ctx.db.patch(args.consultationId, {
       status: "in_progress",
       startedAt: Date.now(),
@@ -86,6 +93,7 @@ export const start = mutation({
 
 export const complete = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     consultationId: v.id("consultations"),
     notes: v.optional(v.string()),
     diagnosis: v.optional(v.string()),
@@ -95,6 +103,7 @@ export const complete = mutation({
     followUpDate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
     const now = Date.now();
     const consultation = await ctx.db.get(args.consultationId);
     if (!consultation) throw new Error("Consultation not found");
@@ -132,10 +141,12 @@ export const complete = mutation({
 
 export const cancel = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     consultationId: v.id("consultations"),
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.CONSULT_START, CAP.CONSULT_JOIN]);
     await ctx.db.patch(args.consultationId, {
       status: "cancelled",
       notes: args.reason,
@@ -224,12 +235,14 @@ export const getById = query({
  */
 export const createFromIntake = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     intakeId: v.id("intakes"),
     patientId: v.id("patients"),
     recording: v.optional(v.string()),
     patientState: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.CONSULT_START, CAP.CONSULT_JOIN]);
     const now = Date.now();
 
     // Get available providers for the patient's state

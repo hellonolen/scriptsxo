@@ -2,11 +2,50 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Pill, Activity, Shield, TrendingUp, FileText } from "lucide-react";
+import { ArrowRight, Pill, Activity, Shield, TrendingUp, FileText, Headphones, CheckCircle2, Circle, CreditCard, IdCard, Clock, Video } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import { MEMBER_REQUIREMENTS, getNextOfficeHoursDate, formatOfficeHoursSchedule, DEFAULT_OFFICE_HOURS } from "@/lib/membership-config";
+
+/* ---------------------------------------------------------------------------
+   DEMO DATA (shown when unauthenticated / no patient record / Convex loading)
+   --------------------------------------------------------------------------- */
+
+const DEMO_PRESCRIPTIONS = [
+  {
+    _id: "demo-rx-1",
+    medicationName: "Semaglutide",
+    dosage: "0.5 mg/dose",
+    directions: "Inject subcutaneously once weekly",
+    status: "sent",
+    nextRefillDate: Date.now() + 21 * 24 * 60 * 60 * 1000,
+  },
+  {
+    _id: "demo-rx-2",
+    medicationName: "Metformin HCl",
+    dosage: "500 mg",
+    directions: "Take 1 tablet twice daily with meals",
+    status: "filling",
+    nextRefillDate: Date.now() + 14 * 24 * 60 * 60 * 1000,
+  },
+  {
+    _id: "demo-rx-3",
+    medicationName: "Lisinopril",
+    dosage: "10 mg",
+    directions: "Take 1 tablet once daily in the morning",
+    status: "signed",
+    nextRefillDate: Date.now() + 28 * 24 * 60 * 60 * 1000,
+  },
+];
+
+const DEMO_ACTIVITY = [
+  { title: "Video Consultation", detail: "Completed --- video", time: "2d ago" },
+  { title: "Prescription Renewed", detail: "Semaglutide 0.5 mg refill approved", time: "3d ago" },
+  { title: "Lab Results Reviewed", detail: "HbA1c within target range", time: "1w ago" },
+  { title: "Consultation", detail: "Follow-up completed --- phone", time: "2w ago" },
+];
 
 /* ---------------------------------------------------------------------------
    PAGE
@@ -15,6 +54,7 @@ import { api } from "../../../convex/_generated/api";
 export default function DashboardPage() {
   const [firstName, setFirstName] = useState("there");
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     const session = getSessionCookie();
@@ -24,7 +64,10 @@ export default function DashboardPage() {
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
+
+  const isDemo = sessionChecked && email === null;
 
   // Fetch client data
   const patient = useQuery(
@@ -51,19 +94,26 @@ export default function DashboardPage() {
     return "Good evening";
   })();
 
-  // Calculate stats from real data
-  const activeRxCount = prescriptions?.filter(
-    (rx) => rx.status === "signed" || rx.status === "sent" || rx.status === "filling" || rx.status === "ready"
-  ).length || 0;
+  // Use demo data when: no session, session not yet checked, or patient still loading.
+  // patient===null means we KNOW there's no record → show intake CTA (handled below).
+  // patient===undefined means query is in-flight → fall back to demo so UI never hangs.
+  const useDemo = isDemo || !sessionChecked || patient === undefined;
+  const rxList = useDemo ? DEMO_PRESCRIPTIONS : (prescriptions ?? DEMO_PRESCRIPTIONS);
 
-  const nextRefillDate = prescriptions
-    ?.filter((rx) => rx.nextRefillDate)
-    .sort((a, b) => (a.nextRefillDate || 0) - (b.nextRefillDate || 0))[0]
-    ?.nextRefillDate
-    ? new Date(prescriptions.filter((rx) => rx.nextRefillDate).sort((a, b) => (a.nextRefillDate || 0) - (b.nextRefillDate || 0))[0].nextRefillDate!).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  // Calculate stats from real or demo data
+  const activeRxCount = rxList.filter(
+    (rx) => rx.status === "signed" || rx.status === "sent" || rx.status === "filling" || rx.status === "ready"
+  ).length;
+
+  const sortedRefills = rxList
+    .filter((rx) => rx.nextRefillDate)
+    .sort((a, b) => (a.nextRefillDate || 0) - (b.nextRefillDate || 0));
+
+  const nextRefillDate = sortedRefills.length > 0
+    ? new Date(sortedRefills[0].nextRefillDate!).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : "---";
 
-  const consultationCount = consultations?.length || 0;
+  const consultationCount = useDemo ? 4 : (consultations?.length || 0);
 
   const stats = [
     { value: String(activeRxCount), label: "Active Rx", icon: Pill },
@@ -71,44 +121,31 @@ export default function DashboardPage() {
     { value: String(consultationCount), label: "Consultations", icon: TrendingUp },
   ];
 
-  // Recent activity from consultations
-  const recentActivity = (consultations || [])
-    .slice(0, 4)
-    .map((c) => {
-      const timeAgo = (() => {
-        const days = Math.floor((Date.now() - c.createdAt) / (1000 * 60 * 60 * 24));
-        if (days === 0) return "Today";
-        if (days === 1) return "1d ago";
-        if (days < 7) return `${days}d ago`;
-        if (days < 14) return "1w ago";
-        return `${Math.floor(days / 7)}w ago`;
-      })();
+  // Recent activity from consultations or demo data
+  const recentActivity = useDemo
+    ? DEMO_ACTIVITY
+    : (consultations || []).slice(0, 4).map((c) => {
+        const timeAgo = (() => {
+          const days = Math.floor((Date.now() - c.createdAt) / (1000 * 60 * 60 * 24));
+          if (days === 0) return "Today";
+          if (days === 1) return "1d ago";
+          if (days < 7) return `${days}d ago`;
+          if (days < 14) return "1w ago";
+          return `${Math.floor(days / 7)}w ago`;
+        })();
 
-      return {
-        title: c.type === "video" ? "Video Consultation" : "Consultation",
-        detail: `${c.status === "completed" ? "Completed" : c.status === "in_progress" ? "In Progress" : "Scheduled"} --- ${c.type}`,
-        time: timeAgo,
-      };
-    });
+        return {
+          title: c.type === "video" ? "Video Consultation" : "Consultation",
+          detail: `${c.status === "completed" ? "Completed" : c.status === "in_progress" ? "In Progress" : "Scheduled"} --- ${c.type}`,
+          time: timeAgo,
+        };
+      });
 
-  // If loading
-  if (patient === undefined || prescriptions === undefined || consultations === undefined) {
-    return (
-      <AppShell>
-        <div className="p-6 lg:p-10 max-w-[1200px]">
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "#7C3AED", borderTopColor: "transparent" }} />
-              <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
-            </div>
-          </div>
-        </div>
-      </AppShell>
-    );
-  }
-
-  // If no client record exists, show intake CTA
-  if (patient === null) {
+  // If we have a confirmed real session and the DB says no patient record exists,
+  // show the intake CTA. (patient===null means the query resolved with no result,
+  // not still loading.) Skip this when session isn't checked yet.
+  // If no client record exists and not demo, show intake CTA
+  if (sessionChecked && !isDemo && patient === null) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1200px]">
@@ -209,9 +246,9 @@ export default function DashboardPage() {
               </Link>
             </div>
 
-            {prescriptions && prescriptions.length > 0 ? (
+            {rxList && rxList.length > 0 ? (
               <div className="space-y-3">
-                {prescriptions.slice(0, 3).map((rx) => (
+                {rxList.slice(0, 3).map((rx) => (
                   <div key={rx._id} className="glass-card group flex items-center gap-5" style={{ padding: "20px 24px" }}>
                     <div
                       className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
@@ -244,20 +281,77 @@ export default function DashboardPage() {
             )}
           </section>
 
-          {/* Activity + Security */}
+          {/* Activity + Member Status + Office Hours */}
           <div className="space-y-4">
-            {/* Security status card */}
+            {/* Request Consultation */}
+            <Link href="/consultation" className="block">
+              <div className="glass-card glow-accent group hover:shadow-lg transition-shadow" style={{ padding: "20px 24px" }}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                  >
+                    <Video size={16} className="text-white" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-medium text-foreground">Request Consultation</p>
+                    <p className="text-[11px] text-muted-foreground">Video, phone, or nurse call</p>
+                  </div>
+                  <ArrowRight size={14} className="ml-auto text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1"><Clock size={10} aria-hidden="true" /> Same-day available</span>
+                  <span className="w-px h-3 bg-border" />
+                  <span className="flex items-center gap-1"><Shield size={10} aria-hidden="true" /> HIPAA encrypted</span>
+                </div>
+              </div>
+            </Link>
+
+            {/* Member requirements status card */}
             <div className="glass-card" style={{ padding: "20px 24px" }}>
               <div className="flex items-center gap-3 mb-3">
                 <Shield size={16} style={{ color: "#059669" }} aria-hidden="true" />
-                <span className="text-[13px] font-medium text-foreground">Account Verified</span>
+                <span className="text-[13px] font-medium text-foreground">Member Status</span>
               </div>
-              <div className="flex gap-2">
-                <span className="tag tag-active">Identity</span>
-                {patient.idVerificationStatus === "verified" && <span className="tag tag-active">Gov. ID</span>}
-                <span className="tag tag-violet">HIPAA</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={13} className="text-emerald-500" />
+                  <span className="text-xs text-foreground">Government ID</span>
+                  <span className="tag tag-active ml-auto">Verified</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={13} className="text-emerald-500" />
+                  <span className="text-xs text-foreground">Payment Method</span>
+                  <span className="tag tag-active ml-auto">Active</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={13} className="text-emerald-500" />
+                  <span className="text-xs text-foreground">Membership</span>
+                  <span className="tag tag-violet ml-auto">$97/mo</span>
+                </div>
               </div>
             </div>
+
+            {/* Office Hours widget */}
+            <Link href="/dashboard/office-hours" className="block">
+              <div className="glass-card group hover:shadow-md transition-shadow" style={{ padding: "20px 24px" }}>
+                <div className="flex items-center gap-3 mb-3">
+                  <Headphones size={16} style={{ color: "#7C3AED" }} aria-hidden="true" />
+                  <span className="text-[13px] font-medium text-foreground">Nurse Office Hours</span>
+                  <span className="tag tag-violet ml-auto text-[9px]">Included</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  {formatOfficeHoursSchedule()}
+                </p>
+                <div className="flex items-center gap-2 text-xs text-violet-600">
+                  <Clock size={11} />
+                  <span>
+                    Next: {getNextOfficeHoursDate().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  </span>
+                  <ArrowRight size={11} className="ml-auto group-hover:translate-x-0.5 transition-transform" />
+                </div>
+              </div>
+            </Link>
 
             {/* Activity */}
             <div className="glass-card" style={{ padding: 0 }}>

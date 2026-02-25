@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireCap, CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     consultationId: v.id("consultations"),
     patientId: v.id("patients"),
     providerId: v.optional(v.id("providers")),
@@ -11,6 +13,7 @@ export const create = mutation({
     scheduledFor: v.number(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
     return await ctx.db.insert("followUps", {
       ...args,
       status: "scheduled",
@@ -28,9 +31,11 @@ export const create = mutation({
 
 export const send = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     followUpId: v.id("followUps"),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
     await ctx.db.patch(args.followUpId, {
       status: "sent",
       sentAt: Date.now(),
@@ -41,12 +46,14 @@ export const send = mutation({
 
 export const recordResponse = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     followUpId: v.id("followUps"),
     patientResponse: v.string(),
     sideEffects: v.optional(v.array(v.string())),
     satisfactionRating: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.CONSULT_JOIN);
     await ctx.db.patch(args.followUpId, {
       status: "responded",
       respondedAt: Date.now(),
@@ -60,11 +67,13 @@ export const recordResponse = mutation({
 
 export const review = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     followUpId: v.id("followUps"),
     providerNotes: v.string(),
     escalate: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
     const status = args.escalate ? "escalated" : "reviewed";
     await ctx.db.patch(args.followUpId, {
       status,

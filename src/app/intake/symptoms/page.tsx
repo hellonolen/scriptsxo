@@ -15,6 +15,7 @@ import { AppShell } from "@/components/app-shell";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
   { label: "Payment", icon: CreditCard },
@@ -64,7 +65,9 @@ export default function SymptomsPage() {
   const currentStep = 2;
 
   useEffect(() => {
-    const storedIntakeId = localStorage.getItem("sxo_intake_id");
+    const storedIntakeId = isDev()
+      ? DevIntakeStore.getId()
+      : localStorage.getItem("sxo_intake_id");
     if (!storedIntakeId) {
       router.push("/intake/medical-history");
       return;
@@ -97,17 +100,28 @@ export default function SymptomsPage() {
   async function handleContinue() {
     if (!intakeId) return;
 
-    await updateIntakeStep({
-      intakeId,
-      stepName: "symptoms",
-      data: {
-        chiefComplaint,
-        duration,
-        severity,
-        relatedSymptoms: selectedSymptoms,
-        previousTreatments,
-      },
-    });
+    const symptomsData = {
+      chiefComplaint,
+      duration,
+      severity,
+      relatedSymptoms: selectedSymptoms,
+      previousTreatments,
+    };
+
+    if (isDev()) {
+      DevIntakeStore.updateStep("symptoms", symptomsData);
+    } else {
+      try {
+        await updateIntakeStep({
+          intakeId,
+          stepName: "symptoms",
+          data: symptomsData,
+        });
+      } catch (err) {
+        console.error("Failed to save symptoms:", err);
+        DevIntakeStore.updateStep("symptoms", symptomsData);
+      }
+    }
 
     router.push("/intake/id-verification");
   }

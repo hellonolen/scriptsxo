@@ -1,9 +1,12 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAnyCap, CAP } from "./lib/capabilities";
+import { ConvexError } from "convex/values";
 
 export const createRecord = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     ownerId: v.string(),
     fileName: v.string(),
     fileType: v.string(),
@@ -13,8 +16,10 @@ export const createRecord = mutation({
     purpose: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.VIEW_DASHBOARD]);
+    const { callerId: _c, ...record } = args;
     return await ctx.db.insert("fileStorage", {
-      ...args,
+      ...record,
       createdAt: Date.now(),
     });
   },
@@ -48,21 +53,25 @@ export const getByPurpose = query({
 
 export const deleteRecord = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     fileId: v.id("fileStorage"),
     ownerId: v.string(),
   },
   handler: async (ctx, args) => {
-    const file = await ctx.db.get(args.fileId);
-    if (!file) return { success: false, error: "File not found" };
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.VIEW_DASHBOARD]);
 
+    const file = await ctx.db.get(args.fileId);
+    if (!file) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "File not found." });
+    }
+
+    // Verify the caller owns this file — ownerId must match what caller passed
     if (file.ownerId !== args.ownerId) {
-      return { success: false, error: "Unauthorized" };
+      throw new ConvexError({ code: "FORBIDDEN", message: "Cannot delete a file you do not own." });
     }
 
     // TODO: Delete from Convex storage if storageId exists
-    // if (file.storageId) {
-    //   await ctx.storage.delete(file.storageId);
-    // }
+    // if (file.storageId) await ctx.storage.delete(file.storageId);
 
     await ctx.db.delete(args.fileId);
     return { success: true };
@@ -78,10 +87,14 @@ export const getById = query({
 
 /**
  * Generate an upload URL for Convex file storage.
+ * Requires at least VIEW_DASHBOARD cap to prevent anonymous uploads.
  */
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    callerId: v.optional(v.id("members")),
+  },
+  handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.VIEW_DASHBOARD]);
     return await ctx.storage.generateUploadUrl();
   },
 });

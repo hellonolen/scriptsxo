@@ -21,6 +21,7 @@ import { SITECONFIG, formatPrice } from "@/lib/config";
 import { getSessionCookie } from "@/lib/auth";
 import { useAction } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 // Dynamic import to avoid SSR issues with Whop embed
 const WhopCheckoutEmbed = dynamic(
@@ -68,6 +69,7 @@ function PaymentContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [isDevMode, setIsDevMode] = useState(false);
 
   const createCheckoutSession = useAction(
     api.actions.whopCheckout.createCheckoutSession
@@ -76,8 +78,17 @@ function PaymentContent() {
     api.actions.whopCheckout.verifyMembership
   );
 
-  // Handle redirect-based return (fallback for external payment flows)
   useEffect(() => {
+    const devMode = isDev();
+    setIsDevMode(devMode);
+
+    if (devMode) {
+      // In dev mode, skip Whop checkout entirely
+      setLoading(false);
+      return;
+    }
+
+    // Handle redirect-based return (fallback for external payment flows)
     const whopCheckout = searchParams.get("whop_checkout");
     if (whopCheckout === "success") {
       handlePostPayment();
@@ -143,6 +154,23 @@ function PaymentContent() {
     setTimeout(() => {
       router.push("/intake/medical-history");
     }, 1500);
+  }
+
+  /** Dev mode: simulate payment completion */
+  function handleDevPayment() {
+    const session = getSessionCookie();
+    if (!session?.email) {
+      router.push("/");
+      return;
+    }
+
+    // Create intake record in localStorage
+    DevIntakeStore.create(session.email);
+
+    setCompleted(true);
+    setTimeout(() => {
+      router.push("/intake/medical-history");
+    }, 1200);
   }
 
   if (completed) {
@@ -216,7 +244,7 @@ function PaymentContent() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          {/* Left: Checkout Embed */}
+          {/* Left: Checkout Embed or Dev Payment */}
           <div className="lg:col-span-3">
             <div className="glass-card p-6 lg:p-8">
               <div className="flex items-center justify-between mb-6">
@@ -239,8 +267,23 @@ function PaymentContent() {
                 </div>
               </div>
 
-              {/* Whop Embedded Checkout */}
-              {loading ? (
+              {/* Dev Mode: Simple activate button */}
+              {isDevMode ? (
+                <div className="py-12 text-center space-y-6">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] text-xs font-medium">
+                    DEV MODE
+                  </div>
+                  <p className="text-sm text-muted-foreground font-light">
+                    Payment gateway is not available in development. Click below to simulate membership activation.
+                  </p>
+                  <button
+                    onClick={handleDevPayment}
+                    className="px-8 py-3 bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white text-sm font-medium rounded-md hover:opacity-90 transition-opacity"
+                  >
+                    Activate Membership (Dev)
+                  </button>
+                </div>
+              ) : loading ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="w-6 h-6 animate-spin text-[#7C3AED]" />
                 </div>

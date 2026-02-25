@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireCap, requireAnyCap, CAP } from "./lib/capabilities";
 
 export const createRecord = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     patientId: v.id("patients"),
     consultationId: v.optional(v.id("consultations")),
     type: v.string(),
@@ -13,6 +15,7 @@ export const createRecord = mutation({
     cptCodes: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.REPORT_VIEW, CAP.SETTINGS_MANAGE]);
     const now = Date.now();
     return await ctx.db.insert("billingRecords", {
       ...args,
@@ -28,11 +31,13 @@ export const createRecord = mutation({
 
 export const processPayment = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     billingId: v.id("billingRecords"),
     stripePaymentIntentId: v.optional(v.string()),
     status: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.SETTINGS_MANAGE);
     const updates: Record<string, unknown> = {
       status: args.status,
       updatedAt: Date.now(),
@@ -63,10 +68,12 @@ export const processPayment = mutation({
 
 export const submitInsuranceClaim = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     billingId: v.id("billingRecords"),
     insuranceClaimId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.SETTINGS_MANAGE);
     await ctx.db.patch(args.billingId, {
       status: "submitted",
       insuranceClaimId: args.insuranceClaimId,

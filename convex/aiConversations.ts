@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireCap, CAP } from "./lib/capabilities";
 
 /**
  * AI CONVERSATIONS
@@ -17,8 +18,12 @@ const messageValidator = v.object({
 
 /** Get or create a conversation for this email */
 export const getOrCreate = mutation({
-  args: { email: v.string() },
+  args: {
+    callerId: v.optional(v.id("members")),
+    email: v.string(),
+  },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.VIEW_DASHBOARD);
     const email = args.email.toLowerCase();
     const existing = await ctx.db
       .query("aiConversations")
@@ -45,12 +50,14 @@ export const getOrCreate = mutation({
 /** Add a message to the conversation */
 export const addMessage = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     conversationId: v.id("aiConversations"),
     role: v.string(),
     content: v.string(),
     page: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.VIEW_DASHBOARD);
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) throw new Error("Conversation not found");
 
@@ -95,10 +102,12 @@ export const getById = query({
 /** Update the current page context */
 export const updatePageContext = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     conversationId: v.id("aiConversations"),
     page: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.VIEW_DASHBOARD);
     await ctx.db.patch(args.conversationId, {
       currentPage: args.page,
       updatedAt: Date.now(),
@@ -109,10 +118,12 @@ export const updatePageContext = mutation({
 /** Store collected data from forms/intake */
 export const updateCollectedData = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     conversationId: v.id("aiConversations"),
     data: v.any(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.VIEW_DASHBOARD);
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) return;
 

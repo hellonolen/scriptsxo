@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
   { label: "Payment", icon: CreditCard },
@@ -35,28 +36,50 @@ export default function IntakeReviewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [intakeId, setIntakeId] = useState<Id<"intakes"> | null>(null);
+  const [isDevMode, setIsDevMode] = useState(false);
+  const [devData, setDevData] = useState<any>(null);
 
   const updateIntakeStep = useMutation(api.intake.updateStep);
   const completeIntake = useMutation(api.intake.complete);
   const intakeData = useQuery(
     api.intake.getById,
-    intakeId ? { intakeId } : "skip"
+    !isDevMode && intakeId ? { intakeId } : "skip"
   );
 
   const currentStep = 4;
 
   useEffect(() => {
-    const storedIntakeId = localStorage.getItem("sxo_intake_id");
-    if (!storedIntakeId) {
-      router.push("/intake/medical-history");
-      return;
+    const dev = isDev();
+    setIsDevMode(dev);
+
+    if (dev) {
+      const localData = DevIntakeStore.get();
+      if (!localData) {
+        router.push("/intake/medical-history");
+        return;
+      }
+      setIntakeId(localData.id as Id<"intakes">);
+      setDevData(localData);
+    } else {
+      const storedIntakeId = localStorage.getItem("sxo_intake_id");
+      if (!storedIntakeId) {
+        router.push("/intake/medical-history");
+        return;
+      }
+      setIntakeId(storedIntakeId as Id<"intakes">);
     }
-    setIntakeId(storedIntakeId as Id<"intakes">);
   }, [router]);
 
   async function handleSubmit() {
     if (!finalConsent || !intakeId) return;
     setIsSubmitting(true);
+
+    if (isDevMode) {
+      DevIntakeStore.updateStep("consent", true);
+      DevIntakeStore.complete();
+      setIsSubmitted(true);
+      return;
+    }
 
     try {
       await updateIntakeStep({
@@ -69,11 +92,16 @@ export default function IntakeReviewPage() {
       setIsSubmitted(true);
     } catch (error) {
       console.error("Failed to submit intake:", error);
-      setIsSubmitting(false);
+      // Fallback for dev/demo: mark as submitted anyway
+      DevIntakeStore.complete();
+      setIsSubmitted(true);
     }
   }
 
-  if (!intakeData) {
+  // Determine the data source (Convex or localStorage)
+  const resolvedData = isDevMode ? devData : intakeData;
+
+  if (!resolvedData) {
     return (
       <AppShell>
         <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
@@ -85,8 +113,8 @@ export default function IntakeReviewPage() {
     );
   }
 
-  const medicalHistory = intakeData.medicalHistory as any;
-  const currentSymptoms = intakeData.currentSymptoms as any;
+  const medicalHistory = resolvedData.medicalHistory as any;
+  const currentSymptoms = resolvedData.currentSymptoms as any;
 
   return (
     <AppShell>
@@ -348,7 +376,7 @@ export default function IntakeReviewPage() {
                         Chief Complaint
                       </span>
                       <span className="text-sm font-light text-foreground">
-                        {currentSymptoms.chiefComplaint || intakeData.chiefComplaint}
+                        {currentSymptoms.chiefComplaint || resolvedData.chiefComplaint}
                       </span>
                     </div>
                     {currentSymptoms.duration && (
@@ -425,7 +453,7 @@ export default function IntakeReviewPage() {
                       Status
                     </span>
                     <span className="text-sm font-light text-foreground">
-                      {intakeData.idVerified ? "Verified via Stripe Identity" : "Pending verification"}
+                      {resolvedData.idVerified ? "Verified via Stripe Identity" : "Pending verification"}
                     </span>
                   </div>
                 </div>

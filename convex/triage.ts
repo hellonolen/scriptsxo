@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireCap, CAP } from "./lib/capabilities";
 
 export const createAssessment = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     intakeId: v.id("intakes"),
     patientId: v.optional(v.id("patients")),
     urgencyLevel: v.string(),
@@ -17,6 +19,7 @@ export const createAssessment = mutation({
     aiReasoning: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.INTAKE_REVIEW);
     const id = await ctx.db.insert("triageAssessments", {
       ...args,
       reviewedByProvider: false,
@@ -49,9 +52,11 @@ export const getByIntake = query({
 
 export const markReviewed = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     triageId: v.id("triageAssessments"),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.INTAKE_REVIEW);
     await ctx.db.patch(args.triageId, { reviewedByProvider: true });
     return { success: true };
   },

@@ -1,13 +1,9 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { Bot, ArrowLeft, Brain, MessageSquare, Pill, Settings } from "lucide-react";
-import { Nav } from "@/components/nav";
-import { Badge } from "@/components/ui/badge";
+"use client";
 
-export const metadata: Metadata = {
-  title: "AI Agents",
-  description: "Configure and monitor AI agents -- triage, prescription assistant, and patient chatbot.",
-};
+import Link from "next/link";
+import { ArrowLeft, Brain, MessageSquare, Pill, Settings } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { Badge } from "@/components/ui/badge";
 
 const AGENTS = [
   {
@@ -38,23 +34,20 @@ const AGENTS = [
 
 export default function AgentsPage() {
   return (
-    <>
-      <Nav />
-      <main className="min-h-screen pt-24 pb-20 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-3 mb-8">
-            <Link href="/admin" className="text-muted-foreground hover:text-foreground">
-              <ArrowLeft size={20} aria-hidden="true" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tighter text-foreground">
-                AI Agents
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Configure and monitor platform AI agents.
-              </p>
-            </div>
+    <AppShell>
+      <div className="p-6 lg:p-10 max-w-[1000px]">
+        <div className="flex items-center gap-3 mb-2">
+          <Link href="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft size={20} aria-hidden="true" />
+          </Link>
+          <div>
+            <p className="eyebrow mb-0.5">ADMINISTRATION</p>
+            <h1 className="text-2xl lg:text-3xl font-light text-foreground tracking-[-0.02em]" style={{ fontFamily: "var(--font-heading)" }}>
+              AI Agents
+            </h1>
           </div>
+        </div>
+        <p className="text-muted-foreground font-light mb-8 ml-8">Configure and monitor platform AI agents.</p>
 
           <div className="space-y-6">
             {AGENTS.map((agent, i) => (
@@ -89,9 +82,8 @@ export default function AgentsPage() {
                 </div>
               </div>
             ))}
-          </div>
         </div>
-      </main>
-    </>
+      </div>
+    </AppShell>
   );
 }

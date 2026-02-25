@@ -283,6 +283,13 @@ export default function WaitingRoomPage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    const isDev = process.env.NODE_ENV === "development";
+    if (isDev) {
+      // Dev: show the provider queue so the telehealth UI is visible
+      setIsProvider(true);
+      setReady(true);
+      return;
+    }
     const session = getSessionCookie();
     if (!session?.email) {
       router.push("/");

@@ -8,33 +8,43 @@
  * KEEP IN SYNC with src/lib/capabilities.ts.
  * If you change capabilities or ROLE_CAPS there, update this file too.
  *
- * Usage in a Convex handler:
+ * ─── Enforcement model ───────────────────────────────────────────────────────
  *
- *   import { requireCap, CAP } from "../lib/capabilities";
+ *   1. Platform owner bypass  — member.isPlatformOwner === true gets ALL caps.
+ *                               This is ORTHOGONAL to roles: checked before any
+ *                               role/cap logic and independent of ROLE_CAPS bundles.
+ *                               Set only via platformAdmin.seed / requestPlatformOwnerGrant.
+ *   2. Base bundle            — ROLE_CAPS[member.role]
+ *   3. Org-level capAllow     — extra caps granted to all org members
+ *   4. Member-level capAllow  — extra caps granted to this individual
+ *   5. Org-level capDeny      — caps revoked from all org members (wins over allow)
+ *   6. Member-level capDeny   — caps revoked from this individual (wins over allow)
+ *
+ *   Deny always wins: if a cap appears in both an allow list and a deny list,
+ *   the cap is removed from the effective set.
+ *
+ * ─── Usage ───────────────────────────────────────────────────────────────────
+ *
+ *   import { requireCap, requireOrgMember, CAP } from "../lib/capabilities";
  *
  *   export const writePrescription = mutation({
- *     args: { callerId: v.string(), ... },
+ *     args: { callerId: v.optional(v.id("members")), ... },
  *     handler: async (ctx, args) => {
  *       await requireCap(ctx, args.callerId, CAP.RX_WRITE);
- *       // ... handler body
+ *       // ...
  *     },
  *   });
  *
- * V1 Security Model:
- *   requireCap() accepts a callerId (memberId) passed by the client,
- *   looks up the member's role in the DB, and checks the capability.
- *   This is significantly better than nothing. V2 will use Convex Auth
- *   for cryptographic identity binding so the server knows the caller.
+ * ─── V1 Security Note ────────────────────────────────────────────────────────
  *
- * The callerId pattern means a malicious client could pass any memberId.
- * Mitigations for now:
- *   - Member IDs are Convex-generated, non-guessable UUIDs
- *   - Session cookie carries the email; cross-check email == member.email
- *     for extra assurance where needed
- *   - Move to Convex Auth as soon as feasible (V2)
+ *   requireCap() accepts a callerId (memberId) passed by the client,
+ *   looks up the member's role+overrides in the DB, then checks the capability.
+ *   Member IDs are Convex-generated non-guessable UUIDs. V2 will bind the
+ *   caller's identity cryptographically via Convex Auth.
  */
 
 import { ConvexError } from "convex/values";
+// (no email-based bypass — platform owner is a DB flag, not a hardcoded list)
 
 // ---------------------------------------------------------------------------
 // Capability identifiers (identical to src/lib/capabilities.ts)
@@ -142,21 +152,62 @@ export const ROLE_CAPS: Record<Role, Capability[]> = {
 };
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Internal: build effective cap set with full override chain
 // ---------------------------------------------------------------------------
 
-function getEffectiveCaps(roles: Role[]): Set<Capability> {
-  const caps = new Set<Capability>();
-  for (const role of roles) {
-    for (const cap of ROLE_CAPS[role] ?? []) {
-      caps.add(cap);
-    }
-  }
-  return caps;
-}
+/**
+ * Builds the effective capability Set for a member, applying:
+ *   base ROLE_CAPS → org capAllow → member capAllow → org capDeny → member capDeny
+ *
+ * Deny always wins — a cap in any deny list is removed regardless of allows.
+ *
+ * Returns empty Set if the member is not found.
+ * Returns ALL caps if the member's email is a platform owner.
+ */
+export async function getMemberEffectiveCaps(
+  ctx: any,
+  memberId: string
+): Promise<Set<Capability>> {
+  try {
+    const member = await ctx.db.get(memberId);
+    if (!member) return new Set();
 
-function hasCap(roles: Role[], cap: Capability): boolean {
-  return getEffectiveCaps(roles).has(cap);
+    // Platform owner bypass — granted only via grantPlatformOwner mutation / seed script.
+    // Never derived from email or any client-supplied value.
+    if (member.isPlatformOwner === true) {
+      return new Set(Object.values(CAP) as Capability[]);
+    }
+
+    const role = member.role as Role;
+    const base: Capability[] = role && role in ROLE_CAPS ? ROLE_CAPS[role] : [];
+
+    // Collect org-level overrides
+    let orgAllow: Set<string> = new Set();
+    let orgDeny: Set<string> = new Set();
+    if (member.orgId) {
+      const org = await ctx.db.get(member.orgId);
+      if (org) {
+        orgAllow = new Set(org.capAllow ?? []);
+        orgDeny = new Set(org.capDeny ?? []);
+      }
+    }
+
+    // Collect member-level overrides
+    const memberAllow = new Set<string>(member.capAllow ?? []);
+    const memberDeny = new Set<string>(member.capDeny ?? []);
+
+    // Build effective set
+    const effective = new Set<Capability>(base);
+    for (const cap of orgAllow) effective.add(cap as Capability);
+    for (const cap of memberAllow) effective.add(cap as Capability);
+    // Deny wins — applied last
+    for (const cap of orgDeny) effective.delete(cap as Capability);
+    for (const cap of memberDeny) effective.delete(cap as Capability);
+
+    return effective;
+  } catch {
+    return new Set();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -164,44 +215,21 @@ function hasCap(roles: Role[], cap: Capability): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Look up a member's role(s) from the DB.
- * Returns ["unverified"] if the member is not found.
- */
-async function getMemberRoles(ctx: any, memberId: string): Promise<Role[]> {
-  try {
-    const member = await ctx.db.get(memberId);
-    if (!member) return ["unverified"];
-    const role = member.role as Role;
-    return role && role in ROLE_CAPS ? [role] : ["unverified"];
-  } catch {
-    return ["unverified"];
-  }
-}
-
-/**
  * Returns true if the member identified by callerId has the capability.
- * Performs a DB lookup — use in mutations/queries that need fine-grained checks.
  */
 export async function memberHasCap(
   ctx: any,
   callerId: string,
   cap: Capability
 ): Promise<boolean> {
-  const roles = await getMemberRoles(ctx, callerId);
-  return hasCap(roles, cap);
+  const effective = await getMemberEffectiveCaps(ctx, callerId);
+  return effective.has(cap);
 }
 
 /**
- * Require a capability. Throws ConvexError with code UNAUTHORIZED or
- * FORBIDDEN if the check fails.
- *
- * Call at the top of any handler that must be capability-gated:
+ * Require a capability. Throws ConvexError with UNAUTHORIZED or FORBIDDEN.
  *
  *   await requireCap(ctx, args.callerId, CAP.RX_WRITE);
- *
- * @param ctx      - Convex query/mutation context
- * @param callerId - memberId passed from client (session cookie)
- * @param cap      - required capability
  */
 export async function requireCap(
   ctx: any,
@@ -214,9 +242,8 @@ export async function requireCap(
       message: "Authentication required.",
     });
   }
-
-  const has = await memberHasCap(ctx, callerId, cap);
-  if (!has) {
+  const effective = await getMemberEffectiveCaps(ctx, callerId);
+  if (!effective.has(cap)) {
     throw new ConvexError({
       code: "FORBIDDEN",
       message: `Missing required capability: ${cap}`,
@@ -225,8 +252,7 @@ export async function requireCap(
 }
 
 /**
- * Require ANY of the listed capabilities.
- * Useful when multiple roles can perform the same action.
+ * Require ANY of the listed capabilities (OR-style check).
  */
 export async function requireAnyCap(
   ctx: any,
@@ -239,13 +265,48 @@ export async function requireAnyCap(
       message: "Authentication required.",
     });
   }
-  const roles = await getMemberRoles(ctx, callerId);
-  const effective = getEffectiveCaps(roles);
-  const hasAny = caps.some((c) => effective.has(c));
-  if (!hasAny) {
+  const effective = await getMemberEffectiveCaps(ctx, callerId);
+  if (!caps.some((c) => effective.has(c))) {
     throw new ConvexError({
       code: "FORBIDDEN",
       message: `Missing one of: ${caps.join(", ")}`,
+    });
+  }
+}
+
+/**
+ * Verify that the caller is a member of the given org — or a platform owner.
+ *
+ * Call before any mutation that accepts an orgId from the client:
+ *
+ *   await requireOrgMember(ctx, args.callerId, args.orgId);
+ *
+ * This prevents a user from acting on behalf of an org they don't belong to.
+ */
+export async function requireOrgMember(
+  ctx: any,
+  callerId: string | undefined,
+  orgId: string
+): Promise<void> {
+  if (!callerId) {
+    throw new ConvexError({
+      code: "UNAUTHORIZED",
+      message: "Authentication required.",
+    });
+  }
+  const member = await ctx.db.get(callerId);
+  if (!member) {
+    throw new ConvexError({
+      code: "UNAUTHORIZED",
+      message: "Member not found.",
+    });
+  }
+  // Platform owners bypass org membership check
+  if (member.isPlatformOwner === true) return;
+  if (member.orgId !== orgId) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "Not a member of this organization.",
     });
   }
 }

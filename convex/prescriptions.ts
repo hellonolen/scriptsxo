@@ -1,9 +1,11 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireCap, requireAnyCap, CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     consultationId: v.id("consultations"),
     patientId: v.id("patients"),
     providerId: v.id("providers"),
@@ -22,6 +24,7 @@ export const create = mutation({
     priorAuthRequired: v.boolean(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.RX_WRITE);
     const now = Date.now();
     return await ctx.db.insert("prescriptions", {
       ...args,
@@ -44,10 +47,12 @@ export const create = mutation({
 
 export const sign = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     prescriptionId: v.id("prescriptions"),
     providerId: v.id("providers"),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.RX_SIGN);
     const rx = await ctx.db.get(args.prescriptionId);
     if (!rx) throw new Error("Prescription not found");
 
@@ -65,11 +70,13 @@ export const sign = mutation({
 
 export const sendToPharmacy = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     prescriptionId: v.id("prescriptions"),
     pharmacyId: v.id("pharmacies"),
     ePrescribeId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.RX_WRITE);
     const rx = await ctx.db.get(args.prescriptionId);
     if (!rx) throw new Error("Prescription not found");
 
@@ -90,10 +97,12 @@ export const sendToPharmacy = mutation({
 
 export const updateStatus = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     prescriptionId: v.id("prescriptions"),
     status: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.PHARMACY_FILL, CAP.RX_WRITE]);
     const updates: Record<string, unknown> = {
       status: args.status,
       updatedAt: Date.now(),
@@ -202,10 +211,12 @@ export const listRecent = query({
 
 export const requestRefill = mutation({
   args: {
+    callerId: v.optional(v.id("members")),
     prescriptionId: v.id("prescriptions"),
     patientId: v.id("patients"),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.callerId, CAP.RX_REFILL);
     const rx = await ctx.db.get(args.prescriptionId);
     if (!rx) {
       throw new Error("Prescription not found");

@@ -55,12 +55,18 @@ export default defineSchema({
     whopMembershipId: v.optional(v.string()),
     maxProviders: v.optional(v.number()),
     maxPatients: v.optional(v.number()),
+    // Capability overrides — applied to all members of this org (deny wins)
+    capAllow: v.optional(v.array(v.string())),
+    capDeny: v.optional(v.array(v.string())),
     createdAt: v.number(),
   })
     .index("by_slug", ["slug"])
     .index("by_type", ["type"]),
 
-  // === MEMBERS (users of the system) ===
+  // === MEMBERS (one row per user-per-org membership) ===
+  // Each row is a scoped membership: a user may have multiple rows across orgs.
+  // orgId is optional for standalone users (patients, solo providers).
+  // requireOrgMember() verifies member.orgId === targetOrgId before org mutations.
   members: defineTable({
     orgId: v.optional(v.id("organizations")),
     email: v.string(),
@@ -72,6 +78,12 @@ export default defineSchema({
     role: v.string(), // "patient" | "provider" | "pharmacist" | "admin" | "staff"
     orgRole: v.optional(v.string()), // "owner" | "admin" | "member" — role within the org
     permissions: v.array(v.string()),
+    // Platform owner — grants all capabilities; set only via grantPlatformOwner mutation
+    // or seed script. Never set programmatically based on email.
+    isPlatformOwner: v.optional(v.boolean()),
+    // Per-member capability overrides (applied after role bundle + org overrides; deny wins)
+    capAllow: v.optional(v.array(v.string())),
+    capDeny: v.optional(v.array(v.string())),
     status: v.string(),
     avatar: v.optional(v.string()),
     governmentIdUrl: v.optional(v.string()),
@@ -416,7 +428,7 @@ export default defineSchema({
     .index("by_agentName", ["agentName"])
     .index("by_createdAt", ["createdAt"]),
 
-  // === AUDIT LOG ===
+  // === AUDIT LOG (general) ===
   auditLog: defineTable({
     action: v.string(),
     actorEmail: v.string(),
@@ -430,6 +442,39 @@ export default defineSchema({
     .index("by_actorEmail", ["actorEmail"])
     .index("by_entityType_entityId", ["entityType", "entityId"])
     .index("by_createdAt", ["createdAt"]),
+
+  // === SECURITY EVENTS (append-only privileged-action trail) ===
+  // Logged for: role changes, platform owner grant/revoke, cap overrides, PHI exports.
+  // Rows are NEVER deleted or updated — immutable audit record.
+  securityEvents: defineTable({
+    action: v.string(),           // e.g. "PLATFORM_OWNER_GRANT_REQUESTED", "ROLE_CHANGE"
+    actorMemberId: v.optional(v.string()),
+    actorOrgId: v.optional(v.string()),
+    targetId: v.optional(v.string()),
+    targetType: v.optional(v.string()),  // "member" | "org" | "platform"
+    diff: v.optional(v.any()),           // { from, to }
+    success: v.boolean(),
+    reason: v.optional(v.string()),      // failure reason or descriptive context
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_action", ["action"])
+    .index("by_actorMemberId", ["actorMemberId"])
+    .index("by_timestamp", ["timestamp"]),
+
+  // === PENDING PLATFORM OWNER GRANTS (two-step cooldown) ===
+  // Created by requestPlatformOwnerGrant, confirmed after 60s by confirmPlatformOwnerGrant.
+  pendingPlatformOwnerGrants: defineTable({
+    requestedBy: v.id("members"),
+    targetMemberId: v.id("members"),
+    requestedAt: v.number(),
+    confirmsAfter: v.number(),  // requestedAt + 60_000 (60s cooldown)
+    expiresAt: v.number(),      // requestedAt + 300_000 (5 min confirmation window)
+    status: v.string(),         // "pending" | "confirmed" | "cancelled" | "expired"
+  })
+    .index("by_requestedBy", ["requestedBy"])
+    .index("by_status", ["status"]),
 
   // === MESSAGES (patient-provider) ===
   messages: defineTable({

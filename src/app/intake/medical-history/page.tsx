@@ -20,6 +20,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { getSessionCookie } from "@/lib/auth";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
   { label: "Payment", icon: CreditCard },
@@ -101,20 +102,39 @@ export default function MedicalHistoryPage() {
         return;
       }
 
-      // Get or create member
-      await getOrCreateMember({ email: session.email });
+      // Dev mode: use localStorage instead of Convex
+      if (isDev()) {
+        const devId = DevIntakeStore.getId();
+        if (devId) {
+          setIntakeId(devId as Id<"intakes">);
+        } else {
+          const newId = DevIntakeStore.create(session.email);
+          setIntakeId(newId as Id<"intakes">);
+        }
+        setLoading(false);
+        return;
+      }
 
-      // Check localStorage for existing intake
-      const storedIntakeId = localStorage.getItem("sxo_intake_id");
-      if (storedIntakeId) {
-        setIntakeId(storedIntakeId as Id<"intakes">);
-      } else {
-        // Create new intake
-        const newIntakeId = await createIntake({
-          email: session.email,
-        });
-        setIntakeId(newIntakeId);
-        localStorage.setItem("sxo_intake_id", newIntakeId);
+      // Production: use Convex
+      try {
+        await getOrCreateMember({ email: session.email });
+
+        const storedIntakeId = localStorage.getItem("sxo_intake_id");
+        if (storedIntakeId) {
+          setIntakeId(storedIntakeId as Id<"intakes">);
+        } else {
+          const newIntakeId = await createIntake({
+            email: session.email,
+          });
+          setIntakeId(newIntakeId);
+          localStorage.setItem("sxo_intake_id", newIntakeId);
+        }
+      } catch (err) {
+        console.error("Failed to initialize intake:", err);
+        // Fallback: create a local ID so the form still works
+        const fallbackId = `fallback_${Date.now()}`;
+        setIntakeId(fallbackId as Id<"intakes">);
+        localStorage.setItem("sxo_intake_id", fallbackId);
       }
       setLoading(false);
     }
@@ -175,22 +195,36 @@ export default function MedicalHistoryPage() {
   async function handleContinue() {
     if (!intakeId) return;
 
-    await updateIntakeStep({
-      intakeId,
-      stepName: "medical_history",
-      data: {
-        firstName,
-        lastName,
-        dob: dateOfBirth,
-        gender,
-        phone,
-        conditions: selectedConditions,
-        medications,
-        allergies,
-        surgeries,
-        familyHistory: selectedFamilyHistory,
-      },
-    });
+    const medData = {
+      firstName,
+      lastName,
+      dob: dateOfBirth,
+      gender,
+      phone,
+      conditions: selectedConditions,
+      medications,
+      allergies,
+      surgeries,
+      familyHistory: selectedFamilyHistory,
+    };
+
+    if (isDev()) {
+      // Dev mode: save to localStorage
+      DevIntakeStore.updateStep("medical_history", medData);
+    } else {
+      // Production: save to Convex
+      try {
+        await updateIntakeStep({
+          intakeId,
+          stepName: "medical_history",
+          data: medData,
+        });
+      } catch (err) {
+        console.error("Failed to save medical history:", err);
+        // Save locally as fallback
+        DevIntakeStore.updateStep("medical_history", medData);
+      }
+    }
 
     router.push("/intake/symptoms");
   }

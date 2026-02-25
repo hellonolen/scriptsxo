@@ -158,7 +158,19 @@ export function isAuthenticated(): boolean {
  * Check if an email is in the admin whitelist
  */
 export function isAdminEmail(email: string): boolean {
-  return SITECONFIG.auth.adminEmails.includes(email.toLowerCase());
+  return SITECONFIG.auth.adminEmails.includes(email.toLowerCase() as any);
+}
+
+/**
+ * Determine the initial role for an email address at login time.
+ * Only admin emails get immediate role assignment from config.
+ * All other users start as "unverified" and must complete the
+ * agentic credential verification pipeline to get a role.
+ */
+export function getRoleForEmail(email: string): "admin" | "unverified" {
+  const lower = email.toLowerCase();
+  if (isAdminEmail(lower)) return "admin";
+  return "unverified";
 }
 
 /**
@@ -167,6 +179,17 @@ export function isAdminEmail(email: string): boolean {
 export function isAdmin(): boolean {
   const adminCookie = getAdminCookie();
   return adminCookie?.isAdmin === true;
+}
+
+/**
+ * Get current user role from session cookie (client-side).
+ * Role is set by the agentic credential verification pipeline.
+ * Returns "unverified" for users who haven't completed verification.
+ */
+export function getCurrentRole(): "admin" | "provider" | "pharmacy" | "patient" | "unverified" {
+  const session = getSessionCookie();
+  if (!session) return "unverified";
+  return (session.role as "admin" | "provider" | "pharmacy" | "patient" | "unverified") || "unverified";
 }
 
 /**
@@ -193,18 +216,23 @@ export function refreshSession(): void {
 
 /**
  * Create a session object from auth data.
- * Automatically sets admin cookie if email is in the admin whitelist.
+ * Admin emails get immediate admin role from config whitelist.
+ * All other users start as "unverified" — the agentic credential
+ * verification pipeline assigns the real role after verification.
  */
 export function createSession(email: string, name?: string): Session {
   const now = Date.now();
+  const role = getRoleForEmail(email);
+
   const session: Session = {
     email,
     name: name || email.split("@")[0],
+    role,
     authenticatedAt: now,
     expiresAt: now + COOKIEMAXAGE * 1000,
   };
 
-  if (isAdminEmail(email)) {
+  if (role === "admin") {
     setAdminCookie(createAdminSession(email));
   }
 
