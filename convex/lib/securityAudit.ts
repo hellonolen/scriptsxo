@@ -46,17 +46,20 @@ export async function logSecurityEvent(
   ctx: any,
   event: SecurityEventInput
 ): Promise<void> {
-  await ctx.db.insert("securityEvents", {
+  // Convex v.optional() = field may be absent; it does NOT accept null.
+  // Build the record with only truthy/defined fields to satisfy the schema.
+  const record: Record<string, unknown> = {
     action: event.action,
-    actorMemberId: event.actorMemberId ?? null,
-    actorOrgId: event.actorOrgId ?? null,
-    targetId: event.targetId ?? null,
-    targetType: event.targetType ?? null,
-    diff: event.diff ?? null,
     success: event.success,
-    reason: event.reason ?? null,
-    ipAddress: event.ipAddress ?? null,
-    userAgent: event.userAgent ?? null,
     timestamp: Date.now(),
-  });
+  };
+  if (event.actorMemberId != null) record.actorMemberId = event.actorMemberId;
+  if (event.actorOrgId != null)    record.actorOrgId    = event.actorOrgId;
+  if (event.targetId != null)      record.targetId      = event.targetId;
+  if (event.targetType != null)    record.targetType    = event.targetType;
+  if (event.diff != null)          record.diff          = event.diff;
+  if (event.reason != null)        record.reason        = event.reason;
+  if (event.ipAddress != null)     record.ipAddress     = event.ipAddress;
+  if (event.userAgent != null)     record.userAgent     = event.userAgent;
+  await ctx.db.insert("securityEvents", record);
 }
