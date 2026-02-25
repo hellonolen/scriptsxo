@@ -11,6 +11,7 @@
  */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAnyCap, CAP } from "./lib/capabilities";
 
 // ─── Queries ────────────────────────────────────────────────────────
 
@@ -67,8 +68,10 @@ export const create = mutation({
     memberId: v.id("members"),
     email: v.string(),
     selectedRole: v.string(), // "patient" | "provider" | "pharmacy"
+    callerId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.INTAKE_REVIEW]);
     const now = Date.now();
     const id = await ctx.db.insert("credentialVerifications", {
       memberId: args.memberId,

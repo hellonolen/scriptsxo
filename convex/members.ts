@@ -5,6 +5,7 @@
  */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAnyCap, CAP } from "./lib/capabilities";
 
 /**
  * Get or create a member record.
@@ -42,8 +43,8 @@ export const getOrCreate = mutation({
       name: displayName,
       firstName: args.firstName,
       lastName: args.lastName,
-      role: "patient",
-      permissions: ["patient:read", "patient:write"],
+      role: "unverified",
+      permissions: [],
       status: "active",
       joinedAt: Date.now(),
     });
@@ -72,6 +73,45 @@ export const getById = query({
   args: { memberId: v.id("members") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.memberId);
+  },
+});
+
+/**
+ * Update a member's verified role.
+ * Called by the credential verification orchestrator after agentic verification passes.
+ */
+export const updateRole = mutation({
+  args: {
+    memberId: v.id("members"),
+    role: v.string(), // "patient" | "provider" | "pharmacy" | "admin" | "staff"
+    callerId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Allow if caller has USER_MANAGE cap, or if the caller is the subject member
+    const callerIsSelf = args.callerId === (args.memberId as string);
+    if (!callerIsSelf) {
+      await requireAnyCap(ctx, args.callerId, [CAP.USER_MANAGE]);
+    }
+    const member = await ctx.db.get(args.memberId);
+    if (!member) throw new Error("Member not found");
+
+    // Assign role-appropriate permissions
+    const permissionsByRole: Record<string, string[]> = {
+      patient: ["patient:read", "patient:write"],
+      provider: ["provider:read", "provider:write", "patient:read"],
+      pharmacy: ["pharmacy:read", "pharmacy:write"],
+      admin: ["admin:read", "admin:write", "provider:read", "provider:write", "patient:read", "patient:write", "pharmacy:read", "pharmacy:write"],
+      staff: ["patient:read"],
+      unverified: [],
+    };
+
+    await ctx.db.patch(args.memberId, {
+      role: args.role,
+      permissions: permissionsByRole[args.role] || [],
+      lastLoginAt: Date.now(),
+    });
+
+    return { success: true, role: args.role };
   },
 });
 

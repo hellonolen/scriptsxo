@@ -2,12 +2,15 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
+import { requireCap, CAP } from "../lib/capabilities";
 
 export const assign = action({
   args: {
     patientState: v.string(),
+    callerId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ providerId: string }> => {
+    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
     // Get active providers licensed in patient's state
     const providers = await ctx.runQuery(api.providers.getByState, {
       state: args.patientState,
