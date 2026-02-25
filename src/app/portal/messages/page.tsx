@@ -8,11 +8,46 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 
 /* ---------------------------------------------------------------------------
+   DEMO DATA (shown when unauthenticated / no patient record)
+   --------------------------------------------------------------------------- */
+
+const DEMO_CONVERSATIONS = [
+  {
+    conversationId: "demo-convo-1",
+    unreadCount: 1,
+    latestMessage: {
+      senderRole: "provider",
+      content: "Your prescription for Semaglutide has been approved and sent to the compounding pharmacy. You should receive tracking within 24–48 hours.",
+      createdAt: Date.now() - 2 * 60 * 60 * 1000,
+    },
+  },
+  {
+    conversationId: "demo-convo-2",
+    unreadCount: 0,
+    latestMessage: {
+      senderRole: "patient",
+      content: "Thank you for the quick turnaround. Do I need to do anything else before my next refill?",
+      createdAt: Date.now() - 26 * 60 * 60 * 1000,
+    },
+  },
+  {
+    conversationId: "demo-convo-3",
+    unreadCount: 0,
+    latestMessage: {
+      senderRole: "provider",
+      content: "Welcome to ScriptsXO. Your intake has been reviewed and a provider has been assigned to your case.",
+      createdAt: Date.now() - 5 * 24 * 60 * 60 * 1000,
+    },
+  },
+];
+
+/* ---------------------------------------------------------------------------
    PAGE
    --------------------------------------------------------------------------- */
 
 export default function MessagesPage() {
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -21,7 +56,10 @@ export default function MessagesPage() {
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
+
+  const isDemo = sessionChecked && email === null;
 
   // Fetch conversations
   const conversations = useQuery(
@@ -52,8 +90,12 @@ export default function MessagesPage() {
     }
   };
 
-  // Loading state
-  if (conversations === undefined) {
+  const convoList = isDemo
+    ? DEMO_CONVERSATIONS
+    : ((conversations as unknown as typeof DEMO_CONVERSATIONS) ?? []);
+
+  // Loading state (skip for demo mode)
+  if (!isDemo && conversations === undefined) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">

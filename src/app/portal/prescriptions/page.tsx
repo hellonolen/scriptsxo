@@ -8,6 +8,49 @@ import { useQuery, useAction } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 
 /* ---------------------------------------------------------------------------
+   DEMO DATA (shown when unauthenticated / no patient record)
+   --------------------------------------------------------------------------- */
+
+const DEMO_PRESCRIPTIONS = [
+  {
+    _id: "demo-rx-1",
+    medicationName: "Semaglutide",
+    dosage: "0.5 mg/dose",
+    directions: "Inject subcutaneously once weekly, rotate injection sites",
+    form: "Injection Pen",
+    quantity: 4,
+    refillsAuthorized: 3,
+    refillsUsed: 0,
+    status: "sent",
+    nextRefillDate: Date.now() + 21 * 24 * 60 * 60 * 1000,
+  },
+  {
+    _id: "demo-rx-2",
+    medicationName: "Metformin HCl",
+    dosage: "500 mg",
+    directions: "Take 1 tablet twice daily with meals",
+    form: "Tablet",
+    quantity: 60,
+    refillsAuthorized: 5,
+    refillsUsed: 1,
+    status: "filling",
+    nextRefillDate: Date.now() + 14 * 24 * 60 * 60 * 1000,
+  },
+  {
+    _id: "demo-rx-3",
+    medicationName: "Lisinopril",
+    dosage: "10 mg",
+    directions: "Take 1 tablet once daily in the morning",
+    form: "Tablet",
+    quantity: 30,
+    refillsAuthorized: 11,
+    refillsUsed: 3,
+    status: "picked_up",
+    nextRefillDate: Date.now() + 28 * 24 * 60 * 60 * 1000,
+  },
+];
+
+/* ---------------------------------------------------------------------------
    STATUS TRACKER CONSTANTS
    --------------------------------------------------------------------------- */
 
@@ -191,6 +234,7 @@ function getStatusBadge(status: string): { label: string; isActive: boolean } {
 
 export default function PrescriptionsPage() {
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -198,7 +242,10 @@ export default function PrescriptionsPage() {
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
+
+  const isDemo = sessionChecked && email === null;
 
   // Fetch client data
   const patient = useQuery(
@@ -227,8 +274,12 @@ export default function PrescriptionsPage() {
     }
   };
 
-  // Loading state
-  if (patient === undefined || prescriptions === undefined) {
+  const rxList: typeof DEMO_PRESCRIPTIONS = isDemo
+    ? DEMO_PRESCRIPTIONS
+    : ((prescriptions as unknown as typeof DEMO_PRESCRIPTIONS) ?? []);
+
+  // Loading state (skip for demo mode)
+  if (!isDemo && (patient === undefined || prescriptions === undefined)) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">
@@ -268,9 +319,9 @@ export default function PrescriptionsPage() {
         </header>
 
         {/* ---- PRESCRIPTION LIST ---- */}
-        {prescriptions && prescriptions.length > 0 ? (
+        {rxList.length > 0 ? (
           <div className="space-y-4">
-            {prescriptions.map((rx) => {
+            {rxList.map((rx) => {
               const badge = getStatusBadge(rx.status);
 
               return (
@@ -344,7 +395,7 @@ export default function PrescriptionsPage() {
                   </div>
 
                   {/* Actions */}
-                  {(rx.status === "signed" || rx.status === "sent" || rx.status === "ready") && (
+                  {!isDemo && (rx.status === "signed" || rx.status === "sent" || rx.status === "ready") && (
                     <div className="pt-4 mt-4 border-t border-border flex items-center gap-4">
                       <button
                         onClick={() => handleDownloadPdf(rx._id)}

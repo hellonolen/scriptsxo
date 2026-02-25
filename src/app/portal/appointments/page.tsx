@@ -10,12 +10,44 @@ import { api } from "../../../../convex/_generated/api";
 import { SITECONFIG, formatPrice } from "@/lib/config";
 
 /* ---------------------------------------------------------------------------
+   DEMO DATA (shown when unauthenticated / no patient record)
+   --------------------------------------------------------------------------- */
+
+const DEMO_UPCOMING = [
+  {
+    _id: "demo-appt-1",
+    type: "video",
+    status: "scheduled",
+    scheduledAt: Date.now() + 2 * 24 * 60 * 60 * 1000,
+    roomUrl: null as string | null,
+  },
+];
+
+const DEMO_PAST = [
+  {
+    _id: "demo-appt-2",
+    type: "phone",
+    status: "completed",
+    scheduledAt: Date.now() - 8 * 24 * 60 * 60 * 1000,
+    roomUrl: null as string | null,
+  },
+  {
+    _id: "demo-appt-3",
+    type: "video",
+    status: "completed",
+    scheduledAt: Date.now() - 22 * 24 * 60 * 60 * 1000,
+    roomUrl: null as string | null,
+  },
+];
+
+/* ---------------------------------------------------------------------------
    PAGE
    --------------------------------------------------------------------------- */
 
 export default function AppointmentsPage() {
   const [email, setEmail] = useState<string | null>(null);
-  const [showBooking, setShowBooking] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [showBooking, setShowBooking] = useState(true);
   const [callReason, setCallReason] = useState("");
   const [noRefundChecked, setNoRefundChecked] = useState(false);
 
@@ -24,7 +56,10 @@ export default function AppointmentsPage() {
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
+
+  const isDemo = sessionChecked && email === null;
 
   // Fetch patient data
   const patient = useQuery(
@@ -38,8 +73,8 @@ export default function AppointmentsPage() {
     patient ? { patientId: patient._id } : "skip"
   );
 
-  // Loading state
-  if (patient === undefined || consultations === undefined) {
+  // Loading state (skip for demo mode)
+  if (!isDemo && (patient === undefined || consultations === undefined)) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">
@@ -55,13 +90,13 @@ export default function AppointmentsPage() {
   }
 
   // Split into upcoming and past
-  const upcoming = consultations?.filter(
-    (c) => c.status === "scheduled" || c.status === "waiting"
-  ) || [];
+  const upcoming = isDemo
+    ? DEMO_UPCOMING
+    : (consultations?.filter((c) => c.status === "scheduled" || c.status === "waiting") || []);
 
-  const past = consultations?.filter(
-    (c) => c.status === "completed"
-  ) || [];
+  const past = isDemo
+    ? DEMO_PAST
+    : (consultations?.filter((c) => c.status === "completed") || []);
 
   return (
     <AppShell>

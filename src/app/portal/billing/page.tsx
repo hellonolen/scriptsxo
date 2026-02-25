@@ -9,18 +9,50 @@ import { api } from "../../../../convex/_generated/api";
 import { formatPrice } from "@/lib/config";
 
 /* ---------------------------------------------------------------------------
+   DEMO DATA (shown when unauthenticated / no patient record)
+   --------------------------------------------------------------------------- */
+
+const DEMO_BILLING = [
+  {
+    _id: "demo-bill-1",
+    type: "consultation",
+    amount: 9700,
+    status: "paid",
+    createdAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
+  },
+  {
+    _id: "demo-bill-2",
+    type: "prescription_fill",
+    amount: 14900,
+    status: "paid",
+    createdAt: Date.now() - 10 * 24 * 60 * 60 * 1000,
+  },
+  {
+    _id: "demo-bill-3",
+    type: "consultation",
+    amount: 9700,
+    status: "paid",
+    createdAt: Date.now() - 31 * 24 * 60 * 60 * 1000,
+  },
+];
+
+/* ---------------------------------------------------------------------------
    PAGE
    --------------------------------------------------------------------------- */
 
 export default function BillingPage() {
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     const session = getSessionCookie();
     if (session?.email) {
       setEmail(session.email);
     }
+    setSessionChecked(true);
   }, []);
+
+  const isDemo = sessionChecked && email === null;
 
   // Fetch patient data
   const patient = useQuery(
@@ -34,8 +66,12 @@ export default function BillingPage() {
     patient ? { patientId: patient._id } : "skip"
   );
 
-  // Loading state
-  if (patient === undefined || billingRecords === undefined) {
+  const billList = isDemo
+    ? DEMO_BILLING
+    : ((billingRecords as unknown as typeof DEMO_BILLING) ?? []);
+
+  // Loading state (skip for demo mode)
+  if (!isDemo && (patient === undefined || billingRecords === undefined)) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">
@@ -95,9 +131,9 @@ export default function BillingPage() {
         <section>
           <p className="eyebrow mb-4">Payment History</p>
 
-          {billingRecords && billingRecords.length > 0 ? (
+          {billList.length > 0 ? (
             <div className="glass-card p-0 divide-y divide-border">
-              {billingRecords.map((payment) => (
+              {billList.map((payment) => (
                 <div
                   key={payment._id}
                   className="flex items-center justify-between px-6 py-4"
