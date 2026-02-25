@@ -160,3 +160,175 @@ Each session is logged with date, topics, decisions, and work completed.
 
 ### Open Items After This Session
 - Same as previous session (no code changes, documentation only)
+
+---
+
+## Session: 2026-02-25 (Agentic Credential Verification Pipeline)
+
+### Topics Discussed
+- Eliminating all manual email lists for role assignment (provider/pharmacy)
+- AI-agent-driven credential verification pipeline
+- NPI Registry integration for provider verification
+- Stripe Identity for patient ID verification
+- NCPDP / pharmacy NPI verification
+- Role-based view isolation (no context switcher for non-admins)
+- Onboarding flow for unverified users
+
+### Work Completed
+
+#### Backend (Convex)
+- Added `credentialVerifications` table to schema.ts (26 fields, 4 indexes)
+- Created convex/credentialVerifications.ts -- state machine with 14 mutations/queries
+- Created convex/agents/credentialVerificationAgent.ts -- 9 agent actions:
+  - Provider: verifyProviderNpi, processProviderLicense, processProviderDea, runProviderComplianceReview
+  - Patient: initPatientVerification, checkPatientVerification, runPatientComplianceReview
+  - Pharmacy: verifyPharmacy, runPharmacyComplianceReview
+- Created convex/actions/credentialVerificationOrchestrator.ts -- 3 actions:
+  - initializeVerification, finalizeVerification, devBypassVerification
+- Updated convex/members.ts: default role "unverified", added updateRole mutation
+- Updated convex/agents/conductor.ts: added credentialVerification dispatch case
+
+#### Frontend (Next.js)
+- Created /src/app/onboard/page.tsx -- role selection UI (Patient/Provider/Pharmacy)
+- Created /src/app/onboard/provider/page.tsx -- multi-step NPI/License/DEA/Review flow
+- Created /src/app/onboard/patient/page.tsx -- Stripe Identity consent/verify flow
+- Created /src/app/onboard/pharmacy/page.tsx -- NCPDP/NPI entry and verification
+
+#### Auth, Routing, Config
+- Updated src/lib/auth.ts: removed email-list role detection, role from session only
+- Updated src/lib/config.ts: removed providerEmails and pharmacyEmails arrays
+- Updated src/middleware.ts: added onboard routes, unverified user routing block
+- Updated src/app/page.tsx: role-based routing (unverified -> /onboard)
+- Updated src/components/app-shell.tsx: context switcher admin-only
+
+#### Bug Fixes (this continuation session)
+- Fixed Stripe Identity arg mismatch: createVerificationSession uses `patientEmail` not `email`
+- Fixed Stripe Identity return value: `verificationSessionId` not `sessionId`
+- Fixed checkVerificationStatus args: `verificationSessionId` + `patientEmail` required
+
+### Decisions Made
+- ADR-015: Agentic Credential Verification -- AI agents verify credentials, no manual email lists
+- ADR-016: Admin-Only Context Switcher -- non-admin users see only their portal, no switching
+
+### Open Items After This Session
+- Deploy Convex schema changes (`npx convex deploy` or `npx convex dev`)
+- Test end-to-end onboarding flow in dev mode
+- Test with real NPI number (e.g., 1234567893) in production
+- Verify Stripe Identity flow end-to-end with real Stripe keys
+- Add license document upload + Gemini OCR step (provider onboarding placeholder exists)
+- NCPDP registry lookup (currently only NPI-based pharmacy verification)
+- End-to-end testing for all three role paths
+
+---
+
+## Session: 2026-02-25 (Telehealth Architecture, Terminology, Consultation UI Plan)
+
+### Topics Discussed
+- Convex schema deployment (emailAuth.ts "use node" bug, credentialVerifications + magicLinks tables going live)
+- Dev onboard flow E2E test: memberId bug found and fixed
+- Configurable terminology: "patient" vs "client" platform-wide without DB schema changes
+- Nurse / clinical staff role added to onboarding
+- Commit, push, deploy to Cloudflare Pages
+- Telehealth status audit: no real WebRTC built yet, consultation pages are UI placeholders
+- Composio integration audit: wired but not connected to video; covers downstream workflows (ModMed, pharmacy, fax, scheduling)
+- Daily.co pricing analysis vs self-hosted Asterisk + WebRTC cost comparison
+- IntakeBella and FaxBella VPS infrastructure audit (Vultr VPS 144.202.25.33, Asterisk + Skyetel + Gemini)
+- Multi-tenant Asterisk architecture: context-based isolation so ScriptsXO and IntakeBella never bleed
+- AmazingXO telehealth UI audit: dark-only, no real WebRTC, ~40% component reuse possible
+- Product separation decision: keep ScriptsXO and AmazingXO separate (different audiences, regulatory contexts, brands)
+- ScriptsXO consultation UI plan: 3 screens (Waiting Room → Consultation Room → Post-Call)
+- Explicit owner instruction: build front end first before wiring any back end
+
+### Work Completed
+
+#### Backend (Convex)
+- Fixed `convex/actions/emailAuth.ts`: added missing `"use node"` directive (was blocking `npx convex deploy`)
+- Deployed schema to prod:striped-caribou-797 — `credentialVerifications` (26 fields, 4 indexes) and `magicLinks` tables now live
+- Confirmed COMPOSIO_API_KEY already set in Convex prod
+
+#### Bug Fix: memberId (Critical)
+- Root cause: `handleDevLogin()` on homepage created a session cookie but never created a Convex member record
+- All onboard pages query `members.getByEmail` to get `memberId` for credential verification; returned null for new dev accounts
+- Fix: added `useMutation(api.members.getOrCreate)` call in `handleDevLogin` before `completeAuth`
+  - `getOrCreate` is idempotent — returns existing member if email already exists
+  - One fix covers all three onboard paths (provider, patient, pharmacy)
+- E2E re-test: all 10 steps passed after fix
+
+#### Terminology System
+- Added `terminology` block to `SITECONFIG` in `src/lib/config.ts`
+  - `clientTerm: "client"`, `clientTermPlural: "clients"`, `clientTermTitle: "Client"`, `clientTermPluralTitle: "Clients"`
+  - Change one line to swap "patient"↔"client" platform-wide — no DB schema changes
+- Added `term()` helper function to `src/lib/config.ts` (4 forms: singular, plural, title, titlePlural)
+- Updated `src/app/provider/page.tsx` — term() for "Patient Queue", nav cards, column header
+- Updated `src/app/admin/page.tsx` — term() for "Patients Today" stat
+- Updated `src/app/pharmacy/page.tsx` — term() for Patient column header
+- Updated `src/app/onboard/page.tsx` — term() for Patient role label and description
+
+#### Nurse Role
+- Added nurse/clinical staff as 4th role in `src/app/onboard/page.tsx` (between Provider and Pharmacy)
+- Created `src/app/onboard/nurse/page.tsx` — 3-step flow:
+  - Step 1: Gov ID (simulated in dev, upload placeholder in prod)
+  - Step 2: Nursing License (type selector: RN/LPN/APRN/CNA/Other, license number, issuing state)
+  - Step 3: Review + Complete Verification
+  - Dev bypass: calls `devBypassVerification` action, assigns "nurse" role
+  - Prod path: placeholder with error directing to admin (to be wired later)
+
+#### Commit / Deploy
+- Committed all changes (terminology, nurse role, memberId fix, emailAuth fix)
+- Pushed to `feature/full-agentic-build` on GitHub
+- Deployed to Cloudflare Pages (scriptsxo project)
+
+### Key Architecture Decisions
+- ADR-017: Configurable Terminology (patient/client) — see DECISIONS.md
+- ADR-018: Nurse / Clinical Staff Role — see DECISIONS.md
+- ADR-019: Self-Hosted WebRTC on Existing Asterisk Infrastructure — see DECISIONS.md
+- ADR-020: Multi-Tenant Asterisk via Context Isolation — see DECISIONS.md
+- ADR-021: Product Separation (ScriptsXO vs AmazingXO) — see DECISIONS.md
+- ADR-022: Front-End-First Build Approach — see DECISIONS.md
+
+### Telehealth Architecture Plan (Next Build)
+Three-screen consultation flow to build (front end first):
+
+**Screen 1 — Waiting Room** (`/consultation/waiting-room`)
+- Patient view: "Your provider will join shortly" with timer, tips carousel, AI concierge chat
+- Provider view: patient queue, accept/decline, quick chart review
+
+**Screen 2 — Consultation Room** (`/consultation/room` or `/provider/consultation/room`)
+- Full-screen video grid (local + remote streams via WebRTC)
+- Sidebar: AI live transcription, suggested Dx, drug lookup
+- Controls: mute, camera, screen share, end call
+- Built on existing Asterisk + Coturn (STUN/TURN) + SIP.js browser bridge
+
+**Screen 3 — Post-Call** (`/consultation/complete`)
+- AI-generated visit summary
+- Prescription decision (approve, modify, decline)
+- Patient messaging: next steps, Rx routing to pharmacy
+- Follow-up scheduling
+
+### Infrastructure Notes
+- Vultr VPS: 144.202.25.33 (Asterisk + Skyetel + Gemini transcription already running)
+- SIP carriers available: Skyetel (primary), Thinq, QuestBlue
+- Need to install: Coturn (STUN/TURN for WebRTC NAT traversal)
+- Browser bridge: SIP.js or JsSIP (WebRTC ↔ Asterisk SIP)
+- Phone provisioning: Skyetel API for auto-provisioning DID at org signup (not manual)
+- Multi-tenant isolation: Asterisk dialplan contexts (scriptsxo-*, intakebella-* namespaces)
+- Breakeven vs Daily.co: ~43 calls/month (self-hosted wins at any real volume)
+
+### Open Items After This Session
+- **NEXT: Build consultation UI front end** (3 screens, no back end wiring yet — owner's explicit instruction)
+- Set STRIPE_SECRET_KEY in Convex prod (owner to add)
+- Set GEMINI_API_KEY, WEBAUTHN_ORIGIN, WEBAUTHN_RP_ID in Convex prod if not already set
+- Update SITE_URL in Convex prod (currently set to localhost)
+- Install Coturn on Vultr VPS 144.202.25.33 for WebRTC STUN/TURN
+- Configure Asterisk multi-tenant contexts (scriptsxo-*, intakebella-*)
+- Wire SIP.js browser bridge in consultation room
+- Auto-provision phone numbers via Skyetel API at org signup
+- Stripe Identity end-to-end test (once key set)
+- Real NPI test in production (use 1003000126, not 1234567893 — 1234567893 is not a real NPI)
+- License document upload + Gemini OCR for provider onboarding
+- NCPDP registry for pharmacy verification
+- Activate Composio toolkits (need individual credentials per toolkit in Composio dashboard)
+- Google Calendar OAuth for scheduling sync via Composio
+- ModMed API credentials for e-prescribe and EHR
+- Per-org terminology config (move clientTerm to organizations table for true multi-tenant)
+- AmazingXO component extraction (chat bubbles, voice hooks, glassmorphism patterns)

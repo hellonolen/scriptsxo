@@ -105,3 +105,59 @@ Decisions are permanent. Never deleted, only marked as superseded.
 - Context: Building separate UIs for consumers, physicians, org admins, and platform admins is wasteful and inconsistent.
 - Decision: A single AI chat interface adapts to the user's role. The userRole field in aiConversations determines the AI's behavior and persona. Consumer sees a patient concierge. Physician sees a clinical assistant. Admin sees a platform management tool.
 - Consequence: aiChat.ts system prompt must be role-aware. UI components remain the same across roles. Role-based feature gating happens via the AI's behavior, not separate pages.
+
+## ADR-015: Agentic Credential Verification
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: Manual email lists for provider/pharmacy role assignment (providerEmails, pharmacyEmails in config.ts) were completely counter to the agentic architecture. Admins shouldn't manually manage who is a provider or pharmacy.
+- Decision: All non-admin users start as "unverified" after auth. An AI-agent-driven pipeline verifies credentials: providers via NPI Registry + license OCR + DEA, patients via Stripe Identity (gov ID + selfie), pharmacies via NCPDP/NPI lookup. On verification, the orchestrator assigns the role and creates role-specific records. Admin emails in config stay as a platform-level override.
+- Consequence: Zero manual role management. New users must complete onboarding at /onboard before accessing any portal. Credential verification agent creates compliance audit trail automatically. Dev mode has a bypass for local testing.
+
+## ADR-016: Admin-Only Context Switcher
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: The context switcher (Patient/Provider/Pharmacy/Admin portals) was visible to all users. Patients could see that provider and pharmacy portals exist, which is a security and UX concern.
+- Decision: Context switcher renders ONLY for admin users. All other roles (patient, provider, pharmacy) see their single portal with no switching capability and no awareness that other portals exist.
+- Consequence: Strict role isolation in the UI. Non-admin users have a cleaner, focused experience. Admins retain full cross-portal access for support and oversight.
+
+## ADR-017: Configurable Terminology (Patient vs Client)
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: Different organizations using the platform call the same person by different terms — healthcare practices say "patient," wellness clinics say "client." The DB schema is the same. Only display text differs. Hardcoded "patient" throughout the UI would require per-org forks.
+- Decision: Add a `terminology` block to `SITECONFIG` in `src/lib/config.ts` with four fields (`clientTerm`, `clientTermPlural`, `clientTermTitle`, `clientTermPluralTitle`). Add a `term()` helper function that accepts a form param and returns the configured string. All user-facing references to "patient" use `term()` instead of literals. Change one line in config to swap the entire platform.
+- Consequence: Zero DB schema impact. Single source of truth for terminology. Future plan: move to organizations table for per-org config in B2B/B2E tier.
+
+## ADR-018: Nurse / Clinical Staff Role
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: The platform initially had four roles: patient, provider, pharmacy, admin. Clinical staff (RNs, LPNs, APRNs, CNAs) are distinct from providers (physicians, NPs, PAs) and need their own verification pipeline and access level.
+- Decision: Add "nurse" as a first-class role. Onboarding flow at `/onboard/nurse` collects government-issued ID and nursing license (type + number + state). Dev bypass assigns the role immediately. Prod path records credentials for admin review. The nurse role gets its own portal access level, distinct from provider and patient.
+- Consequence: 5 roles total: unverified, patient, provider, nurse, pharmacy (admin is config-based, not onboarded). Credential verification agent needs nurse-specific logic added. License verification against state boards is a future step (currently manual admin review).
+
+## ADR-019: Self-Hosted WebRTC on Existing Asterisk Infrastructure
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: Owner already has a Vultr VPS (144.202.25.33) running Asterisk + Skyetel SIP + Gemini transcription for IntakeBella and FaxBella. Daily.co costs $0.00456/participant-minute for video. At any real call volume, self-hosted wins decisively. Breakeven vs Daily.co is ~43 calls/month.
+- Decision: Build ScriptsXO telehealth on the existing Asterisk + SIP infrastructure. Add Coturn (STUN/TURN server) for WebRTC NAT traversal. Add SIP.js or JsSIP as the browser-to-Asterisk bridge. Phone numbers auto-provisioned via Skyetel API at org signup. No Daily.co, no Zoom, no external video SaaS.
+- Consequence: Near-zero marginal cost per call beyond VPS hosting ($6/mo baseline). Requires: (1) Coturn installation on VPS, (2) Asterisk WebRTC config, (3) SIP.js integration in consultation room UI. HIPAA compliance baked in (protected environment, no third-party video processor). Nolen manages the VPS.
+
+## ADR-020: Multi-Tenant Asterisk via Context Isolation
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: Owner runs multiple products on the same Vultr VPS (IntakeBella, FaxBella, ScriptsXO). These products have separate customers, phone numbers, and call flows. They must never share context or allow cross-product bleed.
+- Decision: Use Asterisk dialplan contexts as the isolation mechanism. Each product gets a dedicated context namespace: `scriptsxo-inbound`, `scriptsxo-outbound`, `scriptsxo-internal` vs `intakebella-inbound`, `intakebella-outbound`, etc. Traffic cannot cross context boundaries without an explicit bridge. Each org within ScriptsXO gets a sub-context or context variable. Phone number provisioning (Skyetel DID) is auto-assigned to the correct context at org signup.
+- Consequence: Zero bleed between products — architecturally enforced at the dialplan level. Adding a new tenant is a config append, not a new server. Skyetel API handles DID provisioning programmatically. Future: per-org number porting.
+
+## ADR-021: Product Separation (ScriptsXO vs AmazingXO)
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: AmazingXO (peptides/compounds) and ScriptsXO (prescription telehealth) are both Nolen products on related tech stacks. The question arose: should peptides move to ScriptsXO, and should AmazingXO's telehealth UI be reused?
+- Decision: Keep the products separate. Different audiences (compound enthusiasts vs standard telehealth patients), different regulatory context (compound pharmacy vs standard Rx/Surescripts), different brand experience. Extract reusable UI components from AmazingXO (chat bubbles, voice interaction hooks, glassmorphism card patterns) but build ScriptsXO consultation room from scratch with real WebRTC. Do not merge codebases.
+- Consequence: ScriptsXO is standalone. AmazingXO remains standalone. Shared patterns are extracted as component primitives, not as a shared codebase. No cross-product auth or data sharing.
+
+## ADR-022: Front-End-First Build Approach
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: Owner preference explicitly stated: "I would prefer to see the front end built out first before you do the back end setup." Previous sessions showed that back-end work done before the UI was approved sometimes had to be redone when the UX changed.
+- Decision: For all new features (especially consultation UI, multi-tenant onboarding, scheduling), build and approve the front-end UI first. Back-end wiring happens only after the UI is signed off. This applies specifically to the 3-screen consultation flow: build Waiting Room, Consultation Room, and Post-Call UIs as functional shells before writing a single line of WebRTC, Asterisk, or SIP code.
+- Consequence: Faster iteration on UX without back-end coupling. Back end is written to match a confirmed interface, not guessed. Slight risk of UI-to-backend mismatch caught early. Owner reviews UI at each stage before wiring commences.
