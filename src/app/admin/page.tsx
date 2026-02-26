@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -9,7 +8,6 @@ import {
   ShieldCheck,
   Bot,
   BarChart3,
-  ArrowRight,
   AlertTriangle,
   DollarSign,
   Pill,
@@ -22,6 +20,9 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { NavCard } from "@/components/ui/nav-card";
 import { term } from "@/lib/config";
 import { getSessionToken } from "@/lib/auth";
 
@@ -102,58 +103,20 @@ export default function AdminPage() {
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1200px]">
-        {/* Header */}
-        <div className="mb-10 pb-6 border-b border-border">
-          <p className="eyebrow mb-1">ADMINISTRATION</p>
-          <h1
-            className="text-3xl lg:text-4xl text-foreground font-light tracking-[-0.02em]"
-            style={{ fontFamily: "var(--font-heading)" }}
-          >
-            Admin Dashboard
-          </h1>
-          <p className="text-muted-foreground font-light mt-1">
-            System overview and platform management.
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="ADMINISTRATION"
+          title="Admin Dashboard"
+          description="System overview and platform management."
+          border
+          size="lg"
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {[
-            {
-              label: "Active Providers",
-              value: providerCount === null ? "—" : String(providerCount),
-              icon: UserCheck,
-            },
-            {
-              label: `${term("titlePlural")} Today`,
-              value: patientCount === null ? "—" : String(patientCount),
-              icon: Users,
-            },
-            {
-              label: "Rx Processed",
-              value: recentRxList === undefined ? "—" : String(recentRxList.length),
-              icon: Pill,
-            },
-            {
-              label: "Revenue",
-              value: "—",
-              icon: DollarSign,
-            },
-          ].map((stat) => (
-            <div key={stat.label} className="stats-card">
-              <div className="flex items-center justify-between">
-                <span className="stats-card-label">{stat.label}</span>
-                <stat.icon
-                  size={16}
-                  className="text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="stats-card-value text-foreground">
-                {stat.value}
-              </div>
-            </div>
-          ))}
+          <StatCard label="Active Providers" value={providerCount === null ? "—" : String(providerCount)} icon={UserCheck} />
+          <StatCard label={`${term("titlePlural")} Today`} value={patientCount === null ? "—" : String(patientCount)} icon={Users} />
+          <StatCard label="Rx Processed" value={recentRxList === undefined ? "—" : String(recentRxList.length)} icon={Pill} />
+          <StatCard label="Revenue" value="—" icon={DollarSign} />
         </div>
 
         {/* System Health + Recent Activity */}
@@ -196,7 +159,7 @@ export default function AdminPage() {
                   <div key={rx._id} className="flex items-start gap-3">
                     <AlertTriangle
                       size={16}
-                      className="text-yellow-600 mt-0.5 flex-shrink-0"
+                      className="text-warning mt-0.5 flex-shrink-0"
                       aria-hidden="true"
                     />
                     <div className="flex-1 min-w-0">
@@ -223,38 +186,14 @@ export default function AdminPage() {
         {/* Navigation Cards */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {ADMIN_CARDS.map((card) => (
-            <Link
+            <NavCard
               key={card.title}
               href={card.href}
-              className="group p-6 bg-card border border-border rounded-lg hover:border-brand-secondary/40 transition-all duration-300"
-            >
-              <div className="w-10 h-10 rounded-lg bg-brand-secondary-muted flex items-center justify-center mb-4">
-                <card.icon
-                  size={18}
-                  className="text-foreground"
-                  aria-hidden="true"
-                />
-              </div>
-              <h3
-                className="text-base text-foreground font-light mb-1.5"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                {card.title}
-              </h3>
-              <p className="text-sm text-muted-foreground font-light mb-4 leading-relaxed">
-                {card.description}
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs tracking-[0.1em] text-brand-secondary uppercase font-light">
-                  {card.stat}
-                </span>
-                <ArrowRight
-                  size={14}
-                  className="text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all duration-300"
-                  aria-hidden="true"
-                />
-              </div>
-            </Link>
+              icon={card.icon}
+              title={card.title}
+              description={card.description}
+              stat={card.stat}
+            />
           ))}
         </div>
       </div>

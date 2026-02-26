@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -9,7 +8,6 @@ import {
   Pill,
   Video,
   Clock,
-  ArrowRight,
   CircleDot,
   DollarSign,
   CalendarCheck,
@@ -18,6 +16,9 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { NavCard } from "@/components/ui/nav-card";
 import { term } from "@/lib/config";
 import { getSessionCookie } from "@/lib/auth";
 
@@ -89,73 +90,31 @@ export default function ProviderDashboard() {
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1200px]">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10 pb-6 border-b border-border">
-          <div>
-            <p className="eyebrow mb-1">PROVIDER PORTAL</p>
-            <h1
-              className="text-3xl lg:text-4xl text-foreground font-light tracking-[-0.02em]"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              {providerName}
-            </h1>
-            <p className="text-muted-foreground font-light mt-1">
-              Licensed Provider
-            </p>
-          </div>
-          <div className="mt-4 sm:mt-0 flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <CircleDot
-                size={14}
-                className="text-green-600"
-                aria-hidden="true"
-              />
-              <Badge variant="success">Online</Badge>
+        <PageHeader
+          eyebrow="PROVIDER PORTAL"
+          title={providerName}
+          description="Licensed Provider"
+          border
+          size="lg"
+          cta={
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <CircleDot size={14} className="text-success" aria-hidden="true" />
+                <Badge variant="success">Online</Badge>
+              </div>
+              <span className="text-xs text-muted-foreground font-light tracking-wide">
+                Accepting patients
+              </span>
             </div>
-            <span className="text-xs text-muted-foreground font-light tracking-wide">
-              Accepting patients
-            </span>
-          </div>
-        </div>
+          }
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {[
-            {
-              label: "In Queue",
-              value: queue === undefined ? "—" : String(waitingQueue.length),
-              icon: ClipboardList,
-            },
-            {
-              label: "Today's Visits",
-              value: queue === undefined ? "—" : String(todayVisits.length),
-              icon: CalendarCheck,
-            },
-            {
-              label: "Pending Rx",
-              value: pendingRx === undefined ? "—" : String(pendingRx.length),
-              icon: Pill,
-            },
-            {
-              label: "Revenue",
-              value: "—",
-              icon: DollarSign,
-            },
-          ].map((stat) => (
-            <div key={stat.label} className="stats-card">
-              <div className="flex items-center justify-between">
-                <span className="stats-card-label">{stat.label}</span>
-                <stat.icon
-                  size={16}
-                  className="text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="stats-card-value text-foreground">
-                {stat.value}
-              </div>
-            </div>
-          ))}
+          <StatCard label="In Queue" value={queue === undefined ? "—" : String(waitingQueue.length)} icon={ClipboardList} />
+          <StatCard label="Today's Visits" value={queue === undefined ? "—" : String(todayVisits.length)} icon={CalendarCheck} />
+          <StatCard label="Pending Rx" value={pendingRx === undefined ? "—" : String(pendingRx.length)} icon={Pill} />
+          <StatCard label="Revenue" value="—" icon={DollarSign} />
         </div>
 
         {/* Client Queue */}
@@ -252,38 +211,14 @@ export default function ProviderDashboard() {
         {/* Navigation Cards */}
         <div className="grid sm:grid-cols-3 gap-5">
           {NAV_CARDS.map((card) => (
-            <Link
+            <NavCard
               key={card.title}
               href={card.href}
-              className="group p-6 bg-card border border-border rounded-lg hover:border-brand-secondary/40 transition-all duration-300"
-            >
-              <div className="w-10 h-10 rounded-lg bg-brand-secondary-muted flex items-center justify-center mb-4">
-                <card.icon
-                  size={18}
-                  className="text-foreground"
-                  aria-hidden="true"
-                />
-              </div>
-              <h3
-                className="text-base text-foreground font-light mb-1.5"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                {card.title}
-              </h3>
-              <p className="text-sm text-muted-foreground font-light mb-4 leading-relaxed">
-                {card.description}
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs tracking-[0.1em] text-brand-secondary uppercase font-light">
-                  {card.stat}
-                </span>
-                <ArrowRight
-                  size={14}
-                  className="text-muted-foreground group-hover:text-foreground group-hover:translate-x-1 transition-all duration-300"
-                  aria-hidden="true"
-                />
-              </div>
-            </Link>
+              icon={card.icon}
+              title={card.title}
+              description={card.description}
+              stat={card.stat}
+            />
           ))}
         </div>
       </div>

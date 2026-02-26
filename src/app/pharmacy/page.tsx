@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
 import { term } from "@/lib/config";
 
 type RxPriority = "stat" | "high" | "normal";
@@ -92,47 +94,25 @@ export default function PharmacyPage() {
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1200px]">
-        {/* Header */}
-        <div className="mb-10">
-          <p className="eyebrow mb-0.5">PHARMACY</p>
-          <h1
-            className="text-2xl lg:text-3xl font-light text-foreground tracking-[-0.02em]"
-            style={{ fontFamily: "var(--font-heading)" }}
-          >
-            Pharmacy Portal
-          </h1>
-          <p className="text-muted-foreground font-light mt-1">
-            Manage incoming prescriptions and fulfillment workflow.
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="PHARMACY"
+          title="Pharmacy Portal"
+          description="Manage incoming prescriptions and fulfillment workflow."
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {[
-            { label: "In Queue", value: prescriptions === undefined ? "—" : String(inQueue), icon: Clock },
-            { label: "Filling", value: fillingRx === undefined ? "—" : String(filling), icon: Package },
-            { label: "Ready", value: readyRx === undefined ? "—" : String(ready), icon: CheckCircle },
-            { label: "Delivered Today", value: deliveredRx === undefined ? "—" : String(delivered), icon: Truck },
-          ].map((stat) => (
-            <div key={stat.label} className="glass-card flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <span className="stat-label">{stat.label}</span>
-                <stat.icon
-                  size={16}
-                  className="text-muted-foreground"
-                  aria-hidden="true"
-                />
-              </div>
-              <span className="stat-value">{stat.value}</span>
-            </div>
-          ))}
+          <StatCard label="In Queue" value={prescriptions === undefined ? "—" : String(inQueue)} icon={Clock} />
+          <StatCard label="Filling" value={fillingRx === undefined ? "—" : String(filling)} icon={Package} />
+          <StatCard label="Ready" value={readyRx === undefined ? "—" : String(ready)} icon={CheckCircle} />
+          <StatCard label="Delivered Today" value={deliveredRx === undefined ? "—" : String(delivered)} icon={Truck} />
         </div>
 
         {/* Prescription Queue */}
         <div>
           <div className="flex items-center justify-between mb-6">
             <h2
-              className="text-lg font-medium text-foreground"
+              className="text-lg font-light text-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
               Prescription Queue

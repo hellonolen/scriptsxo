@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight, Pill, Activity, Shield, TrendingUp, FileText, Headphones, CheckCircle2, Circle, CreditCard, IdCard, Clock, Video } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Badge } from "@/components/ui/badge";
 import { getSessionCookie } from "@/lib/auth";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -122,7 +123,7 @@ export default function DashboardPage() {
           </header>
 
           <div className="glass-card glow-accent text-center py-16">
-            <FileText size={48} className="text-foreground mx-auto mb-6" style={{ color: "#7C3AED" }} />
+            <FileText size={48} className="text-primary mx-auto mb-6" />
             <h2 className="text-2xl font-light text-foreground mb-3" style={{ fontFamily: "var(--font-heading)" }}>
               Start Your Health Journey
             </h2>
@@ -132,7 +133,7 @@ export default function DashboardPage() {
             <Link
               href="/dashboard/order"
               className="inline-flex items-center gap-2 px-6 py-3 text-white text-xs tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+              style={{ background: "var(--brand-gradient)" }}
             >
               New Order
               <ArrowRight size={14} />
@@ -166,7 +167,7 @@ export default function DashboardPage() {
           <Link
             href="/dashboard/order"
             className="inline-flex items-center gap-2 px-6 py-3 text-white text-xs tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity self-start sm:self-auto"
-            style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+            style={{ background: "var(--brand-gradient)" }}
           >
             <FileText size={14} aria-hidden="true" />
             New Order
@@ -207,20 +208,17 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 {rxList.slice(0, 3).map((rx) => (
                   <div key={rx._id} className="glass-card group flex items-center gap-5" style={{ padding: "20px 24px" }}>
-                    <div
-                      className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ background: "rgba(124, 58, 237, 0.08)" }}
-                    >
-                      <Pill size={18} style={{ color: "#7C3AED" }} aria-hidden="true" />
+                    <div className="w-11 h-11 rounded-xl bg-brand-secondary-muted flex items-center justify-center shrink-0">
+                      <Pill size={18} className="text-primary" aria-hidden="true" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-[15px] font-medium text-foreground">{rx.medicationName}</h3>
                       <p className="text-[13px] text-muted-foreground">{rx.dosage} · {rx.directions}</p>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className={`tag ${rx.status === "signed" || rx.status === "sent" || rx.status === "ready" ? "tag-active" : "tag-pending"}`}>
-                        {rx.status === "signed" ? "Active" : rx.status === "sent" ? "Active" : rx.status === "ready" ? "Active" : rx.status}
-                      </span>
+                      <Badge variant={rx.status === "signed" || rx.status === "sent" || rx.status === "ready" ? "success" : "warning"}>
+                        {rx.status === "signed" || rx.status === "sent" || rx.status === "ready" ? "Active" : rx.status}
+                      </Badge>
                       {rx.nextRefillDate && (
                         <span className="text-[12px] text-muted-foreground hidden sm:block">
                           Refill {new Date(rx.nextRefillDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
@@ -246,7 +244,7 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-3 mb-3">
                   <div
                     className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                    style={{ background: "var(--brand-gradient)" }}
                   >
                     <Video size={16} className="text-white" aria-hidden="true" />
                   </div>
@@ -267,24 +265,24 @@ export default function DashboardPage() {
             {/* Member requirements status card */}
             <div className="glass-card" style={{ padding: "20px 24px" }}>
               <div className="flex items-center gap-3 mb-3">
-                <Shield size={16} style={{ color: "#059669" }} aria-hidden="true" />
+                <Shield size={16} className="text-success" aria-hidden="true" />
                 <span className="text-[13px] font-medium text-foreground">Member Status</span>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-emerald-500" />
+                  <CheckCircle2 size={13} className="text-success" />
                   <span className="text-xs text-foreground">Government ID</span>
-                  <span className="tag tag-active ml-auto">Verified</span>
+                  <Badge variant="success" className="ml-auto">Verified</Badge>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-emerald-500" />
+                  <CheckCircle2 size={13} className="text-success" />
                   <span className="text-xs text-foreground">Payment Method</span>
-                  <span className="tag tag-active ml-auto">Active</span>
+                  <Badge variant="success" className="ml-auto">Active</Badge>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-emerald-500" />
+                  <CheckCircle2 size={13} className="text-success" />
                   <span className="text-xs text-foreground">Membership</span>
-                  <span className="tag tag-violet ml-auto">$97/mo</span>
+                  <Badge variant="default" className="ml-auto">$97/mo</Badge>
                 </div>
               </div>
             </div>
@@ -293,14 +291,14 @@ export default function DashboardPage() {
             <Link href="/dashboard/office-hours" className="block">
               <div className="glass-card group hover:shadow-md transition-shadow" style={{ padding: "20px 24px" }}>
                 <div className="flex items-center gap-3 mb-3">
-                  <Headphones size={16} style={{ color: "#7C3AED" }} aria-hidden="true" />
+                  <Headphones size={16} className="text-primary" aria-hidden="true" />
                   <span className="text-[13px] font-medium text-foreground">Nurse Office Hours</span>
-                  <span className="tag tag-violet ml-auto text-[9px]">Included</span>
+                  <Badge variant="default" className="ml-auto">Included</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mb-2">
                   {formatOfficeHoursSchedule()}
                 </p>
-                <div className="flex items-center gap-2 text-xs text-violet-600">
+                <div className="flex items-center gap-2 text-xs text-primary">
                   <Clock size={11} />
                   <span>
                     Next: {getNextOfficeHoursDate().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
@@ -321,7 +319,7 @@ export default function DashboardPage() {
                     <div key={`${item.title}-${idx}`} className="flex items-start gap-4 px-6 py-3.5">
                       <div
                         className="w-2 h-2 rounded-full shrink-0 mt-1.5"
-                        style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                        style={{ background: "var(--brand-gradient)" }}
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] text-foreground">{item.title}</p>

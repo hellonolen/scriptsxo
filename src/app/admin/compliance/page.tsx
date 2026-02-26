@@ -1,11 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import {
   ShieldCheck,
-  ArrowLeft,
   FileCheck,
   AlertTriangle,
   CheckCircle,
@@ -14,6 +12,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
 import { getSessionCookie } from "@/lib/auth";
 
 function formatTimestamp(ms: number): string {
@@ -78,23 +77,12 @@ export default function CompliancePage() {
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1000px]">
-        <div className="flex items-center gap-3 mb-2">
-          <Link href="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft size={20} aria-hidden="true" />
-          </Link>
-          <div>
-            <p className="eyebrow mb-0.5">ADMINISTRATION</p>
-            <h1
-              className="text-2xl lg:text-3xl font-light text-foreground tracking-[-0.02em]"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              Compliance
-            </h1>
-          </div>
-        </div>
-        <p className="text-muted-foreground font-light mb-8 ml-8">
-          ID verifications, audit logs, and HIPAA compliance.
-        </p>
+        <PageHeader
+          eyebrow="ADMINISTRATION"
+          title="Compliance"
+          description="ID verifications, audit logs, and HIPAA compliance."
+          backHref="/admin"
+        />
 
         {/* Pending Verifications */}
         <div className="mb-8">
@@ -126,8 +114,8 @@ export default function CompliancePage() {
                   className="bg-card border border-border rounded-lg p-4 flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                      <FileCheck size={18} className="text-yellow-600" aria-hidden="true" />
+                    <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                      <FileCheck size={18} className="text-warning" aria-hidden="true" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">
@@ -179,9 +167,9 @@ export default function CompliancePage() {
                     <div key={event._id} className="flex items-center justify-between p-4">
                       <div className="flex items-center gap-3">
                         {status === "flagged" ? (
-                          <AlertTriangle size={16} className="text-yellow-500 shrink-0" aria-hidden="true" />
+                          <AlertTriangle size={16} className="text-warning shrink-0" aria-hidden="true" />
                         ) : (
-                          <CheckCircle size={16} className="text-green-500 shrink-0" aria-hidden="true" />
+                          <CheckCircle size={16} className="text-success shrink-0" aria-hidden="true" />
                         )}
                         <div>
                           <p className="text-sm text-foreground">{getEventLabel(event.action)}</p>
