@@ -234,7 +234,7 @@ export default function PharmacyOnboardPage() {
               <div className="flex items-start gap-4 p-4 bg-card border border-border rounded-md">
                 <Package size={16} className="text-[#2DD4BF] mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-muted-foreground font-light">
-                  Provide either your NCPDP ID or pharmacy NPI number. Our AI agents will verify your pharmacy credentials automatically.
+                  Provide either your NCPDP ID or pharmacy NPI number. Your pharmacy credentials will be verified before access is granted.
                 </p>
               </div>
 

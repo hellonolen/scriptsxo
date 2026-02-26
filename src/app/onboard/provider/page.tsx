@@ -425,7 +425,7 @@ export default function ProviderOnboardPage() {
               <div>
                 <p className="text-sm text-foreground font-light">License document upload</p>
                 <p className="text-xs text-muted-foreground font-light mt-1">
-                  In a future update, you will be able to upload a photo of your medical license for AI-powered OCR verification. For now, your NPI verification serves as the primary credential check.
+                  In a future update, you will be able to upload a photo of your medical license for automated verification. For now, your NPI verification serves as the primary credential check.
                 </p>
               </div>
             </div>

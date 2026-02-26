@@ -190,7 +190,7 @@ function PayPageInner() {
             Activate Your Membership
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Unlock on-demand telehealth consultations, AI-powered health guidance,
+            Unlock on-demand telehealth consultations, secure health guidance,
             and seamless prescription management.
           </p>
         </div>

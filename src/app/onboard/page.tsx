@@ -86,17 +86,17 @@ export default function OnboardPage() {
               <em className="gradient-text-soft">{userName}</em>
             </h1>
             <p className="text-white/50 text-base font-light leading-relaxed mt-10 max-w-sm">
-              Select your role to begin the credential verification process.
-              Our AI agents will verify your credentials automatically.
+              Select your access type to begin the credential verification process.
+              Your credentials will be verified before access is granted.
             </p>
           </div>
 
           <div className="flex items-center gap-8 text-[10px] tracking-[0.25em] text-white/35 uppercase font-light">
-            <span>AI Verified</span>
+            <span>HIPAA Secure</span>
             <span className="w-5 h-px bg-white/10" />
-            <span>Automated</span>
+            <span>Credential Verified</span>
             <span className="w-5 h-px bg-white/10" />
-            <span>Instant</span>
+            <span>Encrypted</span>
           </div>
         </div>
       </div>
@@ -116,10 +116,10 @@ export default function OnboardPage() {
               className="text-3xl font-light text-foreground tracking-[-0.02em] mb-3"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              Select Your Role
+              Complete Your Access Setup
             </h2>
             <p className="text-muted-foreground font-light text-sm">
-              This determines your access level and what verification is required.
+              Access is granted after your credentials are verified.
             </p>
           </div>
 
@@ -189,7 +189,7 @@ export default function OnboardPage() {
           </button>
 
           <p className="text-center text-[10px] text-muted-foreground mt-8 font-light">
-            Credential verification is powered by AI agents and typically completes in under 60 seconds.
+            Verification typically completes within minutes.
           </p>
         </div>
       </div>

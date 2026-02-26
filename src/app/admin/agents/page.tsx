@@ -5,8 +5,8 @@ import { Nav } from "@/components/nav";
 import { Badge } from "@/components/ui/badge";
 
 export const metadata: Metadata = {
-  title: "AI Agents",
-  description: "Configure and monitor AI agents — triage, prescription assistant, and patient chatbot.",
+  title: "Agents",
+  description: "Configure and monitor platform agents — triage, prescription assistant, and patient support.",
 };
 
 /**
@@ -53,10 +53,10 @@ export default function AgentsPage() {
             </Link>
             <div>
               <h1 className="text-2xl font-bold tracking-tighter text-foreground">
-                AI Agents
+                Platform Agents
               </h1>
               <p className="text-sm text-muted-foreground">
-                Configure platform AI agents. Live metrics require telemetry connection.
+                Configure platform agents. Live metrics require telemetry connection.
               </p>
             </div>
           </div>
