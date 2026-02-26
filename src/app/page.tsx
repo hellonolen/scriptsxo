@@ -180,8 +180,9 @@ export default function HomePage() {
     setStep("error");
   }
 
-  function completeAuth(authEmail: string, authName?: string) {
-    const session = createSession(authEmail, authName);
+  function completeAuth(authEmail: string, authName?: string, sessionToken?: string) {
+    const baseSession = createSession(authEmail, authName);
+    const session = sessionToken ? { ...baseSession, sessionToken } : baseSession;
     setSessionCookie(session);
 
     if (isAdminEmail(authEmail)) {
@@ -246,7 +247,7 @@ export default function HomePage() {
 
       if (!result.success) throw new Error(result.error);
 
-      completeAuth(email);
+      completeAuth(email, undefined, result.sessionToken);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "";
       if (
@@ -294,7 +295,7 @@ export default function HomePage() {
 
       if (!result.success) throw new Error(result.error);
 
-      completeAuth(email, name);
+      completeAuth(email, name, result.sessionToken);
     } catch (err: unknown) {
       handleAuthError(err);
     }
@@ -351,7 +352,7 @@ export default function HomePage() {
         return;
       }
 
-      completeAuth(email);
+      completeAuth(email, undefined, result.sessionToken);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Verification failed";
       setError(message);

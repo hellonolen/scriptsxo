@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import {
   Users,
   Pill,
@@ -11,55 +14,12 @@ import {
   DollarSign,
   CalendarCheck,
   ClipboardList,
+  Loader2,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { term } from "@/lib/config";
-
-const STATS = [
-  { label: "In Queue", value: "3", icon: ClipboardList },
-  { label: "Today's Visits", value: "12", icon: CalendarCheck },
-  { label: "Pending Rx", value: "5", icon: Pill },
-  { label: "Revenue", value: "$2,850", icon: DollarSign },
-] as const;
-
-const QUEUE_PATIENTS = [
-  {
-    name: "Amara Johnson",
-    initials: "AJ",
-    reason: "Sore throat, persistent 4 days",
-    urgency: "standard" as const,
-    wait: "5 min",
-  },
-  {
-    name: "Marcus Rivera",
-    initials: "MR",
-    reason: "Prescription refill - Lisinopril",
-    urgency: "routine" as const,
-    wait: "12 min",
-  },
-  {
-    name: "Elena Vasquez",
-    initials: "EV",
-    reason: "Skin rash, spreading to arms",
-    urgency: "urgent" as const,
-    wait: "2 min",
-  },
-  {
-    name: "David Chen",
-    initials: "DC",
-    reason: "Follow-up, blood pressure management",
-    urgency: "routine" as const,
-    wait: "18 min",
-  },
-  {
-    name: "Sophia Patel",
-    initials: "SP",
-    reason: "New patient intake, anxiety symptoms",
-    urgency: "standard" as const,
-    wait: "8 min",
-  },
-] as const;
+import { getSessionCookie } from "@/lib/auth";
 
 const URGENCY_VARIANT: Record<string, "warning" | "info" | "success"> = {
   urgent: "warning",
@@ -73,14 +33,14 @@ const NAV_CARDS = [
     title: `My ${term("titlePlural")}`,
     description: `View and manage your complete ${term()} roster.`,
     href: "/provider/patients",
-    stat: "24 Active",
+    stat: "View All",
   },
   {
     icon: Pill,
     title: "Prescriptions",
     description: "Review, sign, and manage prescription requests.",
     href: "/provider/prescriptions",
-    stat: "5 Pending",
+    stat: "View All",
   },
   {
     icon: Video,
@@ -92,6 +52,40 @@ const NAV_CARDS = [
 ] as const;
 
 export default function ProviderDashboard() {
+  const [providerEmail, setProviderEmail] = useState<string | undefined>(undefined);
+  const [providerName, setProviderName] = useState<string>("Provider");
+  const [sessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    const session = getSessionCookie();
+    if (session?.email) {
+      setProviderEmail(session.email);
+      if (session.name) setProviderName(session.name);
+    }
+    setSessionReady(true);
+  }, []);
+
+  const queue = useQuery(
+    api.consultations.getProviderQueue,
+    providerEmail ? { providerEmail } : "skip"
+  );
+
+  const queueList = queue ?? [];
+  const waitingQueue = queueList.filter(
+    (c: any) => c.status === "scheduled" || c.status === "in_progress" || c.status === "waiting"
+  );
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayVisits = queueList.filter(
+    (c: any) => c.status === "completed" && c.endedAt && c.endedAt >= todayStart.getTime()
+  );
+
+  const pendingRx = useQuery(
+    api.prescriptions.listAll,
+    { status: "draft" }
+  );
+
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1200px]">
@@ -103,10 +97,10 @@ export default function ProviderDashboard() {
               className="text-3xl lg:text-4xl text-foreground font-light tracking-[-0.02em]"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              Dr. Sarah Mitchell, MD
+              {providerName}
             </h1>
             <p className="text-muted-foreground font-light mt-1">
-              Board Certified, Internal Medicine
+              Licensed Provider
             </p>
           </div>
           <div className="mt-4 sm:mt-0 flex items-center gap-3">
@@ -126,7 +120,28 @@ export default function ProviderDashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {STATS.map((stat) => (
+          {[
+            {
+              label: "In Queue",
+              value: queue === undefined ? "—" : String(waitingQueue.length),
+              icon: ClipboardList,
+            },
+            {
+              label: "Today's Visits",
+              value: queue === undefined ? "—" : String(todayVisits.length),
+              icon: CalendarCheck,
+            },
+            {
+              label: "Pending Rx",
+              value: pendingRx === undefined ? "—" : String(pendingRx.length),
+              icon: Pill,
+            },
+            {
+              label: "Revenue",
+              value: "—",
+              icon: DollarSign,
+            },
+          ].map((stat) => (
             <div key={stat.label} className="stats-card">
               <div className="flex items-center justify-between">
                 <span className="stats-card-label">{stat.label}</span>
@@ -153,7 +168,7 @@ export default function ProviderDashboard() {
               {term("title")} Queue
             </h2>
             <span className="text-xs text-muted-foreground tracking-widest uppercase font-light">
-              {QUEUE_PATIENTS.length} waiting
+              {queue === undefined ? "Loading..." : `${waitingQueue.length} waiting`}
             </span>
           </div>
 
@@ -162,46 +177,73 @@ export default function ProviderDashboard() {
               <thead>
                 <tr>
                   <th className="text-xs tracking-[0.1em] uppercase font-light">{term("title")}</th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">Reason</th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">Urgency</th>
+                  <th className="text-xs tracking-[0.1em] uppercase font-light">Type</th>
+                  <th className="text-xs tracking-[0.1em] uppercase font-light">Status</th>
                   <th className="text-xs tracking-[0.1em] uppercase font-light">Wait Time</th>
                   <th className="text-xs tracking-[0.1em] uppercase font-light text-right">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {QUEUE_PATIENTS.map((patient) => (
-                  <tr key={patient.name}>
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
-                          {patient.initials}
-                        </div>
-                        <span className="text-sm font-light text-foreground">
-                          {patient.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="text-sm font-light text-muted-foreground">
-                      {patient.reason}
-                    </td>
-                    <td>
-                      <Badge variant={URGENCY_VARIANT[patient.urgency]}>
-                        {patient.urgency}
-                      </Badge>
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-1.5 text-sm font-light text-muted-foreground">
-                        <Clock size={13} aria-hidden="true" />
-                        {patient.wait}
-                      </div>
-                    </td>
-                    <td className="text-right">
-                      <button className="px-5 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors">
-                        Accept
-                      </button>
+                {queue === undefined ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12">
+                      <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Loading queue...</p>
                     </td>
                   </tr>
-                ))}
+                ) : waitingQueue.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12">
+                      <p className="text-sm text-muted-foreground">No patients currently in queue.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  waitingQueue.map((consultation: any) => {
+                    const waitMs = consultation.scheduledAt
+                      ? Date.now() - consultation.scheduledAt
+                      : 0;
+                    const waitMin = Math.max(0, Math.floor(waitMs / 60000));
+                    const waitLabel = waitMin < 60 ? `${waitMin} min` : `${Math.floor(waitMin / 60)}h ${waitMin % 60}m`;
+                    const initials = (consultation.patientId ?? "?")
+                      .toString()
+                      .slice(-2)
+                      .toUpperCase();
+
+                    return (
+                      <tr key={consultation._id}>
+                        <td>
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
+                              {initials}
+                            </div>
+                            <span className="text-sm font-light text-foreground">
+                              Patient
+                            </span>
+                          </div>
+                        </td>
+                        <td className="text-sm font-light text-muted-foreground">
+                          {consultation.type ?? "video"}
+                        </td>
+                        <td>
+                          <Badge variant={consultation.status === "in_progress" ? "warning" : "info"}>
+                            {consultation.status}
+                          </Badge>
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-1.5 text-sm font-light text-muted-foreground">
+                            <Clock size={13} aria-hidden="true" />
+                            {waitLabel}
+                          </div>
+                        </td>
+                        <td className="text-right">
+                          <button className="px-5 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors">
+                            Accept
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

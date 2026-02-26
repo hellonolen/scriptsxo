@@ -57,10 +57,6 @@ export default function ProviderOnboardPage() {
   const finalizeVerification = useAction(
     api.actions.credentialVerificationOrchestrator.finalizeVerification
   );
-  const devBypass = useAction(
-    api.actions.credentialVerificationOrchestrator.devBypassVerification
-  );
-
   useEffect(() => {
     const dev =
       typeof window !== "undefined" &&
@@ -211,28 +207,15 @@ export default function ProviderOnboardPage() {
     setError("");
 
     try {
-      if (isDev && memberId) {
-        // Dev bypass
-        const result = await devBypass({
-          memberId,
-          email: session.email,
-          selectedRole: "provider",
-        });
-
-        if (result.success) {
-          // Update the session cookie with the new role
-          const updatedSession = {
-            ...session,
-            role: "provider",
-          };
+      if (!verificationId || !memberId) {
+        // In dev without a real verification, just set role and navigate
+        if (isDev) {
+          const updatedSession = { ...session, role: "provider" };
           setSessionCookie(updatedSession);
           setStep("complete");
+          return;
         }
-        return;
-      }
-
-      if (!verificationId || !memberId) {
-        setError("Missing verification data");
+        setError("Missing verification data. Please restart the flow.");
         return;
       }
 
@@ -242,11 +225,7 @@ export default function ProviderOnboardPage() {
       });
 
       if (result.success) {
-        // Update the session cookie with the verified role
-        const updatedSession = {
-          ...session,
-          role: result.role,
-        };
+        const updatedSession = { ...session, role: result.role };
         setSessionCookie(updatedSession);
         setStep("complete");
       } else {

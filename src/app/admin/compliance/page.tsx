@@ -1,23 +1,78 @@
 "use client";
 
 import Link from "next/link";
-import { ShieldCheck, ArrowLeft, FileCheck, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import {
+  ShieldCheck,
+  ArrowLeft,
+  FileCheck,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Loader2,
+} from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
+import { getSessionCookie } from "@/lib/auth";
 
-const PENDING_VERIFICATIONS = [
-  { patient: "Amy Thompson", type: "ID Verification", submitted: "10 min ago", document: "Driver's License" },
-  { patient: "David Liu", type: "ID Verification", submitted: "25 min ago", document: "Passport" },
-];
+function formatTimestamp(ms: number): string {
+  return new Date(ms).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
 
-const RECENT_AUDITS = [
-  { action: "Patient record accessed", user: "Dr. Johnson", timestamp: "Feb 12, 2:15 PM", status: "normal" },
-  { action: "Prescription signed", user: "Dr. Martinez", timestamp: "Feb 12, 1:45 PM", status: "normal" },
-  { action: "Bulk export requested", user: "Admin", timestamp: "Feb 12, 11:30 AM", status: "flagged" },
-  { action: "Login from new device", user: "PA Brown", timestamp: "Feb 12, 10:00 AM", status: "normal" },
-];
+function getEventStatus(event: { success: boolean; action: string }): "normal" | "flagged" {
+  if (!event.success) return "flagged";
+  if (
+    event.action === "PHI_EXPORT" ||
+    event.action === "PAYMENT_FAILED" ||
+    event.action === "PLATFORM_OWNER_REVOKE"
+  ) {
+    return "flagged";
+  }
+  return "normal";
+}
+
+function getEventLabel(action: string): string {
+  const labels: Record<string, string> = {
+    PLATFORM_OWNER_SEED: "Platform owner bootstrapped",
+    PLATFORM_OWNER_GRANT_REQUESTED: "Platform owner grant requested",
+    PLATFORM_OWNER_GRANT_CONFIRMED: "Platform owner grant confirmed",
+    PLATFORM_OWNER_GRANT_CANCELLED: "Platform owner grant cancelled",
+    PLATFORM_OWNER_REVOKE: "Platform owner revoked",
+    ROLE_CHANGE: "Member role changed",
+    MEMBER_CAP_OVERRIDE_CHANGE: "Member capability override changed",
+    ORG_CAP_OVERRIDE_CHANGE: "Organization capability override changed",
+    PHI_EXPORT: "PHI export requested",
+    PAYMENT_FAILED: "Payment failed",
+    SESSION_CREATED: "Session created",
+    SESSION_REVOKED: "Session revoked",
+  };
+  return labels[action] ?? action;
+}
 
 export default function CompliancePage() {
+  const session = getSessionCookie();
+  const memberId = session?.memberId;
+
+  const events = useQuery(
+    api.platformAdmin.listSecurityEvents,
+    memberId ? { callerId: memberId as any, limit: 50 } : "skip"
+  );
+
+  const pendingVerifications = useQuery(
+    api.credentialVerifications.getPending,
+    memberId ? { callerId: memberId as any } : "skip"
+  );
+
+  const isLoadingEvents = events === undefined;
+  const isLoadingVerifications = pendingVerifications === undefined;
+
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1000px]">
@@ -43,33 +98,57 @@ export default function CompliancePage() {
         <div className="mb-8">
           <h2 className="text-base font-medium text-foreground mb-4 flex items-center gap-2">
             <Clock size={16} className="text-primary" aria-hidden="true" />
-            Pending Verifications ({PENDING_VERIFICATIONS.length})
+            Pending Verifications
+            {!isLoadingVerifications && pendingVerifications && (
+              <span className="text-muted-foreground font-normal">
+                ({pendingVerifications.length})
+              </span>
+            )}
           </h2>
-          <div className="space-y-3">
-            {PENDING_VERIFICATIONS.map((item, i) => (
-              <div key={i} className="bg-card border border-border rounded-lg p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                    <FileCheck size={18} className="text-yellow-600" aria-hidden="true" />
+
+          {isLoadingVerifications ? (
+            <div className="flex items-center justify-center py-10 text-muted-foreground gap-2">
+              <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+              <span className="text-sm">Loading verifications...</span>
+            </div>
+          ) : !pendingVerifications || pendingVerifications.length === 0 ? (
+            <div className="bg-card border border-border rounded-lg p-8 text-center">
+              <FileCheck size={32} className="text-muted-foreground/40 mx-auto mb-3" aria-hidden="true" />
+              <p className="text-sm text-muted-foreground">No pending verifications</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingVerifications.map((item) => (
+                <div
+                  key={item._id}
+                  className="bg-card border border-border rounded-lg p-4 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+                      <FileCheck size={18} className="text-yellow-600" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {item.email}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.selectedRole} &mdash; step: {item.currentStep} &mdash;{" "}
+                        {formatTimestamp(item.startedAt)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{item.patient}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.document} -- {item.submitted}
-                    </p>
+                  <div className="flex gap-2">
+                    <button className="px-3 py-1.5 bg-primary text-primary-foreground text-xs rounded-[5px] hover:bg-primary/90 transition-colors">
+                      Approve
+                    </button>
+                    <button className="px-3 py-1.5 border border-border text-foreground text-xs rounded-[5px] hover:bg-muted transition-colors">
+                      Review
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1.5 bg-primary text-primary-foreground text-xs rounded-[5px] hover:bg-primary/90 transition-colors">
-                    Approve
-                  </button>
-                  <button className="px-3 py-1.5 border border-border text-foreground text-xs rounded-[5px] hover:bg-muted transition-colors">
-                    Review
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Audit Log */}
@@ -78,29 +157,54 @@ export default function CompliancePage() {
             <ShieldCheck size={16} className="text-primary" aria-hidden="true" />
             Recent Audit Log
           </h2>
-          <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <div className="divide-y divide-border">
-              {RECENT_AUDITS.map((audit, i) => (
-                <div key={i} className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    {audit.status === "flagged" ? (
-                      <AlertTriangle size={16} className="text-yellow-500" aria-hidden="true" />
-                    ) : (
-                      <CheckCircle size={16} className="text-green-500" aria-hidden="true" />
-                    )}
-                    <div>
-                      <p className="text-sm text-foreground">{audit.action}</p>
-                      <p className="text-xs text-muted-foreground">{audit.user}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground">{audit.timestamp}</span>
-                    {audit.status === "flagged" && <Badge variant="warning">Flagged</Badge>}
-                  </div>
-                </div>
-              ))}
+
+          {isLoadingEvents ? (
+            <div className="flex items-center justify-center py-10 text-muted-foreground gap-2">
+              <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+              <span className="text-sm">Loading audit events...</span>
             </div>
-          </div>
+          ) : !events || events.length === 0 ? (
+            <div className="bg-card border border-border rounded-lg p-8 text-center">
+              <ShieldCheck size={32} className="text-muted-foreground/40 mx-auto mb-3" aria-hidden="true" />
+              <p className="text-sm text-muted-foreground">No security events recorded yet</p>
+            </div>
+          ) : (
+            <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <div className="divide-y divide-border">
+                {events.map((event) => {
+                  const status = getEventStatus(event);
+                  return (
+                    <div key={event._id} className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-3">
+                        {status === "flagged" ? (
+                          <AlertTriangle size={16} className="text-yellow-500 shrink-0" aria-hidden="true" />
+                        ) : (
+                          <CheckCircle size={16} className="text-green-500 shrink-0" aria-hidden="true" />
+                        )}
+                        <div>
+                          <p className="text-sm text-foreground">{getEventLabel(event.action)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {event.actorMemberId
+                              ? `Member: ${event.actorMemberId}`
+                              : "System"}
+                            {event.reason ? ` — ${event.reason}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs text-muted-foreground">
+                          {formatTimestamp(event.timestamp)}
+                        </span>
+                        {status === "flagged" && (
+                          <Badge variant="warning">Flagged</Badge>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </AppShell>

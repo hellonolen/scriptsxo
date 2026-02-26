@@ -1,48 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Video, Calendar, Clock, CheckCircle, Phone, AlertTriangle, ChevronRight } from "lucide-react";
+import { Video, Calendar, Clock, CheckCircle, Phone, AlertTriangle, ChevronRight, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { getSessionCookie } from "@/lib/auth";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { SITECONFIG, formatPrice } from "@/lib/config";
-
-/* ---------------------------------------------------------------------------
-   DEMO DATA (shown when unauthenticated / no patient record)
-   --------------------------------------------------------------------------- */
-
-const DEMO_UPCOMING = [
-  {
-    _id: "demo-appt-1",
-    type: "video",
-    status: "scheduled",
-    scheduledAt: Date.now() + 2 * 24 * 60 * 60 * 1000,
-    roomUrl: null as string | null,
-  },
-];
-
-const DEMO_PAST = [
-  {
-    _id: "demo-appt-2",
-    type: "phone",
-    status: "completed",
-    scheduledAt: Date.now() - 8 * 24 * 60 * 60 * 1000,
-    roomUrl: null as string | null,
-  },
-  {
-    _id: "demo-appt-3",
-    type: "video",
-    status: "completed",
-    scheduledAt: Date.now() - 22 * 24 * 60 * 60 * 1000,
-    roomUrl: null as string | null,
-  },
-];
-
-/* ---------------------------------------------------------------------------
-   PAGE
-   --------------------------------------------------------------------------- */
 
 export default function AppointmentsPage() {
   const [email, setEmail] = useState<string | null>(null);
@@ -59,28 +24,24 @@ export default function AppointmentsPage() {
     setSessionChecked(true);
   }, []);
 
-  const isDemo = sessionChecked && email === null;
-
-  // Fetch patient data
   const patient = useQuery(
     api.patients.getByEmail,
     email ? { email } : "skip"
   );
 
-  // Fetch consultations
   const consultations = useQuery(
     api.consultations.getByPatient,
     patient ? { patientId: patient._id } : "skip"
   );
 
-  // Loading state (skip for demo mode)
-  if (!isDemo && (patient === undefined || consultations === undefined)) {
+  // Loading state
+  if (!sessionChecked || (email !== null && (patient === undefined || consultations === undefined))) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "#7C3AED", borderTopColor: "transparent" }} />
+              <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
               <p className="text-sm text-muted-foreground">Loading appointments...</p>
             </div>
           </div>
@@ -89,14 +50,9 @@ export default function AppointmentsPage() {
     );
   }
 
-  // Split into upcoming and past
-  const upcoming = isDemo
-    ? DEMO_UPCOMING
-    : (consultations?.filter((c) => c.status === "scheduled" || c.status === "waiting") || []);
-
-  const past = isDemo
-    ? DEMO_PAST
-    : (consultations?.filter((c) => c.status === "completed") || []);
+  const allConsultations = consultations ?? [];
+  const upcoming = allConsultations.filter((c: any) => c.status === "scheduled" || c.status === "waiting");
+  const past = allConsultations.filter((c: any) => c.status === "completed");
 
   return (
     <AppShell>
@@ -211,7 +167,7 @@ export default function AppointmentsPage() {
 
           {upcoming.length > 0 ? (
             <div className="space-y-4">
-              {upcoming.map((appt) => (
+              {upcoming.map((appt: any) => (
                 <div key={appt._id} className="glass-card">
                   <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div className="flex items-start gap-4">
@@ -242,7 +198,6 @@ export default function AppointmentsPage() {
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="mt-6 pt-5 border-t border-border flex gap-3">
                     {appt.roomUrl ? (
                       <a
@@ -291,7 +246,7 @@ export default function AppointmentsPage() {
 
           {past.length > 0 ? (
             <div className="space-y-3">
-              {past.map((appt) => (
+              {past.map((appt: any) => (
                 <div
                   key={appt._id}
                   className="glass-card flex items-center justify-between"

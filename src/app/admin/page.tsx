@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import {
   Users,
   ShieldCheck,
   Bot,
   BarChart3,
   ArrowRight,
-  CheckCircle,
   AlertTriangle,
   DollarSign,
   Pill,
@@ -15,58 +17,13 @@ import {
   Clock,
   FileText,
   Plug,
+  Loader2,
+  Activity,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { term } from "@/lib/config";
-
-const STATS = [
-  { label: "Active Providers", value: "12", icon: UserCheck },
-  { label: `${term("titlePlural")} Today`, value: "47", icon: Users },
-  { label: "Rx Processed", value: "38", icon: Pill },
-  { label: "Revenue", value: "$3,525", icon: DollarSign },
-] as const;
-
-const SYSTEM_HEALTH = [
-  {
-    name: "API Services",
-    status: "operational" as const,
-    detail: "All endpoints responding, avg 42ms",
-  },
-  {
-    name: "Video Consultation",
-    status: "operational" as const,
-    detail: "99.9% uptime, 0 active issues",
-  },
-  {
-    name: "E-Prescribe Network",
-    status: "operational" as const,
-    detail: "Connected, Surescripts active",
-  },
-  {
-    name: "Composio API (v3)",
-    status: "operational" as const,
-    detail: "Integration layer for external services",
-  },
-] as const;
-
-const RECENT_ALERTS = [
-  {
-    type: "warning" as const,
-    message: "Provider Dr. Tran license expires in 30 days",
-    time: "2 hours ago",
-  },
-  {
-    type: "info" as const,
-    message: "New compliance audit report available for Q1 2026",
-    time: "5 hours ago",
-  },
-  {
-    type: "warning" as const,
-    message: "Prescription volume 23% above daily average",
-    time: "8 hours ago",
-  },
-] as const;
+import { getSessionToken } from "@/lib/auth";
 
 const ADMIN_CARDS = [
   {
@@ -74,7 +31,7 @@ const ADMIN_CARDS = [
     title: "Providers",
     description: "Manage provider roster, credentials, and availability.",
     href: "/admin/providers",
-    stat: "12 Active",
+    stat: "View All",
   },
   {
     icon: Pill,
@@ -96,7 +53,7 @@ const ADMIN_CARDS = [
     description:
       "Review ID verifications, audit logs, and HIPAA compliance.",
     href: "/admin/compliance",
-    stat: "2 Pending",
+    stat: "View All",
   },
   {
     icon: Bot,
@@ -104,7 +61,7 @@ const ADMIN_CARDS = [
     description:
       "Configure triage AI, prescription assistant, and chatbot.",
     href: "/admin/agents",
-    stat: "3 Active",
+    stat: "View All",
   },
   {
     icon: BarChart3,
@@ -120,11 +77,28 @@ const ADMIN_CARDS = [
     description:
       "Composio API status, toolkit health, and external service connections.",
     href: "/admin/integrations",
-    stat: "7 Toolkits",
+    stat: "View All",
   },
 ] as const;
 
 export default function AdminPage() {
+  const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const token = getSessionToken();
+    if (token) setSessionToken(token);
+  }, []);
+
+  const memberCounts = useQuery(
+    api.members.countByRole,
+    sessionToken ? { sessionToken } : "skip"
+  );
+
+  const recentRxList = useQuery(api.prescriptions.listRecent, { limit: 5 });
+
+  const providerCount = (memberCounts as any)?.provider ?? null;
+  const patientCount = (memberCounts as any)?.patient ?? null;
+
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1200px]">
@@ -144,7 +118,28 @@ export default function AdminPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {STATS.map((stat) => (
+          {[
+            {
+              label: "Active Providers",
+              value: providerCount === null ? "—" : String(providerCount),
+              icon: UserCheck,
+            },
+            {
+              label: `${term("titlePlural")} Today`,
+              value: patientCount === null ? "—" : String(patientCount),
+              icon: Users,
+            },
+            {
+              label: "Rx Processed",
+              value: recentRxList === undefined ? "—" : String(recentRxList.length),
+              icon: Pill,
+            },
+            {
+              label: "Revenue",
+              value: "—",
+              icon: DollarSign,
+            },
+          ].map((stat) => (
             <div key={stat.label} className="stats-card">
               <div className="flex items-center justify-between">
                 <span className="stats-card-label">{stat.label}</span>
@@ -161,7 +156,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* System Health + Recent Alerts */}
+        {/* System Health + Recent Activity */}
         <div className="grid lg:grid-cols-2 gap-6 mb-10">
           {/* System Health */}
           <div className="bg-card border border-border rounded-lg p-6">
@@ -171,30 +166,9 @@ export default function AdminPage() {
             >
               System Health
             </h2>
-            <div className="space-y-4">
-              {SYSTEM_HEALTH.map((service) => (
-                <div
-                  key={service.name}
-                  className="flex items-start gap-3"
-                >
-                  <CheckCircle
-                    size={16}
-                    className="text-green-600 mt-0.5 flex-shrink-0"
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <p className="text-sm font-light text-foreground">
-                      {service.name}
-                    </p>
-                    <p className="text-xs font-light text-muted-foreground mt-0.5">
-                      {service.detail}
-                    </p>
-                  </div>
-                  <Badge variant="success" className="ml-auto flex-shrink-0">
-                    Operational
-                  </Badge>
-                </div>
-              ))}
+            <div className="flex items-center gap-3 py-4 text-sm text-muted-foreground font-light">
+              <Activity size={16} className="text-muted-foreground shrink-0" aria-hidden="true" />
+              <p>System health monitoring — coming soon. Live service status will appear here.</p>
             </div>
           </div>
 
@@ -204,41 +178,45 @@ export default function AdminPage() {
               className="text-lg text-foreground font-light mb-5"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              Recent Alerts
+              Recent Prescriptions
             </h2>
-            <div className="space-y-4">
-              {RECENT_ALERTS.map((alert, index) => (
-                <div key={index} className="flex items-start gap-3">
-                  {alert.type === "warning" ? (
+            {recentRxList === undefined ? (
+              <div className="flex items-center gap-2 py-4">
+                <Loader2 size={14} className="animate-spin text-muted-foreground" />
+                <p className="text-sm text-muted-foreground font-light">Loading...</p>
+              </div>
+            ) : recentRxList.length === 0 ? (
+              <div className="flex items-start gap-3 py-4">
+                <Clock size={16} className="text-brand-secondary mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <p className="text-sm font-light text-muted-foreground">No prescriptions yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recentRxList.map((rx: any) => (
+                  <div key={rx._id} className="flex items-start gap-3">
                     <AlertTriangle
                       size={16}
                       className="text-yellow-600 mt-0.5 flex-shrink-0"
                       aria-hidden="true"
                     />
-                  ) : (
-                    <Clock
-                      size={16}
-                      className="text-brand-secondary mt-0.5 flex-shrink-0"
-                      aria-hidden="true"
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-light text-foreground">
-                      {alert.message}
-                    </p>
-                    <p className="text-xs font-light text-muted-foreground mt-0.5">
-                      {alert.time}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-light text-foreground truncate">
+                        {rx.medicationName} — {rx.dosage}
+                      </p>
+                      <p className="text-xs font-light text-muted-foreground mt-0.5">
+                        Status: {rx.status}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={rx.status === "signed" || rx.status === "sent" ? "success" : "info"}
+                      className="flex-shrink-0"
+                    >
+                      {rx.status}
+                    </Badge>
                   </div>
-                  <Badge
-                    variant={alert.type === "warning" ? "warning" : "info"}
-                    className="flex-shrink-0"
-                  >
-                    {alert.type}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

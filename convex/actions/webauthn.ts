@@ -11,7 +11,8 @@
  *   WEBAUTHN_ORIGIN    — Allowed origin(s), comma-separated. Default: "http://localhost:3001"
  */
 import { action } from "../_generated/server";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import {
   generateRegistrationOptions,
@@ -149,7 +150,22 @@ export const verifyAndStoreRegistration = action({
       return { success: false, error: result.error };
     }
 
-    return { success: true };
+    // Create server-side session after successful registration
+    let sessionToken: string | undefined;
+    try {
+      const member = await ctx.runQuery(api.members.getByEmail, { email });
+      if (member) {
+        const session = await ctx.runMutation(internal.sessions.create, {
+          memberId: member._id as Id<"members">,
+          email,
+        });
+        sessionToken = session.sessionToken;
+      }
+    } catch (err) {
+      console.error("[WEBAUTHN] Session create failed after registration:", err);
+    }
+
+    return { success: true, sessionToken };
   },
 });
 
@@ -259,6 +275,21 @@ export const verifyAuthentication = action({
       newCounter: verification.authenticationInfo.newCounter,
     });
 
-    return { success: true, email };
+    // Create server-side session
+    let sessionToken: string | undefined;
+    try {
+      const member = await ctx.runQuery(api.members.getByEmail, { email });
+      if (member) {
+        const session = await ctx.runMutation(internal.sessions.create, {
+          memberId: member._id as Id<"members">,
+          email,
+        });
+        sessionToken = session.sessionToken;
+      }
+    } catch (err) {
+      console.error("[WEBAUTHN] Session create failed after authentication:", err);
+    }
+
+    return { success: true, email, sessionToken };
   },
 });

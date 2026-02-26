@@ -3,9 +3,10 @@
  * MEMBERS MODULE
  * Member management - getOrCreate for patient onboarding.
  */
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireAnyCap, requireCap, CAP } from "./lib/capabilities";
+import { CAP } from "./lib/capabilities";
+import { requireCap as requireCapSession, requireAnyCap as requireAnyCapSession } from "./lib/serverAuth";
 import { logSecurityEvent } from "./lib/securityAudit";
 
 /**
@@ -86,16 +87,17 @@ export const updateRole = mutation({
   args: {
     memberId: v.id("members"),
     role: v.string(), // "patient" | "provider" | "pharmacy" | "admin" | "staff"
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
     // Role changes always require USER_MANAGE — no self-promotion allowed.
+    let caller;
     try {
-      await requireCap(ctx, args.callerId, CAP.USER_MANAGE);
+      caller = await requireCapSession(ctx, args.sessionToken, CAP.USER_MANAGE);
     } catch (err) {
       await logSecurityEvent(ctx, {
         action: "ROLE_CHANGE",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: null,
         targetId: args.memberId,
         targetType: "member",
         success: false,
@@ -127,7 +129,7 @@ export const updateRole = mutation({
 
     await logSecurityEvent(ctx, {
       action: "ROLE_CHANGE",
-      actorMemberId: args.callerId ?? null,
+      actorMemberId: caller.memberId,
       targetId: args.memberId,
       targetType: "member",
       diff: { role: { from: previousRole, to: args.role } },
@@ -144,7 +146,7 @@ export const updateRole = mutation({
  */
 export const updateProfile = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     memberId: v.id("members"),
     name: v.optional(v.string()),
     firstName: v.optional(v.string()),
@@ -153,10 +155,14 @@ export const updateProfile = mutation({
     dob: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Resolve caller from session — never trust a client-supplied memberId for identity.
+    const caller = await requireCapSession(ctx, args.sessionToken, CAP.VIEW_DASHBOARD);
     // Allow: caller is the profile owner, OR caller has USER_MANAGE
-    const callerIsSelf = args.callerId === (args.memberId as string);
+    const callerIsSelf = caller.memberId === (args.memberId as string);
     if (!callerIsSelf) {
-      await requireCap(ctx, args.callerId, CAP.USER_MANAGE);
+      if (!caller.caps.has(CAP.USER_MANAGE)) {
+        throw new ConvexError({ code: "FORBIDDEN", message: "Cannot update another member's profile without USER_MANAGE." });
+      }
     }
     const updates: Record<string, unknown> = {};
     if (args.name !== undefined) updates.name = args.name;
@@ -172,23 +178,54 @@ export const updateProfile = mutation({
 });
 
 /**
+ * Get all members. Requires USER_MANAGE capability.
+ * Returns up to 100 most recently joined members.
+ */
+export const getAll = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireCapSession(ctx, args.sessionToken, CAP.USER_MANAGE);
+    return await ctx.db.query("members").order("desc").take(100);
+  },
+});
+
+/**
+ * Count members by role. Requires USER_MANAGE capability.
+ * Returns an object keyed by role with counts.
+ */
+export const countByRole = query({
+  args: { sessionToken: v.string() },
+  handler: async (ctx, args) => {
+    await requireCapSession(ctx, args.sessionToken, CAP.USER_MANAGE);
+    const all = await ctx.db.query("members").collect();
+    const counts: Record<string, number> = {};
+    for (const member of all) {
+      const role = (member.role as string) ?? "unverified";
+      counts[role] = (counts[role] ?? 0) + 1;
+    }
+    return counts;
+  },
+});
+
+/**
  * Update per-member capability overrides (capAllow / capDeny).
  * Requires USER_MANAGE. Every change is audited.
  */
 export const updateCapOverrides = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     memberId: v.id("members"),
     capAllow: v.optional(v.array(v.string())),
     capDeny: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    let caller;
     try {
-      await requireCap(ctx, args.callerId, CAP.USER_MANAGE);
+      caller = await requireCapSession(ctx, args.sessionToken, CAP.USER_MANAGE);
     } catch (err) {
       await logSecurityEvent(ctx, {
         action: "MEMBER_CAP_OVERRIDE_CHANGE",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: null,
         targetId: args.memberId,
         targetType: "member",
         success: false,
@@ -208,7 +245,7 @@ export const updateCapOverrides = mutation({
 
     await logSecurityEvent(ctx, {
       action: "MEMBER_CAP_OVERRIDE_CHANGE",
-      actorMemberId: args.callerId ?? null,
+      actorMemberId: caller.memberId,
       targetId: args.memberId,
       targetType: "member",
       diff: {

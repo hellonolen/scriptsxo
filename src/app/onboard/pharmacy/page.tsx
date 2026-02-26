@@ -42,10 +42,6 @@ export default function PharmacyOnboardPage() {
   const finalizeVerification = useAction(
     api.actions.credentialVerificationOrchestrator.finalizeVerification
   );
-  const devBypass = useAction(
-    api.actions.credentialVerificationOrchestrator.devBypassVerification
-  );
-
   useEffect(() => {
     const dev =
       typeof window !== "undefined" &&
@@ -85,21 +81,12 @@ export default function PharmacyOnboardPage() {
     setStep("verifying");
 
     try {
-      // Dev mode: simulate
-      if (isDev && memberId) {
+      // Dev mode: direct role assignment
+      if (isDev) {
         await new Promise((r) => setTimeout(r, 1200));
-
-        const result = await devBypass({
-          memberId,
-          email: session.email,
-          selectedRole: "pharmacy",
-        });
-
-        if (result.success) {
-          const updatedSession = { ...session, role: "pharmacy" };
-          setSessionCookie(updatedSession);
-          setStep("verified");
-        }
+        const updatedSession = { ...session, role: "pharmacy" };
+        setSessionCookie(updatedSession);
+        setStep("verified");
         setLoading(false);
         return;
       }

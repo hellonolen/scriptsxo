@@ -3,6 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 
 /**
  * EMAIL AUTH (MAGIC LINK / CODE)
@@ -151,6 +152,21 @@ export const verifyCode = action({
       return { success: false, error: result.error };
     }
 
-    return { success: true };
+    // Create a server-side session so sessionToken can be stored in the cookie.
+    // The client must pass this token to all Convex mutations (never memberId).
+    let sessionToken: string | undefined;
+    try {
+      const member = await ctx.runQuery(api.members.getByEmail, { email });
+      const memberId: Id<"members"> = member
+        ? member._id
+        : (await ctx.runMutation(api.members.getOrCreate, { email, name: email.split("@")[0] })).memberId;
+      const session = await ctx.runMutation(internal.sessions.create, { memberId, email });
+      sessionToken = session.sessionToken;
+    } catch (err) {
+      console.error("[EMAIL_AUTH] Failed to create session:", err);
+      // Auth succeeded — still return success; session creation failure is non-fatal here
+    }
+
+    return { success: true, sessionToken };
   },
 });

@@ -1,32 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { getSessionCookie } from "@/lib/auth";
 import {
-  Mic, MicOff, Video, VideoOff, Monitor,
+  Mic, MicOff, Video, VideoOff,
   MessageSquare, PhoneOff, FileText, FlaskConical,
   ChevronRight, Send, Pill,
 } from "lucide-react";
-
-/* ---------------------------------------------------------------------------
-   Constants
-   --------------------------------------------------------------------------- */
-
-const LIVE_TRANSCRIPT = [
-  { timestamp: "00:08", speaker: "Dr. Kim", text: "Good morning. How are you feeling today?" },
-  { timestamp: "00:22", speaker: "Patient", text: "I've had a persistent headache for 3 days, mainly behind my eyes." },
-  { timestamp: "00:41", speaker: "Dr. Kim", text: "Any fever, sensitivity to light, or nausea with it?" },
-  { timestamp: "00:58", speaker: "Patient", text: "Some light sensitivity, yes. No fever though." },
-];
-
-const PATIENT = {
-  name: "Amara Johnson",
-  initials: "AJ",
-  dob: "1988-04-12",
-  chief: "Persistent headache × 3 days",
-  allergies: ["Penicillin", "Sulfa"],
-  currentMeds: ["Lisinopril 10mg", "Metformin 500mg"],
-};
 
 /* ---------------------------------------------------------------------------
    Helpers
@@ -78,11 +61,21 @@ function PatientTile({ name, initials }: { name: string; initials: string }) {
 
 type SidebarTab = "transcript" | "patient" | "rx";
 
-function AiSidebar({ patient }: { patient: typeof PATIENT }) {
+interface PatientData {
+  name: string;
+  initials: string;
+  dob: string;
+  chief: string;
+  allergies: string[];
+  currentMeds: string[];
+}
+
+function AiSidebar({ patient }: { patient: PatientData }) {
   const [tab, setTab] = useState<SidebarTab>("transcript");
   const [message, setMessage] = useState("");
+  const [transcript, setTranscript] = useState<Array<{ timestamp: string; speaker: string; text: string }>>([]);
   const [chat, setChat] = useState([
-    { role: "ai", text: "Session started. Patient vitals from last visit: BP 128/82, HR 74. Chief complaint: headache × 3 days." },
+    { role: "ai", text: "Session started. Ready to assist with this consultation." },
   ]);
 
   function sendMessage() {
@@ -94,7 +87,7 @@ function AiSidebar({ patient }: { patient: typeof PATIENT }) {
     setTimeout(() => {
       setChat((c) => [...c, {
         role: "ai",
-        text: "Based on the headache presentation with light sensitivity and no fever, consider tension-type or migraine. Rule out secondary causes if > 3 days without improvement.",
+        text: "I can help you with clinical decision support. Please describe what you need assistance with.",
       }]);
     }, 800);
   }
@@ -131,12 +124,16 @@ function AiSidebar({ patient }: { patient: typeof PATIENT }) {
       {tab === "transcript" && (
         <div className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {LIVE_TRANSCRIPT.map((line, i) => (
-              <div key={i}>
-                <span className="text-[10px] font-mono text-white/30">{line.timestamp} · {line.speaker}</span>
-                <p className="text-sm text-white/75 font-light leading-relaxed mt-0.5">{line.text}</p>
-              </div>
-            ))}
+            {transcript.length === 0 ? (
+              <p className="text-xs text-white/30 italic">Transcript will appear here as the consultation progresses.</p>
+            ) : (
+              transcript.map((line, i) => (
+                <div key={i}>
+                  <span className="text-[10px] font-mono text-white/30">{line.timestamp} · {line.speaker}</span>
+                  <p className="text-sm text-white/75 font-light leading-relaxed mt-0.5">{line.text}</p>
+                </div>
+              ))
+            )}
             <div className="flex items-center gap-2 pt-1">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
               <span className="text-[11px] text-white/30 italic">Live transcribing...</span>
@@ -180,31 +177,37 @@ function AiSidebar({ patient }: { patient: typeof PATIENT }) {
           <div>
             <p className="text-[10px] tracking-widest text-white/40 uppercase mb-2">Patient</p>
             <p className="text-white font-medium">{patient.name}</p>
-            <p className="text-white/50 text-xs mt-0.5">DOB: {patient.dob}</p>
+            {patient.dob && <p className="text-white/50 text-xs mt-0.5">DOB: {patient.dob}</p>}
           </div>
-          <div>
-            <p className="text-[10px] tracking-widest text-white/40 uppercase mb-2">Chief Complaint</p>
-            <p className="text-white/80 text-sm">{patient.chief}</p>
-          </div>
-          <div>
-            <p className="text-[10px] tracking-widest text-white/40 uppercase mb-2">Allergies</p>
-            <div className="flex flex-wrap gap-1.5">
-              {patient.allergies.map((a) => (
-                <span key={a} className="px-2 py-0.5 text-xs rounded-full text-red-300 border border-red-500/30 bg-red-500/10">{a}</span>
-              ))}
+          {patient.chief && (
+            <div>
+              <p className="text-[10px] tracking-widest text-white/40 uppercase mb-2">Chief Complaint</p>
+              <p className="text-white/80 text-sm">{patient.chief}</p>
             </div>
-          </div>
-          <div>
-            <p className="text-[10px] tracking-widest text-white/40 uppercase mb-2">Current Medications</p>
-            <div className="space-y-1.5">
-              {patient.currentMeds.map((m) => (
-                <div key={m} className="flex items-center gap-2 text-xs text-white/70">
-                  <Pill size={11} className="text-violet-400 shrink-0" />
-                  {m}
-                </div>
-              ))}
+          )}
+          {patient.allergies.length > 0 && (
+            <div>
+              <p className="text-[10px] tracking-widest text-white/40 uppercase mb-2">Allergies</p>
+              <div className="flex flex-wrap gap-1.5">
+                {patient.allergies.map((a) => (
+                  <span key={a} className="px-2 py-0.5 text-xs rounded-full text-red-300 border border-red-500/30 bg-red-500/10">{a}</span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+          {patient.currentMeds.length > 0 && (
+            <div>
+              <p className="text-[10px] tracking-widest text-white/40 uppercase mb-2">Current Medications</p>
+              <div className="space-y-1.5">
+                {patient.currentMeds.map((m) => (
+                  <div key={m} className="flex items-center gap-2 text-xs text-white/70">
+                    <Pill size={11} className="text-violet-400 shrink-0" />
+                    {m}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="pt-2 space-y-2">
             <button className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs text-white/70 border border-white/10 hover:bg-white/5 transition-colors">
               <span className="flex items-center gap-2"><FileText size={13} />View Full Chart</span>
@@ -223,7 +226,7 @@ function AiSidebar({ patient }: { patient: typeof PATIENT }) {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <p className="text-[10px] tracking-widest text-white/40 uppercase">Quick Prescribe</p>
           {[
-            { name: "Sumatriptan", dose: "50 mg", sig: "Take 1 tablet at onset, may repeat ×1 after 2h" },
+            { name: "Sumatriptan", dose: "50 mg", sig: "Take 1 tablet at onset, may repeat once after 2h" },
             { name: "Ibuprofen", dose: "600 mg", sig: "Take 1 tablet every 6h with food, max 3 days" },
             { name: "Ondansetron", dose: "4 mg", sig: "Take 1 tablet every 8h as needed for nausea" },
           ].map((rx) => (
@@ -247,20 +250,66 @@ function AiSidebar({ patient }: { patient: typeof PATIENT }) {
 }
 
 /* ---------------------------------------------------------------------------
-   Page
+   Inner page — uses useSearchParams (requires Suspense boundary)
    --------------------------------------------------------------------------- */
 
-export default function ConsultationRoomPage() {
+function ConsultationRoomInner() {
   const router = useRouter();
+  const params = useSearchParams();
+  const consultationId = params.get("id");
+
+  const session = getSessionCookie();
+  const memberId = session?.memberId;
+
   const [duration, setDuration] = useState(0);
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // Query real consultation data
+  const consultation = useQuery(
+    api.consultations.getById,
+    consultationId ? { consultationId: consultationId as any } : "skip"
+  );
+
+  // Query patient record via consultation.patientId
+  const patient = useQuery(
+    api.patients.getById,
+    consultation?.patientId ? { patientId: consultation.patientId } : "skip"
+  );
+
+  // Query patient member record for name
+  const patientMember = useQuery(
+    api.members.getByEmail,
+    patient?.email ? { email: patient.email } : "skip"
+  );
+
+  // Derive display data from real records, fall back gracefully
+  const patientName = patientMember?.name ?? patient?.email ?? "Patient";
+  const patientInitials = patientName
+    .split(" ")
+    .map((w: string) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || "PT";
+
+  const patientData: PatientData = {
+    name: patientName,
+    initials: patientInitials,
+    dob: patient?.dateOfBirth ?? "",
+    chief: "",
+    allergies: patient?.allergies ?? [],
+    currentMeds: patient?.currentMedications ?? [],
+  };
+
+  // Duration timer — start from consultation.startedAt if available
   useEffect(() => {
+    const startMs = consultation?.startedAt ?? Date.now();
+    const initialSecs = Math.max(0, Math.round((Date.now() - startMs) / 1000));
+    setDuration(initialSecs);
     const timer = setInterval(() => setDuration((d) => d + 1), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [consultation?.startedAt]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: "#0A0A12" }}>
@@ -273,7 +322,7 @@ export default function ConsultationRoomPage() {
         <div className="flex items-center gap-3">
           <span className="text-sm tracking-[0.2em] font-medium text-white uppercase">SCRIPTSXO</span>
           <span className="w-px h-4 bg-white/20" />
-          <span className="text-xs font-light text-white/60">{PATIENT.name}</span>
+          <span className="text-xs font-light text-white/60">{patientName}</span>
           <span className="w-px h-4 bg-white/20" />
           <span className="flex items-center gap-1.5 text-xs font-light text-green-400">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -302,7 +351,7 @@ export default function ConsultationRoomPage() {
 
           {/* Remote video */}
           <div className="flex-1">
-            <PatientTile name={PATIENT.name} initials={PATIENT.initials} />
+            <PatientTile name={patientName} initials={patientInitials} />
           </div>
 
           {/* Self preview */}
@@ -379,8 +428,24 @@ export default function ConsultationRoomPage() {
         </div>
 
         {/* Sidebar */}
-        {sidebarOpen && <AiSidebar patient={PATIENT} />}
+        {sidebarOpen && <AiSidebar patient={patientData} />}
       </div>
     </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Page — Suspense boundary for useSearchParams
+   --------------------------------------------------------------------------- */
+
+export default function ConsultationRoomPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center" style={{ background: "#0A0A12" }}>
+        <span className="text-white/40 text-sm font-light">Loading consultation...</span>
+      </div>
+    }>
+      <ConsultationRoomInner />
+    </Suspense>
   );
 }

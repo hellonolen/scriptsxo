@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 import { Loader2, Clock, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
@@ -17,27 +19,6 @@ const TIPS = [
   "Find a quiet, well-lit space",
   "Your provider can send prescriptions directly to your pharmacy",
   "Video is preferred — ensure your camera is enabled",
-] as const;
-
-const QUEUE_PATIENTS = [
-  {
-    name: "Amara Johnson",
-    initials: "AJ",
-    reason: "Persistent headache — 3 days",
-    wait: "4 min",
-  },
-  {
-    name: "Marcus Rivera",
-    initials: "MR",
-    reason: "Prescription refill — Lisinopril",
-    wait: "9 min",
-  },
-  {
-    name: "Elena Vasquez",
-    initials: "EV",
-    reason: "Skin rash, spreading to arms",
-    wait: "14 min",
-  },
 ] as const;
 
 /* ---------------------------------------------------------------------------
@@ -60,6 +41,13 @@ function PatientWaitingRoom() {
   const [tipIndex, setTipIndex] = useState(0);
   const tipRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Read active consultation status from Convex
+  const session = getSessionCookie();
+  const activeConsult = useQuery(
+    api.consultations.getMyActiveConsultation,
+    session?.email ? { patientEmail: session.email } : "skip"
+  );
+
   useEffect(() => {
     const elapsed_timer = setInterval(() => setElapsed((t) => t + 1), 1000);
     return () => clearInterval(elapsed_timer);
@@ -73,6 +61,22 @@ function PatientWaitingRoom() {
       if (tipRef.current) clearInterval(tipRef.current);
     };
   }, []);
+
+  // Auto-navigate when consultation is assigned/in_progress
+  useEffect(() => {
+    if (activeConsult?.status === "in_progress" || activeConsult?.status === "assigned") {
+      router.push(`/consultation/room?id=${activeConsult._id}`);
+    }
+  }, [activeConsult, router]);
+
+  const statusLabel =
+    activeConsult?.status === "waiting"
+      ? "Connecting your session..."
+      : activeConsult?.status === "assigned"
+        ? "Provider is joining..."
+        : activeConsult?.status === "in_progress"
+          ? "Joining consultation room..."
+          : "Connecting your session...";
 
   return (
     <AppShell>
@@ -101,7 +105,7 @@ function PatientWaitingRoom() {
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
               </span>
               <span className="text-sm font-light text-foreground">
-                Connecting your session...
+                {statusLabel}
               </span>
             </div>
 
@@ -187,6 +191,42 @@ function PatientWaitingRoom() {
 
 function ProviderWaitingQueue() {
   const router = useRouter();
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const session = getSessionCookie();
+  const memberId = session?.memberId;
+
+  const queue = useQuery(
+    api.consultations.getWaitingQueue,
+    memberId ? { callerId: memberId as any } : "skip"
+  );
+
+  const claimConsultation = useMutation(api.consultations.claim);
+
+  // Compute stats from real queue data
+  const waitingCount = queue?.length ?? 0;
+  const avgWait =
+    queue && queue.length > 0
+      ? Math.round(queue.reduce((sum, p) => sum + p.waitMin, 0) / queue.length)
+      : null;
+  const nextPatient = queue?.[0]?.patientName ?? "No patients waiting";
+
+  async function handleClaim(consultationId: string) {
+    if (!memberId) return;
+    setClaimingId(consultationId);
+    setErrorMsg(null);
+    try {
+      await claimConsultation({
+        callerId: memberId as any,
+        consultationId: consultationId as any,
+      });
+      router.push(`/consultation/room?id=${consultationId}`);
+    } catch (err: any) {
+      setErrorMsg(err?.message ?? "Failed to claim consultation.");
+      setClaimingId(null);
+    }
+  }
 
   return (
     <AppShell>
@@ -205,19 +245,30 @@ function ProviderWaitingQueue() {
           </div>
         </div>
 
+        {/* Error banner */}
+        {errorMsg && (
+          <div className="mb-6 px-4 py-3 rounded-md border border-red-200 bg-red-50 text-sm text-red-700 font-light">
+            {errorMsg}
+          </div>
+        )}
+
         {/* Stats bar */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="stats-card">
             <span className="stats-card-label">Waiting</span>
-            <span className="stats-card-value">3</span>
+            <span className="stats-card-value">
+              {queue === undefined ? "—" : waitingCount}
+            </span>
           </div>
           <div className="stats-card">
             <span className="stats-card-label">Avg Wait</span>
-            <span className="stats-card-value">6 min</span>
+            <span className="stats-card-value">
+              {avgWait !== null ? `${avgWait} min` : "—"}
+            </span>
           </div>
           <div className="stats-card">
             <span className="stats-card-label">Next</span>
-            <span className="stats-card-value text-sm font-light">Amara Johnson</span>
+            <span className="stats-card-value text-sm font-light">{nextPatient}</span>
           </div>
         </div>
 
@@ -233,38 +284,57 @@ function ProviderWaitingQueue() {
               </tr>
             </thead>
             <tbody>
-              {QUEUE_PATIENTS.map((patient) => (
-                <tr key={patient.name}>
-                  <td>
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
-                        {patient.initials}
-                      </div>
-                      <span className="text-sm font-light text-foreground">
-                        {patient.name}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="text-sm font-light text-muted-foreground">
-                    {patient.reason}
-                  </td>
-                  <td>
-                    <div className="flex items-center gap-1.5 text-sm font-light text-muted-foreground">
-                      <Clock size={13} aria-hidden="true" />
-                      {patient.wait}
-                    </div>
-                  </td>
-                  <td className="text-right">
-                    <button
-                      onClick={() => router.push("/consultation/room")}
-                      className="inline-flex items-center gap-2 px-5 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors"
-                    >
-                      Begin Consultation
-                      <ArrowRight size={11} aria-hidden="true" />
-                    </button>
+              {queue === undefined ? (
+                <tr>
+                  <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground font-light">
+                    Loading queue...
                   </td>
                 </tr>
-              ))}
+              ) : queue.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground font-light">
+                    No patients waiting
+                  </td>
+                </tr>
+              ) : (
+                queue.map((patient) => (
+                  <tr key={patient._id}>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
+                          {patient.patientInitials}
+                        </div>
+                        <span className="text-sm font-light text-foreground">
+                          {patient.patientName}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="text-sm font-light text-muted-foreground">
+                      {patient.chiefComplaint}
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-1.5 text-sm font-light text-foreground">
+                        <Clock size={12} className="text-muted-foreground" aria-hidden="true" />
+                        {patient.waitMin} min
+                      </div>
+                    </td>
+                    <td className="text-right">
+                      <button
+                        onClick={() => handleClaim(patient._id)}
+                        disabled={claimingId === patient._id}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {claimingId === patient._id ? (
+                          <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+                        ) : (
+                          <ArrowRight size={11} aria-hidden="true" />
+                        )}
+                        Begin Consultation
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -283,13 +353,6 @@ export default function WaitingRoomPage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const isDev = process.env.NODE_ENV === "development";
-    if (isDev) {
-      // Dev: show the provider queue so the telehealth UI is visible
-      setIsProvider(true);
-      setReady(true);
-      return;
-    }
     const session = getSessionCookie();
     if (!session?.email) {
       router.push("/");

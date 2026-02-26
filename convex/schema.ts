@@ -614,4 +614,22 @@ export default defineSchema({
     .index("by_pharmacyId", ["pharmacyId"])
     .index("by_status", ["status"])
     .index("by_createdAt", ["createdAt"]),
+
+  // === SERVER SESSIONS (replaces client-supplied callerId) ===
+  // Created by passkey/magic link auth mutations. Clients present sessionToken
+  // (opaque, random) instead of memberId. Server resolves identity from this table.
+  // callerId is NEVER accepted from clients in production — the session IS the identity.
+  sessions: defineTable({
+    sessionToken: v.string(),           // opaque random token stored in cookie
+    memberId: v.id("members"),          // resolved server-side, never from client
+    email: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    userAgent: v.optional(v.string()),
+    ipAddress: v.optional(v.string()),
+  })
+    .index("by_token", ["sessionToken"])
+    .index("by_memberId", ["memberId"])
+    .index("by_email", ["email"]),
 });

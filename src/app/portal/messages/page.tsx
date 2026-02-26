@@ -1,49 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, Bot, MessageCircle } from "lucide-react";
+import { Send, Bot, MessageCircle, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-
-/* ---------------------------------------------------------------------------
-   DEMO DATA (shown when unauthenticated / no patient record)
-   --------------------------------------------------------------------------- */
-
-const DEMO_CONVERSATIONS = [
-  {
-    conversationId: "demo-convo-1",
-    unreadCount: 1,
-    latestMessage: {
-      senderRole: "provider",
-      content: "Your prescription for Semaglutide has been approved and sent to the compounding pharmacy. You should receive tracking within 24–48 hours.",
-      createdAt: Date.now() - 2 * 60 * 60 * 1000,
-    },
-  },
-  {
-    conversationId: "demo-convo-2",
-    unreadCount: 0,
-    latestMessage: {
-      senderRole: "patient",
-      content: "Thank you for the quick turnaround. Do I need to do anything else before my next refill?",
-      createdAt: Date.now() - 26 * 60 * 60 * 1000,
-    },
-  },
-  {
-    conversationId: "demo-convo-3",
-    unreadCount: 0,
-    latestMessage: {
-      senderRole: "provider",
-      content: "Welcome to ScriptsXO. Your intake has been reviewed and a provider has been assigned to your case.",
-      createdAt: Date.now() - 5 * 24 * 60 * 60 * 1000,
-    },
-  },
-];
-
-/* ---------------------------------------------------------------------------
-   PAGE
-   --------------------------------------------------------------------------- */
 
 export default function MessagesPage() {
   const [email, setEmail] = useState<string | null>(null);
@@ -59,15 +21,11 @@ export default function MessagesPage() {
     setSessionChecked(true);
   }, []);
 
-  const isDemo = sessionChecked && email === null;
-
-  // Fetch conversations
   const conversations = useQuery(
     api.messages.getConversations,
     email ? { email } : "skip"
   );
 
-  // Send message mutation
   const sendMessage = useMutation(api.messages.send);
 
   const handleSendMessage = async () => {
@@ -84,24 +42,22 @@ export default function MessagesPage() {
       });
       setNewMessage("");
     } catch (error) {
-      console.error("Failed to send message:", error);
+      // Silently ignore — compose box remains available
     } finally {
       setSending(false);
     }
   };
 
-  const convoList = isDemo
-    ? DEMO_CONVERSATIONS
-    : ((conversations as unknown as typeof DEMO_CONVERSATIONS) ?? []);
+  // Show spinner until both session check completes and query resolves
+  const isLoading = !sessionChecked || (email !== null && conversations === undefined);
 
-  // Loading state (skip for demo mode)
-  if (!isDemo && conversations === undefined) {
+  if (isLoading) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "#7C3AED", borderTopColor: "transparent" }} />
+              <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
               <p className="text-sm text-muted-foreground">Loading messages...</p>
             </div>
           </div>
@@ -109,6 +65,8 @@ export default function MessagesPage() {
       </AppShell>
     );
   }
+
+  const convoList = conversations ?? [];
 
   return (
     <AppShell>
@@ -126,9 +84,9 @@ export default function MessagesPage() {
         </header>
 
         {/* ---- THREADS ---- */}
-        {conversations && conversations.length > 0 ? (
+        {convoList.length > 0 ? (
           <div className="glass-card p-0 divide-y divide-border mb-8">
-            {conversations.map((convo) => {
+            {convoList.map((convo: any) => {
               const { latestMessage, unreadCount } = convo;
               const timeAgo = (() => {
                 const days = Math.floor((Date.now() - latestMessage.createdAt) / (1000 * 60 * 60 * 24));
@@ -144,7 +102,6 @@ export default function MessagesPage() {
                   key={convo.conversationId}
                   className="flex items-start gap-5 px-6 py-5 hover:bg-muted/30 transition-colors cursor-pointer group"
                 >
-                  {/* Icon */}
                   <div className="w-10 h-10 flex items-center justify-center shrink-0 mt-0.5" style={{ background: "rgba(124, 58, 237, 0.08)" }}>
                     {latestMessage.senderRole === "patient" ? (
                       <MessageCircle size={16} className="text-[#7C3AED]" aria-hidden="true" />
@@ -153,7 +110,6 @@ export default function MessagesPage() {
                     )}
                   </div>
 
-                  {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-1">
                       <p className="text-[14px] font-medium text-foreground">
@@ -168,7 +124,6 @@ export default function MessagesPage() {
                     </p>
                   </div>
 
-                  {/* Time */}
                   <span className="text-[10px] tracking-[0.12em] uppercase text-muted-foreground shrink-0 mt-1">
                     {timeAgo}
                   </span>
@@ -183,45 +138,47 @@ export default function MessagesPage() {
               No Messages Yet
             </h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Send a message below to start a conversation with your care team.
+              No messages yet — start a conversation with your care team.
             </p>
           </div>
         )}
 
         {/* ---- COMPOSE ---- */}
-        <div className="glass-card">
-          <p className="eyebrow mb-4">New Message</p>
-          <div className="flex items-center gap-3">
-            <input
-              type="text"
-              placeholder="Type a message to your care team..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              disabled={sending}
-              className="flex-1 px-4 py-3 bg-background border border-border rounded-md text-sm text-foreground font-light placeholder-muted-foreground focus:outline-none focus:border-[#7C3AED] transition-colors disabled:opacity-50"
-              aria-label="Message input"
-            />
-            <button
-              onClick={handleSendMessage}
-              disabled={!newMessage.trim() || sending}
-              className="w-11 h-11 flex items-center justify-center hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50 rounded-md"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
-              aria-label="Send message"
-            >
-              {sending ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Send size={16} className="text-white" />
-              )}
-            </button>
+        {email && (
+          <div className="glass-card">
+            <p className="eyebrow mb-4">New Message</p>
+            <div className="flex items-center gap-3">
+              <input
+                type="text"
+                placeholder="Type a message to your care team..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                disabled={sending}
+                className="flex-1 px-4 py-3 bg-background border border-border rounded-md text-sm text-foreground font-light placeholder-muted-foreground focus:outline-none focus:border-[#7C3AED] transition-colors disabled:opacity-50"
+                aria-label="Message input"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!newMessage.trim() || sending}
+                className="w-11 h-11 flex items-center justify-center hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50 rounded-md"
+                style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                aria-label="Send message"
+              >
+                {sending ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send size={16} className="text-white" />
+                )}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </AppShell>

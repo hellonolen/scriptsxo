@@ -42,10 +42,6 @@ export default function PatientOnboardPage() {
   const finalizeVerification = useAction(
     api.actions.credentialVerificationOrchestrator.finalizeVerification
   );
-  const devBypass = useAction(
-    api.actions.credentialVerificationOrchestrator.devBypassVerification
-  );
-
   useEffect(() => {
     const dev =
       typeof window !== "undefined" &&
@@ -78,23 +74,14 @@ export default function PatientOnboardPage() {
     setError("");
 
     try {
-      // Dev mode: simulate verification
-      if (isDev && memberId) {
+      // Dev mode: simulate verification with direct role assignment
+      if (isDev) {
         setStep("verifying");
         // Short delay to simulate
         await new Promise((r) => setTimeout(r, 1500));
-
-        const result = await devBypass({
-          memberId,
-          email: session.email,
-          selectedRole: "patient",
-        });
-
-        if (result.success) {
-          const updatedSession = { ...session, role: "patient" };
-          setSessionCookie(updatedSession);
-          setStep("verified");
-        }
+        const updatedSession = { ...session, role: "patient" };
+        setSessionCookie(updatedSession);
+        setStep("verified");
         setLoading(false);
         return;
       }

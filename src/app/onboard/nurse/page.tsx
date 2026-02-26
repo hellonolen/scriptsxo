@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getSessionCookie, setSessionCookie } from "@/lib/auth";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { SITECONFIG } from "@/lib/config";
 
@@ -37,10 +37,6 @@ export default function NurseOnboardPage() {
   const [isDev, setIsDev] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
-
-  const devBypass = useAction(
-    api.actions.credentialVerificationOrchestrator.devBypassVerification
-  );
 
   useEffect(() => {
     const dev =
@@ -78,15 +74,8 @@ export default function NurseOnboardPage() {
       }
 
       if (isDev) {
-        const result = await devBypass({
-          memberId,
-          email: session.email,
-          selectedRole: "nurse",
-        });
-        if (result.success) {
-          setSessionCookie({ ...session, role: "nurse" });
-          setStep("complete");
-        }
+        setSessionCookie({ ...session, role: "nurse" });
+        setStep("complete");
         return;
       }
 

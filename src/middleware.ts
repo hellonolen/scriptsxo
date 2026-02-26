@@ -375,8 +375,10 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // Skip auth checks in development
-  if (process.env.NODE_ENV === "development") {
+  // Auth bypass is allowed ONLY if explicitly enabled via AUTH_BYPASS_ALLOWED=true.
+  // This flag must NEVER be set in production. The deploy script validates this.
+  // NODE_ENV alone is NOT sufficient to bypass auth — protects staging environments.
+  if (process.env.AUTH_BYPASS_ALLOWED === "true") {
     const response = NextResponse.next();
     applySecurityHeaders(response);
     return response;

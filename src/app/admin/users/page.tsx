@@ -1,18 +1,11 @@
 "use client";
 
-import { UserCog, Mail, Shield, Search, MoreHorizontal } from "lucide-react";
+import { UserCog, Mail, Search, MoreHorizontal, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { useState } from "react";
-
-const DEMO_USERS = [
-  { id: "u1", name: "Nolen Owner", email: "hellonolen@gmail.com", role: "admin", status: "active", joined: "Feb 12, 2026" },
-  { id: "u2", name: "Dr. Sarah Kim", email: "sarah.kim@scriptsxo.com", role: "provider", status: "active", joined: "Feb 14, 2026" },
-  { id: "u3", name: "Jessica Torres RN", email: "j.torres@scriptsxo.com", role: "nurse", status: "active", joined: "Feb 14, 2026" },
-  { id: "u4", name: "RxPlus Pharmacy", email: "ops@rxplus.com", role: "pharmacy", status: "active", joined: "Feb 15, 2026" },
-  { id: "u5", name: "Amara Johnson", email: "amara.j@gmail.com", role: "patient", status: "active", joined: "Feb 18, 2026" },
-  { id: "u6", name: "Marcus Rivera", email: "mrivera@outlook.com", role: "patient", status: "active", joined: "Feb 19, 2026" },
-  { id: "u7", name: "Elena Vasquez", email: "elena.v@gmail.com", role: "unverified", status: "pending", joined: "Feb 22, 2026" },
-];
+import { useState, useEffect } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { getSessionToken } from "@/lib/auth";
 
 const ROLE_BADGE: Record<string, string> = {
   admin: "tag tag-violet",
@@ -25,12 +18,33 @@ const ROLE_BADGE: Record<string, string> = {
 
 export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
+  const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
 
-  const filtered = DEMO_USERS.filter(
-    (u) =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    const token = getSessionToken();
+    if (token) setSessionToken(token);
+  }, []);
+
+  const members = useQuery(
+    api.members.getAll,
+    sessionToken ? { sessionToken } : "skip"
   );
+
+  const memberCounts = useQuery(
+    api.members.countByRole,
+    sessionToken ? { sessionToken } : "skip"
+  );
+
+  const filtered = (members ?? []).filter(
+    (m: any) =>
+      (m.name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (m.email ?? "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalUsers = members?.length ?? 0;
+  const providerCount = (memberCounts as any)?.provider ?? 0;
+  const patientCount = (memberCounts as any)?.patient ?? 0;
+  const pendingCount = (memberCounts as any)?.unverified ?? 0;
 
   return (
     <AppShell>
@@ -50,6 +64,7 @@ export default function AdminUsersPage() {
           <button
             className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-xs tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity self-start sm:self-auto"
             style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+            onClick={() => alert("Invite functionality coming soon.")}
           >
             <UserCog size={13} />
             Invite User
@@ -59,10 +74,10 @@ export default function AdminUsersPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Total Users", value: String(DEMO_USERS.length) },
-            { label: "Providers", value: "1" },
-            { label: "Patients", value: "2" },
-            { label: "Pending", value: "1" },
+            { label: "Total Users", value: members === undefined ? "—" : String(totalUsers) },
+            { label: "Providers", value: memberCounts === undefined ? "—" : String(providerCount) },
+            { label: "Patients", value: memberCounts === undefined ? "—" : String(patientCount) },
+            { label: "Pending", value: memberCounts === undefined ? "—" : String(pendingCount) },
           ].map((s) => (
             <div key={s.label} className="glass-card flex flex-col gap-2">
               <span className="stat-label">{s.label}</span>
@@ -96,46 +111,72 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((user) => (
-                <tr key={user.id}>
-                  <td>
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-medium shrink-0"
-                        style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)", color: "#fff" }}
-                      >
-                        {user.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
-                      </div>
-                      <div>
-                        <p className="text-[13px] font-medium text-foreground">{user.name}</p>
-                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                          <Mail size={10} />
-                          {user.email}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={ROLE_BADGE[user.role] || "tag"}>
-                      {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={user.status === "active" ? "tag tag-active" : "tag"}>
-                      {user.status === "active" ? "Active" : "Pending"}
-                    </span>
-                  </td>
-                  <td className="text-[12px] text-muted-foreground">{user.joined}</td>
-                  <td className="text-right">
-                    <button
-                      className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
-                      aria-label="More options"
-                    >
-                      <MoreHorizontal size={14} />
-                    </button>
+              {members === undefined ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12">
+                    <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Loading users...</p>
                   </td>
                 </tr>
-              ))}
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12">
+                    <p className="text-sm text-muted-foreground">
+                      {search ? "No users match your search." : "No members found."}
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((member: any) => (
+                  <tr key={member._id}>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-medium shrink-0"
+                          style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)", color: "#fff" }}
+                        >
+                          {(member.name ?? member.email ?? "?")
+                            .split(" ")
+                            .map((w: string) => w[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </div>
+                        <div>
+                          <p className="text-[13px] font-medium text-foreground">{member.name ?? member.email}</p>
+                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <Mail size={10} />
+                            {member.email}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={ROLE_BADGE[member.role] || "tag"}>
+                        {(member.role ?? "unverified").charAt(0).toUpperCase() + (member.role ?? "unverified").slice(1)}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={member.status === "active" ? "tag tag-active" : "tag"}>
+                        {member.status === "active" ? "Active" : "Pending"}
+                      </span>
+                    </td>
+                    <td className="text-[12px] text-muted-foreground">
+                      {member.joinedAt
+                        ? new Date(member.joinedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : "—"}
+                    </td>
+                    <td className="text-right">
+                      <button
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
+                        aria-label="More options"
+                      >
+                        <MoreHorizontal size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

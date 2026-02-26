@@ -63,6 +63,30 @@ export const getActiveByEmail = query({
   },
 });
 
+/**
+ * List all verifications with a given status (for admin review queues).
+ * Defaults to "pending" if no status is provided.
+ * Caller must have INTAKE_REVIEW capability.
+ */
+export const getPending = query({
+  args: {
+    callerId: v.optional(v.string()),
+    status: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const targetStatus = args.status ?? "pending";
+    const limit = args.limit ?? 50;
+    const all = await ctx.db
+      .query("credentialVerifications")
+      .order("desc")
+      .collect();
+    return all
+      .filter((r) => r.status === targetStatus)
+      .slice(0, limit);
+  },
+});
+
 // ─── Mutations ──────────────────────────────────────────────────────
 
 /**

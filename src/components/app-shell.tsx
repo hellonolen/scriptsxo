@@ -205,16 +205,14 @@ export function AppShell({ children, sidebarExtra }: AppShellProps) {
   // no useEffect flash. getSessionCookie() reads document.cookie which is
   // available immediately on the client. On the server (SSR) it returns null.
   const session = getSessionCookie();
-  const isDev = process.env.NODE_ENV === "development";
 
   const userName: string = session?.name
     || session?.email?.split("@")[0]
-    || (isDev ? "Nolen" : "Guest");
+    || "Guest";
 
-  const userEmail: string | null = session?.email || (isDev ? "nolen@doclish.com" : null);
+  const userEmail: string | null = session?.email || null;
 
   const roles: Role[] = (() => {
-    if (isDev) return ["admin"];
     if (!session) return ["unverified"];
     if (checkIsAdmin()) return ["admin"];
     return parseRolesFromSession(session.role);

@@ -22,6 +22,7 @@ export interface Session {
   email: string;
   name?: string;
   memberId?: string;
+  sessionToken?: string; // opaque server-issued token; server resolves identity from sessions table
   userId?: string;
   paymentStatus?: string; // "active" | "none" | "cancelled"
   orgId?: string; // organization ID for B2B/B2E users
@@ -91,6 +92,15 @@ export function getSessionCookie(): Session | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Get just the sessionToken from the current session cookie.
+ * Pass this to Convex mutations instead of memberId — the server resolves identity.
+ */
+export function getSessionToken(): string | undefined {
+  const session = getSessionCookie();
+  return session?.sessionToken;
 }
 
 /**

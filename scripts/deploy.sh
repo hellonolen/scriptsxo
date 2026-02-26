@@ -63,6 +63,11 @@ if [ "$CONVEX_ONLY" = false ]; then
   ok "Cloudflare authenticated"
 fi
 
+# Release gate: AUTH_BYPASS_ALLOWED must not be true in production
+if [ "${AUTH_BYPASS_ALLOWED:-}" = "true" ]; then
+  fail "AUTH_BYPASS_ALLOWED=true is set. This must never be enabled in production."
+fi
+
 # ==============================================================================
 # Step 2: Deploy Convex (backend functions + schema)
 # ==============================================================================
