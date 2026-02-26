@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Fingerprint, ShieldCheck, AlertCircle, Mail } from "lucide-react";
+import { Fingerprint, ShieldCheck, AlertCircle, Mail, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SITECONFIG } from "@/lib/config";
@@ -24,6 +24,7 @@ import {
 } from "@/lib/webauthn";
 
 type AuthStep =
+  | "hero"
   | "email"
   | "name"
   | "processing"
@@ -42,12 +43,13 @@ type AuthStep =
 
 export default function HomePage() {
   const router = useRouter();
-  const [step, setStep] = useState<AuthStep>("email");
+  const [step, setStep] = useState<AuthStep>("hero");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [statusText, setStatusText] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
+  const [intent, setIntent] = useState<"client" | "provider" | null>(null);
   const [passkeysAvailable, setPasskeysAvailable] = useState(true);
   const [isDev, setIsDev] = useState(false);
   const codeInputRef = useRef<HTMLInputElement>(null);
@@ -131,7 +133,7 @@ export default function HomePage() {
 
     // Unverified users go to credential verification onboarding
     if (role === "unverified" || !role) {
-      router.push("/onboard");
+      router.push("/access/setup");
       return;
     }
 
@@ -392,16 +394,28 @@ export default function HomePage() {
               className="text-5xl xl:text-[4.25rem] text-white/85 font-light leading-[1.08] tracking-[-0.02em]"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              Your prescriptions,
+              Prescriptions,
               <br />
-              <em className="gradient-text-soft">effortlessly</em>
-              <br />
-              managed.
+              <em className="gradient-text-soft">done right.</em>
             </h1>
             <p className="text-white/50 text-base font-light leading-relaxed mt-10 max-w-sm">
-              A private concierge experience for telehealth consultations and
-              prescription fulfillment.
+              Secure telehealth consultations and prescription fulfillment.
+              Verified workflows. HIPAA-compliant end-to-end.
             </p>
+            <div className="mt-10 space-y-3">
+              <div className="flex items-center gap-3 text-white/50 text-sm font-light">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                Same-day consultations with board-certified providers
+              </div>
+              <div className="flex items-center gap-3 text-white/50 text-sm font-light">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                Prescriptions sent directly to your pharmacy
+              </div>
+              <div className="flex items-center gap-3 text-white/50 text-sm font-light">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                Credential-verified providers and pharmacies
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-8 text-[10px] tracking-[0.25em] text-white/35 uppercase font-light">
@@ -417,14 +431,75 @@ export default function HomePage() {
       {/* Right — Auth Form */}
       <div className="flex-1 flex items-center justify-center px-8 sm:px-16 py-16 bg-background">
         <div className="w-full max-w-sm">
-          {/* Mobile logo */}
-          <div className="lg:hidden mb-16">
-            <span
-              className="text-[13px] tracking-[0.35em] text-foreground font-light uppercase"
-            >
-              {SITECONFIG.brand.name}
-            </span>
-          </div>
+          {/* Mobile logo — hidden on hero step which has its own */}
+          {step !== "hero" && (
+            <div className="lg:hidden mb-16">
+              <span
+                className="text-[13px] tracking-[0.35em] text-foreground font-light uppercase"
+              >
+                {SITECONFIG.brand.name}
+              </span>
+            </div>
+          )}
+
+          {/* STEP: Hero — conversion CTAs */}
+          {step === "hero" && (
+            <>
+              <div className="mb-12">
+                <div className="lg:hidden mb-8">
+                  <span className="text-[13px] tracking-[0.35em] text-foreground font-light uppercase">
+                    {SITECONFIG.brand.name}
+                  </span>
+                </div>
+                <h2
+                  className="text-3xl lg:text-4xl font-light text-foreground tracking-[-0.02em] mb-3"
+                  style={{ fontFamily: "var(--font-heading)" }}
+                >
+                  Secure access
+                  <br />
+                  for everyone.
+                </h2>
+                <p className="text-muted-foreground font-light text-sm leading-relaxed max-w-xs">
+                  Credential-verified access for clients, providers, and pharmacies.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setIntent("client");
+                    setStep("email");
+                  }}
+                  className="w-full flex items-center justify-between px-6 py-4 rounded-xl bg-[#7C3AED] text-white text-sm font-light tracking-wide hover:bg-[#6D28D9] transition-colors"
+                >
+                  <span>Start as a Client</span>
+                  <ArrowRight size={16} aria-hidden="true" />
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIntent("provider");
+                    setStep("email");
+                  }}
+                  className="w-full flex items-center justify-between px-6 py-4 rounded-xl border border-border text-foreground text-sm font-light tracking-wide hover:bg-muted/50 transition-colors"
+                >
+                  <span>Provider / Clinic Login</span>
+                  <ArrowRight size={16} aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="mt-16 flex items-center gap-8 text-[10px] tracking-[0.25em] text-muted-foreground uppercase font-light">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={11} aria-hidden="true" />
+                  HIPAA
+                </div>
+                <div className="flex items-center gap-2">
+                  <Fingerprint size={11} aria-hidden="true" />
+                  Passkey
+                </div>
+              </div>
+            </>
+          )}
 
           {/* STEP: Processing / Routing spinner */}
           {(step === "processing" || step === "routing") && (
@@ -450,7 +525,7 @@ export default function HomePage() {
                   className="text-3xl lg:text-4xl font-light text-foreground tracking-[-0.02em] mb-3"
                   style={{ fontFamily: "var(--font-heading)" }}
                 >
-                  Welcome
+                  {intent === "provider" ? "Provider Login" : "Welcome"}
                 </h2>
                 <p className="text-muted-foreground font-light">
                   Enter your email to sign in or create an account.
