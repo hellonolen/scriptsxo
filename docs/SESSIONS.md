@@ -404,3 +404,59 @@ Three-screen consultation flow to build (front end first):
 - **Phase 12 (Prod env sanity)**: PHAXIO_API_KEY verification not added at startup
 - Set STRIPE_SECRET_KEY in Convex prod
 - Set WEBAUTHN_ORIGIN, WEBAUTHN_RP_ID in Convex prod
+
+---
+
+## Session: 2026-02-25 (Security Hardening + Product Hardening)
+
+### Phase 1-7 Security (from previous session continuation)
+- Completed platformAdmin.ts fix: requirePlatformOwner uses getCaller() from serverAuth, listOwners/listSecurityEvents use getCallerQuery(), all actorMemberId fields log caller.memberId not session token, self-revoke check uses caller.memberId
+- Fixed credentialVerificationOrchestrator.ts: all callerId: args.sessionToken changed to sessionToken: args.sessionToken
+- Fixed compliance/page.tsx and waiting-room/page.tsx frontend to pass sessionToken
+- Ran npx convex deploy -y -- green, all functions deployed to striped-caribou-797
+
+### Phase 1 -- Capability Activation Gate
+- Added verification gate to getMemberEffectiveCaps in convex/lib/capabilities.ts
+- Role bundle caps only active if credentialVerification.status === "verified"
+- Per-role belt-and-suspenders field checks: patient needs Stripe session + identity, provider needs NPI + license, pharmacy needs NCPDP + registry, nurse needs license + orgId
+- Admin and platform owners are exempt from the gate
+
+### Phase 2 -- Homepage Redesign
+- Left panel: "Prescriptions, done right." with teal bullet points
+- Right panel: hero step with two intent CTAs (Start as a Client / Provider & Clinic Login)
+- intent state (client|provider) captured before email auth step
+- Post-auth routing: unverified users route to /access/setup (was /onboard)
+
+### Phase 3 -- /access/setup Screen
+- New file: src/app/access/setup/page.tsx
+- "Complete Your Access Setup" -- no role, no AI language
+- Four access paths: Client, Provider, Clinical Staff, Pharmacy
+- Routes to /onboard/* verification flows
+- /access redirects to /access/setup
+
+### Phase 4 -- Stripe Webhook Hardening
+- convex/http.ts: replaced { _path } hacks with internal.billing.markConsultationPaid and internal.billing.markPaymentFailed
+- Aligned call args: stripeSessionId/patientEmail/amountTotal for checkout, receipt_email/last_payment_error for failure
+
+### Phase 5 -- AI Language Removal
+- 0 instances of AI-powered, AI agents, RBAC, role-based in production UI
+- Files cleaned: onboard/page.tsx, onboard/pharmacy, onboard/provider, pay/page.tsx, admin/agents
+
+### Phase 6 -- All Conditions Passed
+- callerId in args: 0
+- AI language: 0
+- Homepage CTAs: present
+- Verification gate: deployed
+- Stripe webhook: internal refs used
+- /access/setup: live
+
+### Commits
+- ef88e84, 3a4207a, 0a8b841, 3f92f05
+
+### Decisions Made
+- ADR-031: Capability Activation Gate in getMemberEffectiveCaps
+- ADR-032: /access/setup replaces /onboard for post-auth routing
+- ADR-033: Homepage intent capture before auth
+
+### Open Items After This Session
+- Same as previous session plus: test capability gate with real verified/unverified accounts end-to-end

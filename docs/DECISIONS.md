@@ -161,3 +161,24 @@ Decisions are permanent. Never deleted, only marked as superseded.
 - Context: Owner preference explicitly stated: "I would prefer to see the front end built out first before you do the back end setup." Previous sessions showed that back-end work done before the UI was approved sometimes had to be redone when the UX changed.
 - Decision: For all new features (especially consultation UI, multi-tenant onboarding, scheduling), build and approve the front-end UI first. Back-end wiring happens only after the UI is signed off. This applies specifically to the 3-screen consultation flow: build Waiting Room, Consultation Room, and Post-Call UIs as functional shells before writing a single line of WebRTC, Asterisk, or SIP code.
 - Consequence: Faster iteration on UX without back-end coupling. Back end is written to match a confirmed interface, not guessed. Slight risk of UI-to-backend mismatch caught early. Owner reviews UI at each stage before wiring commences.
+
+## ADR-031: Capability Activation Gate in getMemberEffectiveCaps
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: Even with role-based capability bundles, a user who has a role assigned but has not completed credential verification should not be granted capabilities. Belt-and-suspenders enforcement is needed so that even if a role is set prematurely, capabilities remain inactive until credentials are verified.
+- Decision: Add a verification state check inside `getMemberEffectiveCaps` before granting role bundle caps. Query `credentialVerifications` by `by_memberId` index, check `status === "verified"`, then apply per-role field checks: patient needs Stripe session + identity, provider needs NPI + license, pharmacy needs NCPDP + registry, nurse needs license + orgId.
+- Consequence: Admin role and platform owners are exempt from the gate. Unverified role returns an empty bundle anyway. All other roles must have a verified credential record with the correct fields populated before capabilities activate. This is a defense-in-depth layer on top of role assignment.
+
+## ADR-032: /access/setup Replaces /onboard for Post-Auth Routing
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: The `/onboard` page used "Select Your Role" language and referenced AI/role concepts that should not appear in production UI. A new screen was needed that frames the same flow as "access path selection" without exposing internal role or AI terminology.
+- Decision: Unverified users route to `/access/setup` instead of `/onboard`. New page at `src/app/access/setup/page.tsx` with "Complete Your Access Setup" heading and four access paths (Client, Provider, Clinical Staff, Pharmacy). `/access` redirects to `/access/setup`. Actual verification flows remain at `/onboard/*` sub-routes.
+- Consequence: Clean user-facing language. Internal routing to `/onboard/patient`, `/onboard/provider`, `/onboard/nurse`, `/onboard/pharmacy` remains unchanged. The `/onboard` root page still exists but is no longer the entry point for unverified users.
+
+## ADR-033: Homepage Intent Capture Before Auth
+- Date: 2026-02-25
+- Status: ACTIVE
+- Context: The original homepage showed an email form immediately. This missed the opportunity to differentiate client vs provider entry intent and lacked conversion-first marketing copy.
+- Decision: Homepage shows a marketing hero with "Prescriptions, done right." copy and two CTAs: "Start as a Client" and "Provider & Clinic Login". An `intent` state (`client` | `provider`) is captured when the user clicks a CTA, before the email auth step begins. Post-auth routing uses this intent to inform the experience.
+- Consequence: Better conversion UX. Client and provider entry paths are visually separated from the first interaction. The email form only appears after the user has self-identified their intent. ArrowRight CTAs set intent state then advance to the email step.
