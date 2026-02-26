@@ -161,7 +161,7 @@ export default function HomePage() {
     if (patient && hasPaid) {
       router.push("/dashboard");
     } else {
-      router.push("/intake/payment");
+      router.push("/intake/symptoms");
     }
   }, [step, routingEmail, patient, membership, router, isDev]);
 
@@ -394,13 +394,12 @@ export default function HomePage() {
               className="text-5xl xl:text-[4.25rem] text-white/85 font-light leading-[1.08] tracking-[-0.02em]"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              Prescriptions,
+              See a doctor.
               <br />
-              <em className="gradient-text-soft">done right.</em>
+              <em className="gradient-text-soft">Get your prescription. Today.</em>
             </h1>
             <p className="text-white/50 text-base font-light leading-relaxed mt-10 max-w-sm">
-              Secure telehealth consultations and prescription fulfillment.
-              Verified workflows. HIPAA-compliant end-to-end.
+              Board-certified telehealth consultations with same-day prescriptions sent directly to your pharmacy.
             </p>
             <div className="mt-10 space-y-3">
               <div className="flex items-center gap-3 text-white/50 text-sm font-light">
@@ -472,7 +471,7 @@ export default function HomePage() {
                   }}
                   className="w-full flex items-center justify-between px-6 py-4 rounded-xl bg-[#7C3AED] text-white text-sm font-light tracking-wide hover:bg-[#6D28D9] transition-colors"
                 >
-                  <span>Start as a Client</span>
+                  <span>Get Care Today</span>
                   <ArrowRight size={16} aria-hidden="true" />
                 </button>
 
@@ -483,12 +482,16 @@ export default function HomePage() {
                   }}
                   className="w-full flex items-center justify-between px-6 py-4 rounded-xl border border-border text-foreground text-sm font-light tracking-wide hover:bg-muted/50 transition-colors"
                 >
-                  <span>Provider / Clinic Login</span>
+                  <span>Providers & Clinics</span>
                   <ArrowRight size={16} aria-hidden="true" />
                 </button>
               </div>
 
-              <div className="mt-16 flex items-center gap-8 text-[10px] tracking-[0.25em] text-muted-foreground uppercase font-light">
+              <p className="text-xs text-center text-muted-foreground mt-3 font-light">
+                From $97/month · Cancel anytime · No contracts
+              </p>
+
+              <div className="mt-12 flex items-center gap-8 text-[10px] tracking-[0.25em] text-muted-foreground uppercase font-light">
                 <div className="flex items-center gap-2">
                   <ShieldCheck size={11} aria-hidden="true" />
                   HIPAA

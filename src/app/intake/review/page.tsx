@@ -23,10 +23,10 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
-  { label: "Payment", icon: CreditCard },
-  { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
+  { label: "Medical History", icon: Heart },
   { label: "Verification", icon: ScanLine },
+  { label: "Payment", icon: CreditCard },
   { label: "Review", icon: FileCheck },
 ] as const;
 
@@ -55,7 +55,7 @@ export default function IntakeReviewPage() {
     if (dev) {
       const localData = DevIntakeStore.get();
       if (!localData) {
-        router.push("/intake/medical-history");
+        router.push("/intake/symptoms");
         return;
       }
       setIntakeId(localData.id as Id<"intakes">);
@@ -63,7 +63,7 @@ export default function IntakeReviewPage() {
     } else {
       const storedIntakeId = localStorage.getItem("sxo_intake_id");
       if (!storedIntakeId) {
-        router.push("/intake/medical-history");
+        router.push("/intake/symptoms");
         return;
       }
       setIntakeId(storedIntakeId as Id<"intakes">);
@@ -516,7 +516,7 @@ export default function IntakeReviewPage() {
               {/* Navigation */}
               <div className="flex justify-between pt-6 border-t border-border">
                 <Link
-                  href="/intake/id-verification"
+                  href="/intake/payment"
                   className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
                 >
                   <ArrowLeft size={16} aria-hidden="true" />

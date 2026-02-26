@@ -9,43 +9,6 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { MEMBER_REQUIREMENTS, getNextOfficeHoursDate, formatOfficeHoursSchedule, DEFAULT_OFFICE_HOURS } from "@/lib/membership-config";
 
-/* ---------------------------------------------------------------------------
-   DEMO DATA (shown when unauthenticated / no patient record / Convex loading)
-   --------------------------------------------------------------------------- */
-
-const DEMO_PRESCRIPTIONS = [
-  {
-    _id: "demo-rx-1",
-    medicationName: "Semaglutide",
-    dosage: "0.5 mg/dose",
-    directions: "Inject subcutaneously once weekly",
-    status: "sent",
-    nextRefillDate: Date.now() + 21 * 24 * 60 * 60 * 1000,
-  },
-  {
-    _id: "demo-rx-2",
-    medicationName: "Metformin HCl",
-    dosage: "500 mg",
-    directions: "Take 1 tablet twice daily with meals",
-    status: "filling",
-    nextRefillDate: Date.now() + 14 * 24 * 60 * 60 * 1000,
-  },
-  {
-    _id: "demo-rx-3",
-    medicationName: "Lisinopril",
-    dosage: "10 mg",
-    directions: "Take 1 tablet once daily in the morning",
-    status: "signed",
-    nextRefillDate: Date.now() + 28 * 24 * 60 * 60 * 1000,
-  },
-];
-
-const DEMO_ACTIVITY = [
-  { title: "Video Consultation", detail: "Completed --- video", time: "2d ago" },
-  { title: "Prescription Renewed", detail: "Semaglutide 0.5 mg refill approved", time: "3d ago" },
-  { title: "Lab Results Reviewed", detail: "HbA1c within target range", time: "1w ago" },
-  { title: "Consultation", detail: "Follow-up completed --- phone", time: "2w ago" },
-];
 
 /* ---------------------------------------------------------------------------
    PAGE
@@ -94,13 +57,9 @@ export default function DashboardPage() {
     return "Good evening";
   })();
 
-  // Use demo data when: no session, session not yet checked, or patient still loading.
-  // patient===null means we KNOW there's no record → show intake CTA (handled below).
-  // patient===undefined means query is in-flight → fall back to demo so UI never hangs.
-  const useDemo = isDemo || !sessionChecked || patient === undefined;
-  const rxList = useDemo ? DEMO_PRESCRIPTIONS : (prescriptions ?? DEMO_PRESCRIPTIONS);
+  const rxList = prescriptions ?? [];
 
-  // Calculate stats from real or demo data
+  // Calculate stats from real data
   const activeRxCount = rxList.filter(
     (rx) => rx.status === "signed" || rx.status === "sent" || rx.status === "filling" || rx.status === "ready"
   ).length;
@@ -113,7 +72,7 @@ export default function DashboardPage() {
     ? new Date(sortedRefills[0].nextRefillDate!).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : "---";
 
-  const consultationCount = useDemo ? 4 : (consultations?.length || 0);
+  const consultationCount = consultations?.length || 0;
 
   const stats = [
     { value: String(activeRxCount), label: "Active Rx", icon: Pill },
@@ -121,10 +80,8 @@ export default function DashboardPage() {
     { value: String(consultationCount), label: "Consultations", icon: TrendingUp },
   ];
 
-  // Recent activity from consultations or demo data
-  const recentActivity = useDemo
-    ? DEMO_ACTIVITY
-    : (consultations || []).slice(0, 4).map((c) => {
+  // Recent activity from consultations
+  const recentActivity = (consultations || []).slice(0, 4).map((c) => {
         const timeAgo = (() => {
           const days = Math.floor((Date.now() - c.createdAt) / (1000 * 60 * 60 * 24));
           if (days === 0) return "Today";

@@ -22,10 +22,10 @@ import { loadStripe } from "@stripe/stripe-js";
 import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
-  { label: "Payment", icon: CreditCard },
-  { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
+  { label: "Medical History", icon: Heart },
   { label: "Verification", icon: ScanLine },
+  { label: "Payment", icon: CreditCard },
   { label: "Review", icon: FileCheck },
 ] as const;
 
@@ -40,7 +40,7 @@ export default function IDVerificationPage() {
   const createVerificationSession = useAction(api.actions.stripeIdentity.createVerificationSession);
   const checkVerificationStatus = useAction(api.actions.stripeIdentity.checkVerificationStatus);
 
-  const currentStep = 3;
+  const currentStep = 2;
 
   useEffect(() => {
     setIsDevMode(isDev());
@@ -121,7 +121,7 @@ export default function IDVerificationPage() {
   }
 
   function handleContinue() {
-    router.push("/intake/review");
+    router.push("/intake/payment");
   }
 
   return (
@@ -132,13 +132,13 @@ export default function IDVerificationPage() {
           <div className="max-w-2xl mb-12">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                Step 4 of 5
+                Step 3 of 5
               </span>
             </div>
             <div className="w-full h-px bg-border relative">
               <div
                 className="absolute top-0 left-0 h-px bg-brand-secondary transition-all duration-500"
-                style={{ width: "80%" }}
+                style={{ width: "60%" }}
               />
             </div>
             {/* Step indicators */}
@@ -327,7 +327,7 @@ export default function IDVerificationPage() {
             {/* Navigation */}
             <div className="flex justify-between pt-6 border-t border-border">
               <button
-                onClick={() => router.push("/intake/symptoms")}
+                onClick={() => router.push("/intake/medical-history")}
                 className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
               >
                 <ArrowLeft size={16} aria-hidden="true" />
@@ -339,7 +339,7 @@ export default function IDVerificationPage() {
                   onClick={handleContinue}
                   className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-md"
                 >
-                  Continue to Review
+                  Continue to Payment
                   <ArrowRight size={16} aria-hidden="true" />
                 </button>
               ) : verificationStatus === "verifying" ? (

@@ -31,11 +31,11 @@ const WhopCheckoutEmbed = dynamic(
 );
 
 const STEPS = [
-  { number: 1, label: "Payment", active: true },
-  { number: 2, label: "Medical History", active: false },
-  { number: 3, label: "Symptoms", active: false },
-  { number: 4, label: "Verification", active: false },
-  { number: 5, label: "Review", active: false },
+  { number: 1, label: "Symptoms", active: false, completed: true },
+  { number: 2, label: "Medical History", active: false, completed: true },
+  { number: 3, label: "Verification", active: false, completed: true },
+  { number: 4, label: "Payment", active: true, completed: false },
+  { number: 5, label: "Review", active: false, completed: false },
 ];
 
 const INCLUDED_FEATURES = [
@@ -136,7 +136,7 @@ function PaymentContent() {
 
     // Short delay for visual feedback then navigate
     setTimeout(() => {
-      router.push("/intake/medical-history");
+      router.push("/intake/review");
     }, 1500);
   }
 
@@ -152,7 +152,7 @@ function PaymentContent() {
 
     // Navigate after brief success state
     setTimeout(() => {
-      router.push("/intake/medical-history");
+      router.push("/intake/review");
     }, 1500);
   }
 
@@ -169,7 +169,7 @@ function PaymentContent() {
 
     setCompleted(true);
     setTimeout(() => {
-      router.push("/intake/medical-history");
+      router.push("/intake/review");
     }, 1200);
   }
 
@@ -188,7 +188,7 @@ function PaymentContent() {
               Welcome to ScriptsXO
             </h2>
             <p className="text-muted-foreground font-light">
-              Membership activated. Starting your intake...
+              Membership activated. Proceeding to review...
             </p>
           </div>
         </div>
@@ -208,7 +208,9 @@ function PaymentContent() {
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
                     step.active
                       ? "bg-gradient-to-br from-[#7C3AED] to-[#2DD4BF] text-white"
-                      : "bg-muted text-muted-foreground"
+                      : step.completed
+                        ? "bg-[#2DD4BF] text-white"
+                        : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {step.number}
@@ -219,7 +221,7 @@ function PaymentContent() {
               </div>
             ))}
           </div>
-          <p className="eyebrow text-[#7C3AED]">Step 1 of 5</p>
+          <p className="eyebrow text-[#7C3AED]">Step 4 of 5</p>
         </div>
 
         {/* Header */}
@@ -295,7 +297,7 @@ function PaymentContent() {
                     skipRedirect
                     onComplete={handleCheckoutComplete}
                     themeOptions={{ accentColor: "violet" }}
-                    returnUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/intake/medical-history?whop_checkout=success`}
+                    returnUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/intake/review?whop_checkout=success`}
                     fallback={
                       <div className="flex items-center justify-center py-16">
                         <Loader2 className="w-6 h-6 animate-spin text-[#7C3AED]" />
@@ -361,14 +363,14 @@ function PaymentContent() {
         {/* Navigation */}
         <div className="flex items-center justify-between pt-6 mt-8 border-t border-border">
           <Link
-            href="/access"
+            href="/intake/id-verification"
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors font-light"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Sign In
           </Link>
           <p className="text-xs text-muted-foreground font-light">
-            Next: Medical History
+            Next: Review & Submit
           </p>
         </div>
       </div>

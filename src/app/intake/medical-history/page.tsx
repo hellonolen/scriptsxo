@@ -23,10 +23,10 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
-  { label: "Payment", icon: CreditCard },
-  { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
+  { label: "Medical History", icon: Heart },
   { label: "Verification", icon: ScanLine },
+  { label: "Payment", icon: CreditCard },
   { label: "Review", icon: FileCheck },
 ] as const;
 
@@ -226,7 +226,7 @@ export default function MedicalHistoryPage() {
       }
     }
 
-    router.push("/intake/symptoms");
+    router.push("/intake/id-verification");
   }
 
   if (loading) {
@@ -610,7 +610,7 @@ export default function MedicalHistoryPage() {
             {/* Navigation */}
             <div className="flex justify-between pt-6 border-t border-border">
               <button
-                onClick={() => router.push("/intake")}
+                onClick={() => router.push("/intake/symptoms")}
                 className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
               >
                 <ArrowLeft size={16} aria-hidden="true" />
