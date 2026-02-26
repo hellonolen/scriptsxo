@@ -51,6 +51,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Status tokens — available as Tailwind utilities (text-success, bg-warning, etc.) */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-ring: var(--ring);
 }
 
 /* ==============================================================================
@@ -59,6 +66,9 @@
    ============================================================================== */
 
 :root {
+  /* Brand gradient — use as inline style: style={{ background: "var(--brand-gradient)" }} */
+  --brand-gradient: linear-gradient(135deg, #7C3AED, #2DD4BF);
+
   /* Brand — Deep Violet */
   --brand: #5B21B6;
   --brand-foreground: #FFFFFF;
@@ -428,7 +438,7 @@
     line-height: 1;
     font-weight: 300;
     letter-spacing: -0.03em;
-    background: linear-gradient(135deg, #09090B, #5B21B6);
+    background: linear-gradient(135deg, var(--foreground), var(--brand));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

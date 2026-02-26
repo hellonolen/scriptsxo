@@ -1,50 +1,91 @@
-"use client";
-
+import * as React from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-interface PageHeaderProps {
-  eyebrow: string;
-  title: string;
-  subtitle?: string;
+export interface PageHeaderProps {
+  eyebrow?: string;
+  title: React.ReactNode;
+  description?: string;
+  /** Renders a back-arrow link beside the title */
   backHref?: string;
-  /** Extra content rendered inline with the title row (e.g. action buttons) */
-  actions?: React.ReactNode;
+  /** Adds pb-6 border-b — use on dashboard-level pages */
+  border?: boolean;
+  /** Right-side slot (CTA, status badge, etc.) — only rendered when backHref is absent */
+  cta?: React.ReactNode;
+  /** "lg" = text-3xl lg:text-4xl (dashboard pages), "md" = text-2xl lg:text-3xl (sub-pages) */
+  size?: "md" | "lg";
 }
 
 /**
- * Standard page header used across all portal / admin / provider / pharmacy pages.
- * Keeps eyebrow → title → subtitle + optional back link visually consistent.
+ * Unified page header for all internal portal pages.
+ *
+ * Two layouts:
+ * - Without backHref: eyebrow → h1 → description inline, optional CTA on right, optional border
+ * - With backHref:    ← arrow + eyebrow → h1, description below with left-indent
  */
-export function PageHeader({ eyebrow, title, subtitle, backHref, actions }: PageHeaderProps) {
-  return (
-    <header className="mb-8">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          {backHref && (
-            <Link
-              href={backHref}
-              className="mt-1 text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              aria-label="Go back"
-            >
-              <ArrowLeft size={20} aria-hidden="true" />
-            </Link>
-          )}
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  backHref,
+  border = false,
+  cta,
+  size = "md",
+}: PageHeaderProps) {
+  const headingClass =
+    size === "lg"
+      ? "text-3xl lg:text-4xl text-foreground font-light tracking-[-0.02em]"
+      : "text-2xl lg:text-3xl text-foreground font-light tracking-[-0.02em]";
+
+  if (backHref) {
+    return (
+      <>
+        <div className="flex items-center gap-3 mb-2">
+          <Link
+            href={backHref}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Go back"
+          >
+            <ArrowLeft size={20} aria-hidden="true" />
+          </Link>
           <div>
-            <p className="eyebrow mb-1">{eyebrow}</p>
+            {eyebrow && <p className="eyebrow mb-0.5">{eyebrow}</p>}
             <h1
-              className="text-2xl lg:text-3xl font-light text-foreground tracking-[-0.02em]"
+              className={headingClass}
               style={{ fontFamily: "var(--font-heading)" }}
             >
               {title}
             </h1>
-            {subtitle && (
-              <p className="text-sm text-muted-foreground font-light mt-1">{subtitle}</p>
-            )}
           </div>
         </div>
-        {actions && <div className="shrink-0 flex items-center gap-2">{actions}</div>}
+        {description && (
+          <p className="text-muted-foreground font-light mb-8 ml-8">
+            {description}
+          </p>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div
+      className={`mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4${
+        border ? " pb-6 border-b border-border" : ""
+      }`}
+    >
+      <div>
+        {eyebrow && <p className="eyebrow mb-1">{eyebrow}</p>}
+        <h1
+          className={headingClass}
+          style={{ fontFamily: "var(--font-heading)" }}
+        >
+          {title}
+        </h1>
+        {description && (
+          <p className="text-muted-foreground font-light mt-1">{description}</p>
+        )}
       </div>
-    </header>
+      {cta && <div className="mt-4 sm:mt-0 shrink-0">{cta}</div>}
+    </div>
   );
 }

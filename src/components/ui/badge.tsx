@@ -10,12 +10,12 @@ const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
       "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium tracking-wide";
 
     const variants = {
-      default: "bg-primary/10 text-primary",
+      default:   "bg-primary/10 text-primary",
       secondary: "bg-secondary text-secondary-foreground border border-border",
-      success: "bg-green-500/15 text-green-600",
-      warning: "bg-yellow-500/15 text-yellow-600",
-      error: "bg-red-500/15 text-red-600",
-      info: "bg-blue-500/15 text-blue-600",
+      success:   "bg-success/10 text-success",
+      warning:   "bg-warning/10 text-warning",
+      error:     "bg-destructive/10 text-destructive",
+      info:      "bg-brand/10 text-brand",
     };
 
     return (
