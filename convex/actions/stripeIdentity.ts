@@ -8,6 +8,7 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
+import { requireCap, CAP } from "../lib/capabilities";
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
@@ -59,8 +60,10 @@ async function stripeGet(
 export const createVerificationSession = action({
   args: {
     patientEmail: v.string(),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.sessionToken, CAP.INTAKE_SELF);
     const apiKey = process.env.STRIPE_SECRET_KEY;
     if (!apiKey) {
       throw new Error("STRIPE_SECRET_KEY not configured");
@@ -97,8 +100,10 @@ export const checkVerificationStatus = action({
   args: {
     verificationSessionId: v.string(),
     patientEmail: v.string(),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.sessionToken, CAP.INTAKE_SELF);
     const apiKey = process.env.STRIPE_SECRET_KEY;
     if (!apiKey) {
       throw new Error("STRIPE_SECRET_KEY not configured");

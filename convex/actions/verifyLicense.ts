@@ -7,7 +7,9 @@
  * Uses the free NPPES NPI Registry API (npiregistry.cms.hhs.gov).
  */
 import { action } from "../_generated/server";
+import { api } from "../_generated/api";
 import { v } from "convex/values";
+import { requireCap, CAP } from "../lib/capabilities";
 
 const NPI_REGISTRY_URL = "https://npiregistry.cms.hhs.gov/api";
 
@@ -36,8 +38,10 @@ export const verifyNpi = action({
     npiNumber: v.string(),
     expectedFirstName: v.optional(v.string()),
     expectedLastName: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args): Promise<NpiResult> => {
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     const npi = args.npiNumber.replace(/\D/g, ""); // Strip non-digits
 
     if (npi.length !== 10) {
@@ -184,8 +188,10 @@ export const verifyNpi = action({
 export const checkPrescribingAuthority = action({
   args: {
     npiNumber: v.string(),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     const npiResult = await ctx.runAction(api.actions.verifyLicense.verifyNpi, {
       npiNumber: args.npiNumber,
     });

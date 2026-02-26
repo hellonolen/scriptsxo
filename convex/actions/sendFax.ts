@@ -2,6 +2,7 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
+import { requireCap, CAP } from "../lib/capabilities";
 
 const PHAXIO_API_URL = "https://api.phaxio.com/v2.1/faxes";
 
@@ -9,8 +10,10 @@ export const send = action({
   args: {
     prescriptionId: v.id("prescriptions"),
     pharmacyId: v.id("pharmacies"),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args): Promise<{ faxLogId: string; phaxioFaxId?: string }> => {
+    await requireCap(ctx, args.sessionToken, CAP.RX_VIEW);
     // Get pharmacy fax number
     const pharmacy = await ctx.runQuery(api.pharmacies.getById, {
       pharmacyId: args.pharmacyId,

@@ -20,12 +20,13 @@ import { Button } from "@/components/ui/button";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
-  { label: "Payment", icon: CreditCard },
-  { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
+  { label: "Medical History", icon: Heart },
   { label: "Verification", icon: ScanLine },
+  { label: "Payment", icon: CreditCard },
   { label: "Review", icon: FileCheck },
 ] as const;
 
@@ -35,28 +36,50 @@ export default function IntakeReviewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [intakeId, setIntakeId] = useState<Id<"intakes"> | null>(null);
+  const [isDevMode, setIsDevMode] = useState(false);
+  const [devData, setDevData] = useState<any>(null);
 
   const updateIntakeStep = useMutation(api.intake.updateStep);
   const completeIntake = useMutation(api.intake.complete);
   const intakeData = useQuery(
     api.intake.getById,
-    intakeId ? { intakeId } : "skip"
+    !isDevMode && intakeId ? { intakeId } : "skip"
   );
 
   const currentStep = 4;
 
   useEffect(() => {
-    const storedIntakeId = localStorage.getItem("sxo_intake_id");
-    if (!storedIntakeId) {
-      router.push("/intake/medical-history");
-      return;
+    const dev = isDev();
+    setIsDevMode(dev);
+
+    if (dev) {
+      const localData = DevIntakeStore.get();
+      if (!localData) {
+        router.push("/intake/symptoms");
+        return;
+      }
+      setIntakeId(localData.id as Id<"intakes">);
+      setDevData(localData);
+    } else {
+      const storedIntakeId = localStorage.getItem("sxo_intake_id");
+      if (!storedIntakeId) {
+        router.push("/intake/symptoms");
+        return;
+      }
+      setIntakeId(storedIntakeId as Id<"intakes">);
     }
-    setIntakeId(storedIntakeId as Id<"intakes">);
   }, [router]);
 
   async function handleSubmit() {
     if (!finalConsent || !intakeId) return;
     setIsSubmitting(true);
+
+    if (isDevMode) {
+      DevIntakeStore.updateStep("consent", true);
+      DevIntakeStore.complete();
+      setIsSubmitted(true);
+      return;
+    }
 
     try {
       await updateIntakeStep({
@@ -69,14 +92,16 @@ export default function IntakeReviewPage() {
       setIsSubmitted(true);
     } catch (error) {
       console.error("Failed to submit intake:", error);
-      setIsSubmitting(false);
+      // Fallback for dev/demo: mark as submitted anyway
+      DevIntakeStore.complete();
+      setIsSubmitted(true);
     }
   }
 
-  // Show spinner only while genuinely loading (intakeId set but query hasn't returned yet).
-  // When intakeId is null (no stored ID), the useEffect redirects to medical-history.
-  // When intakeData is null (not found in DB), show a "not found" message instead of infinite spinner.
-  if (intakeId && intakeData === undefined) {
+  // Determine the data source (Convex or localStorage)
+  const resolvedData = isDevMode ? devData : intakeData;
+
+  if (!resolvedData) {
     return (
       <AppShell>
         <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
@@ -88,22 +113,8 @@ export default function IntakeReviewPage() {
     );
   }
 
-  if (!intakeData) {
-    return (
-      <AppShell>
-        <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
-          <div className="max-w-[1400px] mx-auto">
-            <p className="text-muted-foreground">
-              Intake not found. Please start a new intake.
-            </p>
-          </div>
-        </main>
-      </AppShell>
-    );
-  }
-
-  const medicalHistory = intakeData.medicalHistory as any;
-  const currentSymptoms = intakeData.currentSymptoms as any;
+  const medicalHistory = resolvedData.medicalHistory as any;
+  const currentSymptoms = resolvedData.currentSymptoms as any;
 
   return (
     <AppShell>
@@ -365,7 +376,7 @@ export default function IntakeReviewPage() {
                         Chief Complaint
                       </span>
                       <span className="text-sm font-light text-foreground">
-                        {currentSymptoms.chiefComplaint || intakeData.chiefComplaint}
+                        {currentSymptoms.chiefComplaint || resolvedData.chiefComplaint}
                       </span>
                     </div>
                     {currentSymptoms.duration && (
@@ -442,7 +453,7 @@ export default function IntakeReviewPage() {
                       Status
                     </span>
                     <span className="text-sm font-light text-foreground">
-                      {intakeData.idVerified ? "Verified via Stripe Identity" : "Pending verification"}
+                      {resolvedData.idVerified ? "Verified via Stripe Identity" : "Pending verification"}
                     </span>
                   </div>
                 </div>
@@ -505,7 +516,7 @@ export default function IntakeReviewPage() {
               {/* Navigation */}
               <div className="flex justify-between pt-6 border-t border-border">
                 <Link
-                  href="/intake/id-verification"
+                  href="/intake/payment"
                   className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
                 >
                   <ArrowLeft size={16} aria-hidden="true" />

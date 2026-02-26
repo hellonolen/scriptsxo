@@ -13,6 +13,7 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
+import { requireCap, CAP } from "../lib/capabilities";
 
 // ============================================
 // SYSTEM PROMPTS BY ROLE
@@ -222,8 +223,10 @@ export const chat = action({
     intakeId: v.optional(v.string()),
     userRole: v.optional(v.string()), // "client" | "provider" | "admin"
     llmProvider: v.optional(v.string()), // "gemini" | "claude"
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.sessionToken, CAP.VIEW_DASHBOARD);
     const role = args.userRole || "client";
     const emailLower = args.patientEmail.toLowerCase();
 
@@ -248,7 +251,7 @@ export const chat = action({
 
       if (args.intakeId) {
         try {
-          intake = await ctx.runQuery(api.intake.getById, { intakeId: args.intakeId });
+          intake = await ctx.runQuery(api.intake.getById, { intakeId: args.intakeId as any });
         } catch {}
       } else {
         try {

@@ -28,7 +28,7 @@ const MEMBERSHIP_FEATURES = [
   },
   {
     icon: MessageSquare,
-    label: "AI Health Concierge",
+    label: "Health Concierge",
     description: "24/7 intelligent health guidance and triage",
   },
   {
@@ -187,7 +187,7 @@ function PayPageInner() {
             Activate Your Membership
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Unlock on-demand telehealth consultations, AI-powered health guidance,
+            Unlock on-demand telehealth consultations, secure health guidance,
             and seamless prescription management.
           </p>
         </div>
@@ -288,7 +288,7 @@ function PayPageInner() {
           <div className="flex items-center justify-center gap-2 mt-4">
             <Shield size={12} style={{ color: "#2DD4BF" }} />
             <p className="text-[11px] text-muted-foreground">
-              Secure payment via Whop. HIPAA-compliant platform.
+              Secure, encrypted payment · HIPAA-compliant
             </p>
           </div>
         </div>

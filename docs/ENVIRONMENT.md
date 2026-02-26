@@ -28,6 +28,7 @@
 | MODMED_CLIENT_ID | ModMed API | Not set | EHR integration (planned) |
 | MODMED_CLIENT_SECRET | ModMed API | Not set | EHR integration (planned) |
 | MODMED_API_BASE_URL | ModMed API | Not set | EHR integration (planned) |
+| COMPOSIO_API_KEY | Composio | Not set | Unified integration layer for external services |
 | STRIPE_SECRET_KEY | Stripe | Not set | Legacy -- only needed for Identity verification |
 | STRIPE_WEBHOOK_SECRET | Stripe | Not set | Legacy -- webhook verification |
 
@@ -98,6 +99,23 @@ All webhooks go through the Convex HTTP router at `https://striped-caribou-797.c
 | /phaxio-callback | Phaxio/FaxBot | INACTIVE -- faxing not yet deployed |
 | /eprescribe-callback | ModMed | INACTIVE -- integration planned |
 | /health | Health check | ACTIVE |
+
+## Composio Setup (API v3)
+1. Sign up at https://composio.dev and create a project
+2. Generate an API key from the Composio dashboard
+3. Set the API key in Convex: `npx convex env set COMPOSIO_API_KEY "your_key_here"` (DONE)
+4. Configure auth configs (toolkits) in the Composio dashboard:
+   - ModMed (e-prescribing, EHR)
+   - Pharmacy networks
+   - Google Calendar (scheduling sync)
+   - Email / SMS (patient notifications)
+   - Fax (non-electronic pharmacy routing)
+5. Integration code lives in `convex/integrations/composio.ts` (uses REST API v3 directly)
+6. The conductor dispatches to Composio via `agentName: "composio"`
+7. Health check: Call `api.integrations.composio.healthCheck` from admin panel
+8. Admin UI: `/admin/integrations` shows connection status and toolkit health
+9. API v3 base: `https://backend.composio.dev/api/v3`
+10. v3 uses `user_id` instead of `entity_id`, `connected_accounts` instead of `connectedAccounts`
 
 ## ModMed API Setup (Planned)
 1. Contact ModMed rep to add "ScriptsXO Telehealth" as a second location

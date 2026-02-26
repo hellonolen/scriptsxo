@@ -7,6 +7,8 @@
  */
 import { action } from "../_generated/server";
 import { v } from "convex/values";
+import { requireCap } from "../lib/serverAuth";
+import { CAP } from "../lib/capabilities";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
@@ -168,8 +170,10 @@ export const callLLM = action({
     model: v.optional(v.string()),
     maxTokens: v.optional(v.number()),
     temperature: v.optional(v.number()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args): Promise<LLMResponse> => {
+    await requireCap(ctx, args.sessionToken, CAP.VIEW_DASHBOARD);
     const maxTokens = args.maxTokens || 2048;
     const temperature = args.temperature ?? 0.3;
     const provider = args.provider || "gemini";
@@ -208,9 +212,11 @@ export const callMultimodal = action({
     model: v.optional(v.string()),
     maxTokens: v.optional(v.number()),
     temperature: v.optional(v.number()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args): Promise<LLMResponse> => {
-    const apiKey = getGeminiKey();
+    await requireCap(ctx, args.sessionToken, CAP.VIEW_DASHBOARD);
+    const apiKey = getApiKey();
     const model = args.model || "gemini-2.0-flash";
     const maxTokens = args.maxTokens || 2048;
     const temperature = args.temperature ?? 0.2;

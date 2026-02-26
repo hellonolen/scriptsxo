@@ -8,7 +8,8 @@ export type AgentName =
   | "pharmacy"
   | "followUp"
   | "billing"
-  | "quality";
+  | "quality"
+  | "composio";
 
 export type AgentAction = {
   agentName: AgentName;

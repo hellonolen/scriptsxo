@@ -15,12 +15,14 @@ import { AppShell } from "@/components/app-shell";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { getSessionCookie } from "@/lib/auth";
+import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
-  { label: "Payment", icon: CreditCard },
-  { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
+  { label: "Medical History", icon: Heart },
   { label: "Verification", icon: ScanLine },
+  { label: "Payment", icon: CreditCard },
   { label: "Review", icon: FileCheck },
 ] as const;
 
@@ -60,17 +62,21 @@ export default function SymptomsPage() {
   const [intakeId, setIntakeId] = useState<Id<"intakes"> | null>(null);
 
   const updateIntakeStep = useMutation(api.intake.updateStep);
+  const createIntake = useMutation(api.intake.create);
+  const getOrCreateMember = useMutation(api.members.getOrCreate);
 
-  const currentStep = 2;
+  const currentStep = 0;
 
   useEffect(() => {
-    const storedIntakeId = localStorage.getItem("sxo_intake_id");
-    if (!storedIntakeId) {
-      router.push("/intake/medical-history");
-      return;
+    // Symptoms is now the first intake step — no redirect if no intake ID yet.
+    // The intake record is created on Continue if not already present.
+    const storedIntakeId = isDev()
+      ? DevIntakeStore.getId()
+      : localStorage.getItem("sxo_intake_id");
+    if (storedIntakeId) {
+      setIntakeId(storedIntakeId as Id<"intakes">);
     }
-    setIntakeId(storedIntakeId as Id<"intakes">);
-  }, [router]);
+  }, []);
 
   function toggleSymptom(symptom: string) {
     setSelectedSymptoms((prev) =>
@@ -95,21 +101,58 @@ export default function SymptomsPage() {
   }
 
   async function handleContinue() {
-    if (!intakeId) return;
+    const symptomsData = {
+      chiefComplaint,
+      duration,
+      severity,
+      relatedSymptoms: selectedSymptoms,
+      previousTreatments,
+    };
 
-    await updateIntakeStep({
-      intakeId,
-      stepName: "symptoms",
-      data: {
-        chiefComplaint,
-        duration,
-        severity,
-        relatedSymptoms: selectedSymptoms,
-        previousTreatments,
-      },
-    });
+    if (isDev()) {
+      // Ensure intake exists in dev mode
+      if (!DevIntakeStore.getId()) {
+        const session = getSessionCookie();
+        if (session?.email) DevIntakeStore.create(session.email);
+      }
+      DevIntakeStore.updateStep("symptoms", symptomsData);
+      router.push("/intake/medical-history");
+      return;
+    }
 
-    router.push("/intake/id-verification");
+    try {
+      let currentIntakeId = intakeId;
+
+      if (!currentIntakeId) {
+        // Create intake record on the first step
+        const session = getSessionCookie();
+        if (!session?.email) {
+          router.push("/access");
+          return;
+        }
+        await getOrCreateMember({ email: session.email });
+        const newId = await createIntake({ email: session.email });
+        currentIntakeId = newId;
+        localStorage.setItem("sxo_intake_id", newId);
+        setIntakeId(newId);
+      }
+
+      await updateIntakeStep({
+        intakeId: currentIntakeId,
+        stepName: "symptoms",
+        data: symptomsData,
+      });
+    } catch (err) {
+      console.error("Failed to save symptoms:", err);
+      // Fallback: save locally and proceed
+      const session = getSessionCookie();
+      if (!DevIntakeStore.getId() && session?.email) {
+        DevIntakeStore.create(session.email);
+      }
+      DevIntakeStore.updateStep("symptoms", symptomsData);
+    }
+
+    router.push("/intake/medical-history");
   }
 
   return (
@@ -120,13 +163,13 @@ export default function SymptomsPage() {
           <div className="max-w-2xl mb-12">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                Step 3 of 5
+                Step 1 of 5
               </span>
             </div>
             <div className="w-full h-px bg-border relative">
               <div
                 className="absolute top-0 left-0 h-px bg-brand-secondary transition-all duration-500"
-                style={{ width: "60%" }}
+                style={{ width: "20%" }}
               />
             </div>
             {/* Step indicators */}
@@ -347,7 +390,7 @@ export default function SymptomsPage() {
             {/* Navigation */}
             <div className="flex justify-between pt-6 border-t border-border">
               <button
-                onClick={() => router.push("/intake/medical-history")}
+                onClick={() => router.push("/dashboard/order")}
                 className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
               >
                 <ArrowLeft size={16} aria-hidden="true" />

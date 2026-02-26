@@ -21,6 +21,7 @@ import { SITECONFIG, formatPrice } from "@/lib/config";
 import { getSessionCookie } from "@/lib/auth";
 import { useAction } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 // Dynamic import to avoid SSR issues with Whop embed
 const WhopCheckoutEmbed = dynamic(
@@ -30,11 +31,11 @@ const WhopCheckoutEmbed = dynamic(
 );
 
 const STEPS = [
-  { number: 1, label: "Payment", active: true },
-  { number: 2, label: "Medical History", active: false },
-  { number: 3, label: "Symptoms", active: false },
-  { number: 4, label: "Verification", active: false },
-  { number: 5, label: "Review", active: false },
+  { number: 1, label: "Symptoms", active: false, completed: true },
+  { number: 2, label: "Medical History", active: false, completed: true },
+  { number: 3, label: "Verification", active: false, completed: true },
+  { number: 4, label: "Payment", active: true, completed: false },
+  { number: 5, label: "Review", active: false, completed: false },
 ];
 
 const INCLUDED_FEATURES = [
@@ -68,6 +69,7 @@ function PaymentContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [isDevMode, setIsDevMode] = useState(false);
 
   const createCheckoutSession = useAction(
     api.actions.whopCheckout.createCheckoutSession
@@ -76,8 +78,17 @@ function PaymentContent() {
     api.actions.whopCheckout.verifyMembership
   );
 
-  // Handle redirect-based return (fallback for external payment flows)
   useEffect(() => {
+    const devMode = isDev();
+    setIsDevMode(devMode);
+
+    if (devMode) {
+      // In dev mode, skip Whop checkout entirely
+      setLoading(false);
+      return;
+    }
+
+    // Handle redirect-based return (fallback for external payment flows)
     const whopCheckout = searchParams.get("whop_checkout");
     if (whopCheckout === "success") {
       handlePostPayment();
@@ -125,7 +136,7 @@ function PaymentContent() {
 
     // Short delay for visual feedback then navigate
     setTimeout(() => {
-      router.push("/intake/medical-history");
+      router.push("/intake/review");
     }, 1500);
   }
 
@@ -141,8 +152,25 @@ function PaymentContent() {
 
     // Navigate after brief success state
     setTimeout(() => {
-      router.push("/intake/medical-history");
+      router.push("/intake/review");
     }, 1500);
+  }
+
+  /** Dev mode: simulate payment completion */
+  function handleDevPayment() {
+    const session = getSessionCookie();
+    if (!session?.email) {
+      router.push("/");
+      return;
+    }
+
+    // Create intake record in localStorage
+    DevIntakeStore.create(session.email);
+
+    setCompleted(true);
+    setTimeout(() => {
+      router.push("/intake/review");
+    }, 1200);
   }
 
   if (completed) {
@@ -160,7 +188,7 @@ function PaymentContent() {
               Welcome to ScriptsXO
             </h2>
             <p className="text-muted-foreground font-light">
-              Membership activated. Starting your intake...
+              Membership activated. Proceeding to review...
             </p>
           </div>
         </div>
@@ -180,7 +208,9 @@ function PaymentContent() {
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
                     step.active
                       ? "bg-gradient-to-br from-[#7C3AED] to-[#2DD4BF] text-white"
-                      : "bg-muted text-muted-foreground"
+                      : step.completed
+                        ? "bg-[#2DD4BF] text-white"
+                        : "bg-muted text-muted-foreground"
                   }`}
                 >
                   {step.number}
@@ -191,7 +221,7 @@ function PaymentContent() {
               </div>
             ))}
           </div>
-          <p className="eyebrow text-[#7C3AED]">Step 1 of 5</p>
+          <p className="eyebrow text-[#7C3AED]">Step 4 of 5</p>
         </div>
 
         {/* Header */}
@@ -216,7 +246,7 @@ function PaymentContent() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          {/* Left: Checkout Embed */}
+          {/* Left: Checkout Embed or Dev Payment */}
           <div className="lg:col-span-3">
             <div className="glass-card p-6 lg:p-8">
               <div className="flex items-center justify-between mb-6">
@@ -239,8 +269,23 @@ function PaymentContent() {
                 </div>
               </div>
 
-              {/* Whop Embedded Checkout */}
-              {loading ? (
+              {/* Dev Mode: Simple activate button */}
+              {isDevMode ? (
+                <div className="py-12 text-center space-y-6">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] text-xs font-medium">
+                    DEV MODE
+                  </div>
+                  <p className="text-sm text-muted-foreground font-light">
+                    Payment gateway is not available in development. Click below to simulate membership activation.
+                  </p>
+                  <button
+                    onClick={handleDevPayment}
+                    className="px-8 py-3 bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white text-sm font-medium rounded-md hover:opacity-90 transition-opacity"
+                  >
+                    Activate Membership (Dev)
+                  </button>
+                </div>
+              ) : loading ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="w-6 h-6 animate-spin text-[#7C3AED]" />
                 </div>
@@ -252,7 +297,7 @@ function PaymentContent() {
                     skipRedirect
                     onComplete={handleCheckoutComplete}
                     themeOptions={{ accentColor: "violet" }}
-                    returnUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/intake/medical-history?whop_checkout=success`}
+                    returnUrl={`${typeof window !== "undefined" ? window.location.origin : ""}/intake/review?whop_checkout=success`}
                     fallback={
                       <div className="flex items-center justify-center py-16">
                         <Loader2 className="w-6 h-6 animate-spin text-[#7C3AED]" />
@@ -318,14 +363,14 @@ function PaymentContent() {
         {/* Navigation */}
         <div className="flex items-center justify-between pt-6 mt-8 border-t border-border">
           <Link
-            href="/access"
+            href="/intake/id-verification"
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors font-light"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Sign In
           </Link>
           <p className="text-xs text-muted-foreground font-light">
-            Next: Medical History
+            Next: Review & Submit
           </p>
         </div>
       </div>

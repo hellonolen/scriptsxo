@@ -1,4 +1,8 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import {
   Clock,
   Package,
@@ -6,22 +10,11 @@ import {
   Truck,
   Pill,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
-import { Nav } from "@/components/nav";
+import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
-
-export const metadata: Metadata = {
-  title: "Pharmacy Portal",
-  description:
-    "Pharmacy portal for managing prescription fulfillment and queue.",
-};
-
-const STATS = [
-  { label: "In Queue", value: "12", icon: Clock },
-  { label: "Filling", value: "8", icon: Package },
-  { label: "Ready", value: "15", icon: CheckCircle },
-  { label: "Delivered Today", value: "3", icon: Truck },
-] as const;
+import { term } from "@/lib/config";
 
 type RxPriority = "stat" | "high" | "normal";
 type FillStatus = "queued" | "filling" | "ready" | "verification";
@@ -46,221 +39,200 @@ const FILL_STATUS_LABEL: Record<FillStatus, string> = {
   verification: "Verification",
 };
 
-const QUEUE_PRESCRIPTIONS = [
-  {
-    patient: "Amara Johnson",
-    initials: "AJ",
-    medication: "Amoxicillin 500mg",
-    dosage: "30 capsules",
-    provider: "Dr. Mitchell",
-    priority: "high" as RxPriority,
-    status: "queued" as FillStatus,
-  },
-  {
-    patient: "Marcus Rivera",
-    initials: "MR",
-    medication: "Lisinopril 10mg",
-    dosage: "90 tablets",
-    provider: "Dr. Mitchell",
-    priority: "normal" as RxPriority,
-    status: "filling" as FillStatus,
-  },
-  {
-    patient: "Elena Vasquez",
-    initials: "EV",
-    medication: "Fluconazole 150mg",
-    dosage: "1 tablet",
-    provider: "Dr. Mitchell",
-    priority: "stat" as RxPriority,
-    status: "queued" as FillStatus,
-  },
-  {
-    patient: "David Chen",
-    initials: "DC",
-    medication: "Metformin 850mg",
-    dosage: "60 tablets",
-    provider: "Dr. Pham",
-    priority: "normal" as RxPriority,
-    status: "verification" as FillStatus,
-  },
-  {
-    patient: "Sophia Patel",
-    initials: "SP",
-    medication: "Sertraline 50mg",
-    dosage: "30 tablets",
-    provider: "Dr. Wells",
-    priority: "normal" as RxPriority,
-    status: "ready" as FillStatus,
-  },
-  {
-    patient: "Thomas Grant",
-    initials: "TG",
-    medication: "Atorvastatin 20mg",
-    dosage: "90 tablets",
-    provider: "Dr. Mitchell",
-    priority: "normal" as RxPriority,
-    status: "filling" as FillStatus,
-  },
-] as const;
+function mapDbStatusToFill(status: string): FillStatus {
+  switch (status) {
+    case "sent": return "queued";
+    case "filling": return "filling";
+    case "ready": return "ready";
+    case "signed": return "verification";
+    default: return "queued";
+  }
+}
+
+function mapDbPriority(deaSchedule: string | undefined): RxPriority {
+  if (!deaSchedule) return "normal";
+  if (deaSchedule === "II" || deaSchedule === "III") return "stat";
+  if (deaSchedule === "IV") return "high";
+  return "normal";
+}
+
+function getInitials(id: string): string {
+  return id.toString().slice(-2).toUpperCase();
+}
 
 export default function PharmacyPage() {
+  const prescriptions = useQuery(api.prescriptions.listAll, { status: "sent" });
+  const fillingRx = useQuery(api.prescriptions.listAll, { status: "filling" });
+  const readyRx = useQuery(api.prescriptions.listAll, { status: "ready" });
+  const deliveredRx = useQuery(api.prescriptions.listAll, { status: "picked_up" });
+  const signedRx = useQuery(api.prescriptions.listAll, { status: "signed" });
+
+  const inQueue = prescriptions?.length ?? 0;
+  const filling = fillingRx?.length ?? 0;
+  const ready = readyRx?.length ?? 0;
+  const delivered = deliveredRx?.length ?? 0;
+
+  // Combine queued + filling + verification prescriptions for the main table
+  const queueData = [
+    ...(prescriptions ?? []),
+    ...(fillingRx ?? []),
+    ...(signedRx ?? []),
+  ];
+
+  // Remove duplicates by _id
+  const seen = new Set<string>();
+  const allQueueItems = queueData.filter((rx: any) => {
+    if (seen.has(rx._id)) return false;
+    seen.add(rx._id);
+    return true;
+  });
+
+  const isLoading = prescriptions === undefined && fillingRx === undefined;
+
   return (
-    <>
-      <Nav />
-      <main className="min-h-screen pt-24 pb-20 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-[1400px] mx-auto">
-          {/* Header */}
-          <div className="mb-12 pb-8 border-b border-border">
-            <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase mb-2 font-light">
-              Pharmacy
-            </p>
-            <h1
-              className="text-3xl lg:text-4xl text-foreground font-light tracking-tight"
+    <AppShell>
+      <div className="p-6 lg:p-10 max-w-[1200px]">
+        {/* Header */}
+        <div className="mb-10">
+          <p className="eyebrow mb-0.5">PHARMACY</p>
+          <h1
+            className="text-2xl lg:text-3xl font-light text-foreground tracking-[-0.02em]"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            Pharmacy Portal
+          </h1>
+          <p className="text-muted-foreground font-light mt-1">
+            Manage incoming prescriptions and fulfillment workflow.
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+          {[
+            { label: "In Queue", value: prescriptions === undefined ? "—" : String(inQueue), icon: Clock },
+            { label: "Filling", value: fillingRx === undefined ? "—" : String(filling), icon: Package },
+            { label: "Ready", value: readyRx === undefined ? "—" : String(ready), icon: CheckCircle },
+            { label: "Delivered Today", value: deliveredRx === undefined ? "—" : String(delivered), icon: Truck },
+          ].map((stat) => (
+            <div key={stat.label} className="glass-card flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="stat-label">{stat.label}</span>
+                <stat.icon
+                  size={16}
+                  className="text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </div>
+              <span className="stat-value">{stat.value}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Prescription Queue */}
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <h2
+              className="text-lg font-medium text-foreground"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              Pharmacy Portal
-            </h1>
-            <p className="text-muted-foreground font-light mt-1">
-              Manage incoming prescriptions and fulfillment workflow.
-            </p>
+              Prescription Queue
+            </h2>
+            <span className="text-xs text-muted-foreground tracking-widest uppercase font-light">
+              {isLoading ? "Loading..." : `${allQueueItems.length} prescriptions`}
+            </span>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-            {STATS.map((stat) => (
-              <div key={stat.label} className="stats-card">
-                <div className="flex items-center justify-between">
-                  <span className="stats-card-label">{stat.label}</span>
-                  <stat.icon
-                    size={16}
-                    className="text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="stats-card-value text-foreground">
-                  {stat.value}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Prescription Queue */}
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2
-                className="text-xl text-foreground font-light"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Prescription Queue
-              </h2>
-              <span className="text-xs text-muted-foreground tracking-widest uppercase font-light">
-                {QUEUE_PRESCRIPTIONS.length} prescriptions
-              </span>
-            </div>
-
-            <div className="table-container">
-              <table className="table-custom">
-                <thead>
+          <div className="table-container">
+            <table className="table-custom">
+              <thead>
+                <tr>
+                  <th className="text-xs tracking-[0.1em] uppercase font-light">{term("title")}</th>
+                  <th className="text-xs tracking-[0.1em] uppercase font-light">Medication</th>
+                  <th className="text-xs tracking-[0.1em] uppercase font-light">Dosage</th>
+                  <th className="text-xs tracking-[0.1em] uppercase font-light">Priority</th>
+                  <th className="text-xs tracking-[0.1em] uppercase font-light">Status</th>
+                  <th className="text-xs tracking-[0.1em] uppercase font-light text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
                   <tr>
-                    <th className="text-xs tracking-[0.1em] uppercase font-light">
-                      Patient
-                    </th>
-                    <th className="text-xs tracking-[0.1em] uppercase font-light">
-                      Medication
-                    </th>
-                    <th className="text-xs tracking-[0.1em] uppercase font-light">
-                      Dosage
-                    </th>
-                    <th className="text-xs tracking-[0.1em] uppercase font-light">
-                      Provider
-                    </th>
-                    <th className="text-xs tracking-[0.1em] uppercase font-light">
-                      Priority
-                    </th>
-                    <th className="text-xs tracking-[0.1em] uppercase font-light">
-                      Status
-                    </th>
-                    <th className="text-xs tracking-[0.1em] uppercase font-light text-right">
-                      Action
-                    </th>
+                    <td colSpan={6} className="text-center py-12">
+                      <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">Loading prescriptions...</p>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {QUEUE_PRESCRIPTIONS.map((rx) => (
-                    <tr key={`${rx.patient}-${rx.medication}`}>
-                      <td>
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
-                            {rx.initials}
+                ) : allQueueItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-12">
+                      <p className="text-sm text-muted-foreground">No prescriptions in queue.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  allQueueItems.map((rx: any) => {
+                    const fillStatus = mapDbStatusToFill(rx.status);
+                    const priority = mapDbPriority(rx.deaSchedule);
+
+                    return (
+                      <tr key={rx._id}>
+                        <td>
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
+                              {getInitials(rx.patientId ?? rx._id)}
+                            </div>
+                            <span className="text-sm font-light text-foreground">
+                              Patient
+                            </span>
                           </div>
-                          <span className="text-sm font-light text-foreground">
-                            {rx.patient}
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="flex items-center gap-2">
-                          <Pill
-                            size={13}
-                            className="text-muted-foreground flex-shrink-0"
-                            aria-hidden="true"
-                          />
-                          <span className="text-sm font-light text-foreground">
-                            {rx.medication}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="text-sm font-light text-muted-foreground">
-                        {rx.dosage}
-                      </td>
-                      <td className="text-sm font-light text-muted-foreground">
-                        {rx.provider}
-                      </td>
-                      <td>
-                        <Badge variant={PRIORITY_VARIANT[rx.priority]}>
-                          {rx.priority === "stat" && (
-                            <AlertCircle
-                              size={10}
-                              className="mr-1"
-                              aria-hidden="true"
-                            />
-                          )}
-                          {rx.priority}
-                        </Badge>
-                      </td>
-                      <td>
-                        <Badge variant={FILL_STATUS_VARIANT[rx.status]}>
-                          {FILL_STATUS_LABEL[rx.status]}
-                        </Badge>
-                      </td>
-                      <td className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {rx.status === "queued" && (
-                            <button className="px-5 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors">
-                              Fill
-                            </button>
-                          )}
-                          {rx.status === "filling" && (
-                            <button className="px-5 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors">
-                              Ready
-                            </button>
-                          )}
-                          {(rx.status === "ready" ||
-                            rx.status === "verification") && (
-                            <button className="px-5 py-2 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors">
-                              Details
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <Pill size={13} className="text-muted-foreground flex-shrink-0" aria-hidden="true" />
+                            <span className="text-sm font-light text-foreground">{rx.medicationName}</span>
+                          </div>
+                        </td>
+                        <td className="text-sm font-light text-muted-foreground">{rx.dosage}</td>
+                        <td>
+                          <Badge variant={PRIORITY_VARIANT[priority]}>
+                            {priority === "stat" && (
+                              <AlertCircle size={10} className="mr-1" aria-hidden="true" />
+                            )}
+                            {priority}
+                          </Badge>
+                        </td>
+                        <td>
+                          <Badge variant={FILL_STATUS_VARIANT[fillStatus]}>
+                            {FILL_STATUS_LABEL[fillStatus]}
+                          </Badge>
+                        </td>
+                        <td className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {fillStatus === "queued" && (
+                              <button className="px-5 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors">
+                                Fill
+                              </button>
+                            )}
+                            {fillStatus === "filling" && (
+                              <button className="px-5 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors">
+                                Ready
+                              </button>
+                            )}
+                            {(fillStatus === "ready" || fillStatus === "verification") && (
+                              <button className="px-5 py-2 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors">
+                                Details
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      </main>
-    </>
+      </div>
+    </AppShell>
   );
 }

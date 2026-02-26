@@ -1865,8 +1865,8 @@ export default function StartPage() {
     <AppShell>
       <div className="flex h-[calc(100vh-56px)] lg:h-screen">
         {/* ===== Left: Step Tracker ===== */}
-        <div className="hidden lg:flex flex-col w-[240px] border-r border-border bg-background p-6">
-          <p className="text-[10px] tracking-[0.2em] uppercase font-medium text-[#7C3AED] mb-6">
+        <div className="hidden lg:flex flex-col w-[220px] border-r border-border p-5" style={{ background: "rgba(124,58,237,0.02)" }}>
+          <p className="text-[10px] tracking-[0.2em] uppercase font-medium text-[#7C3AED] mb-4">
             Progress
           </p>
           <div className="space-y-1">
@@ -1969,10 +1969,10 @@ export default function StartPage() {
 
           {/* Welcome landing OR Chat messages */}
           {currentStep === "welcome" ? (
-            <div className="flex-1 overflow-y-auto px-6 lg:px-12 py-8">
-              <div className="max-w-[640px] mx-auto">
+            <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+              <div className="max-w-[680px]">
                 {/* Eyebrow */}
-                <p className="eyebrow text-[10px] tracking-[0.2em] uppercase font-medium text-[#7C3AED] mb-3">
+                <p className="eyebrow text-[10px] tracking-[0.2em] uppercase font-medium text-[#7C3AED] mb-2">
                   New Intake
                 </p>
 
@@ -1980,12 +1980,12 @@ export default function StartPage() {
                 <h1 className="text-3xl lg:text-4xl font-medium text-foreground mb-2" style={{ fontFamily: "var(--font-playfair)" }}>
                   Let&apos;s get started
                 </h1>
-                <p className="text-sm text-muted-foreground mb-8">
+                <p className="text-sm text-muted-foreground mb-5">
                   This process takes about 5 minutes. A licensed provider will review your request.
                 </p>
 
                 {/* 4-step overview */}
-                <div className="grid grid-cols-2 gap-4 mb-10">
+                <div className="grid grid-cols-2 gap-3 mb-6">
                   {[
                     { num: "01", title: "Medical History", desc: "Share your health background" },
                     { num: "02", title: "Symptoms", desc: "Describe what you need" },
@@ -2003,7 +2003,7 @@ export default function StartPage() {
                 </div>
 
                 {/* Choose Your Path */}
-                <p className="eyebrow text-[10px] tracking-[0.2em] uppercase font-medium text-[#7C3AED] mb-4">
+                <p className="eyebrow text-[10px] tracking-[0.2em] uppercase font-medium text-[#7C3AED] mb-3">
                   Choose Your Path
                 </p>
 

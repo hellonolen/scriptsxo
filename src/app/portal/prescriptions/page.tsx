@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Pill, Plus, FileDown } from "lucide-react";
+import { Pill, Plus, FileDown, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
 import { useQuery, useAction } from "convex/react";
@@ -19,35 +19,27 @@ const STATUS_STEPS = [
   { key: "received", label: "Received" },
 ] as const;
 
-type TrackerStep = (typeof STATUS_STEPS)[number]["key"];
-
 const COMPLETED_COLOR = "#7C3AED";
 const CURRENT_COLOR = "#2DD4BF";
 const UPCOMING_COLOR = "#D4D4D8";
 
-/**
- * Maps a prescription's database status to the tracker step index.
- * Returns the 0-based index of the CURRENT step.
- */
-function resolveStepIndex(
-  dbStatus: string
-): number {
+function resolveStepIndex(dbStatus: string): number {
   switch (dbStatus) {
     case "draft":
     case "pending_review":
-      return 0; // Submitted
+      return 0;
     case "signed":
-      return 1; // Approved
+      return 1;
     case "filling":
-      return 2; // Preparing
+      return 2;
     case "sent":
     case "ready":
     case "delivered":
-      return 3; // Sent
+      return 3;
     case "picked_up":
-      return 4; // Received
+      return 4;
     case "cancelled":
-      return -1; // Cancelled -- handled separately
+      return -1;
     default:
       return 0;
   }
@@ -76,7 +68,6 @@ function StatusTracker({ status }: { status: string }) {
 
   return (
     <div className="w-full" role="group" aria-label="Prescription order status">
-      {/* Dots and connecting lines */}
       <div className="flex items-center w-full">
         {STATUS_STEPS.map((step, index) => {
           const isCompleted = index < currentIndex;
@@ -89,7 +80,6 @@ function StatusTracker({ status }: { status: string }) {
 
           return (
             <div key={step.key} className="flex items-center flex-1 last:flex-none">
-              {/* Dot */}
               <div className="relative flex items-center justify-center">
                 <span
                   className="block rounded-full transition-all duration-300"
@@ -103,14 +93,12 @@ function StatusTracker({ status }: { status: string }) {
                   }}
                   aria-hidden="true"
                 />
-                {/* Screen reader text */}
                 <span className="sr-only">
                   {step.label}:{" "}
                   {isCompleted ? "completed" : isCurrent ? "current step" : "upcoming"}
                 </span>
               </div>
 
-              {/* Connecting line (skip after last dot) */}
               {index < STATUS_STEPS.length - 1 && (
                 <div
                   className="flex-1 mx-1 transition-colors duration-300"
@@ -127,7 +115,6 @@ function StatusTracker({ status }: { status: string }) {
         })}
       </div>
 
-      {/* Labels */}
       <div className="flex w-full mt-2">
         {STATUS_STEPS.map((step, index) => {
           const isCompleted = index < currentIndex;
@@ -167,7 +154,6 @@ function StatusTracker({ status }: { status: string }) {
    HELPERS
    --------------------------------------------------------------------------- */
 
-/** Human-readable status label for the badge */
 function getStatusBadge(status: string): { label: string; isActive: boolean } {
   switch (status) {
     case "signed":
@@ -202,46 +188,38 @@ export default function PrescriptionsPage() {
     setSessionChecked(true);
   }, []);
 
-  // Fetch client data
   const patient = useQuery(
     api.patients.getByEmail,
     email ? { email } : "skip"
   );
 
-  // Fetch prescriptions
   const prescriptions = useQuery(
     api.prescriptions.getByPatient,
     patient ? { patientId: patient._id } : "skip"
   );
 
-  // Action for generating PDF
   const generatePdf = useAction(api.actions.generatePrescriptionPdf.generate);
 
   const handleDownloadPdf = async (prescriptionId: string) => {
     setDownloading(prescriptionId);
     try {
       await generatePdf({ prescriptionId });
-    } catch (error) {
-      console.error("Failed to generate PDF:", error);
+    } catch {
+      // Error handling — PDF generation failure is silent to avoid exposing details
     } finally {
-      setDownloading(null);
+      setDownloading(prescriptionId);
+      setTimeout(() => setDownloading(null), 1500);
     }
   };
 
-  // Loading state — only show spinner while genuinely loading.
-  // When session has been checked and email is null, queries are skipped — not loading.
-  // When patient is null (not found), prescriptions are skipped — treat as empty, not loading.
-  const isLoading = !sessionChecked
-    || (email !== null && patient === undefined)
-    || (patient && prescriptions === undefined);
-
-  if (isLoading) {
+  // Loading state
+  if (!sessionChecked || (email !== null && (patient === undefined || prescriptions === undefined))) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "#7C3AED", borderTopColor: "transparent" }} />
+              <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
               <p className="text-sm text-muted-foreground">Loading prescriptions...</p>
             </div>
           </div>
@@ -249,6 +227,8 @@ export default function PrescriptionsPage() {
       </AppShell>
     );
   }
+
+  const rxList = prescriptions ?? [];
 
   return (
     <AppShell>
@@ -275,9 +255,9 @@ export default function PrescriptionsPage() {
         </header>
 
         {/* ---- PRESCRIPTION LIST ---- */}
-        {prescriptions && prescriptions.length > 0 ? (
+        {rxList.length > 0 ? (
           <div className="space-y-4">
-            {prescriptions.map((rx) => {
+            {rxList.map((rx: any) => {
               const badge = getStatusBadge(rx.status);
 
               return (
@@ -286,7 +266,6 @@ export default function PrescriptionsPage() {
 
                     {/* Left: Medication info */}
                     <div className="flex-1 min-w-0">
-                      {/* Status badge + Refill */}
                       <div className="flex items-center justify-between mb-4">
                         <span
                           className={`text-[9px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 ${
@@ -304,7 +283,6 @@ export default function PrescriptionsPage() {
                         )}
                       </div>
 
-                      {/* Medication name + details */}
                       <div className="flex items-start gap-3 mb-4">
                         <div className="w-10 h-10 flex items-center justify-center shrink-0" style={{ background: "rgba(124, 58, 237, 0.08)" }}>
                           <Pill size={16} className="text-[#7C3AED]" aria-hidden="true" />
@@ -322,7 +300,6 @@ export default function PrescriptionsPage() {
                         </div>
                       </div>
 
-                      {/* Meta row */}
                       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[12px]">
                         <div className="flex items-center gap-1.5">
                           <span className="text-muted-foreground">Form</span>
@@ -335,7 +312,7 @@ export default function PrescriptionsPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="text-muted-foreground">Refills</span>
                           <span className="text-foreground font-light">
-                            {rx.refillsAuthorized - rx.refillsUsed} left
+                            {(rx.refillsAuthorized ?? 0) - (rx.refillsUsed ?? 0)} left
                           </span>
                         </div>
                       </div>

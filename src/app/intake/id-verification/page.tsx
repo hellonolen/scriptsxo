@@ -19,12 +19,13 @@ import { useAction } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { getSessionCookie } from "@/lib/auth";
 import { loadStripe } from "@stripe/stripe-js";
+import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
-  { label: "Payment", icon: CreditCard },
-  { label: "Medical History", icon: Heart },
   { label: "Symptoms", icon: Stethoscope },
+  { label: "Medical History", icon: Heart },
   { label: "Verification", icon: ScanLine },
+  { label: "Payment", icon: CreditCard },
   { label: "Review", icon: FileCheck },
 ] as const;
 
@@ -34,21 +35,40 @@ export default function IDVerificationPage() {
   const [verificationStatus, setVerificationStatus] = useState<"idle" | "verifying" | "verified" | "failed">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [isDevMode, setIsDevMode] = useState(false);
 
   const createVerificationSession = useAction(api.actions.stripeIdentity.createVerificationSession);
   const checkVerificationStatus = useAction(api.actions.stripeIdentity.checkVerificationStatus);
 
-  const currentStep = 3;
+  const currentStep = 2;
 
   useEffect(() => {
-    const storedIntakeId = localStorage.getItem("sxo_intake_id");
+    setIsDevMode(isDev());
+    const storedIntakeId = isDev()
+      ? DevIntakeStore.getId()
+      : localStorage.getItem("sxo_intake_id");
     if (!storedIntakeId) {
       router.push("/intake/medical-history");
     }
   }, [router]);
 
+  /** Dev mode: simulate identity verification */
+  function handleDevVerify() {
+    setVerificationStatus("verifying");
+    setTimeout(() => {
+      DevIntakeStore.updateStep("id_verification", true);
+      setVerificationStatus("verified");
+    }, 1500);
+  }
+
   async function handleVerifyIdentity() {
     if (!consent) return;
+
+    // Dev mode: simulate verification
+    if (isDevMode) {
+      handleDevVerify();
+      return;
+    }
 
     const session = getSessionCookie();
     if (!session?.email) {
@@ -92,7 +112,7 @@ export default function IDVerificationPage() {
         setVerificationStatus("verified");
       } else {
         setVerificationStatus("failed");
-        setErrorMessage(result.lastError?.message || "Verification was not completed");
+        setErrorMessage((result.lastError as any)?.message || "Verification was not completed");
       }
     } catch (err) {
       setVerificationStatus("failed");
@@ -101,7 +121,7 @@ export default function IDVerificationPage() {
   }
 
   function handleContinue() {
-    router.push("/intake/review");
+    router.push("/intake/payment");
   }
 
   return (
@@ -112,13 +132,13 @@ export default function IDVerificationPage() {
           <div className="max-w-2xl mb-12">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                Step 4 of 5
+                Step 3 of 5
               </span>
             </div>
             <div className="w-full h-px bg-border relative">
               <div
                 className="absolute top-0 left-0 h-px bg-brand-secondary transition-all duration-500"
-                style={{ width: "80%" }}
+                style={{ width: "60%" }}
               />
             </div>
             {/* Step indicators */}
@@ -182,8 +202,16 @@ export default function IDVerificationPage() {
               Identity Verification
             </h1>
             <p className="text-muted-foreground font-light">
-              Federal and state regulations require identity verification for telehealth prescriptions. We use Stripe Identity for secure, HIPAA-compliant verification.
+              Federal and state regulations require identity verification for telehealth prescriptions.
+              {isDevMode
+                ? " In dev mode, verification is simulated automatically."
+                : " We use Stripe Identity for secure, HIPAA-compliant verification."}
             </p>
+            {isDevMode && (
+              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] text-xs font-medium">
+                DEV MODE
+              </div>
+            )}
           </div>
 
           {/* Content */}
@@ -299,7 +327,7 @@ export default function IDVerificationPage() {
             {/* Navigation */}
             <div className="flex justify-between pt-6 border-t border-border">
               <button
-                onClick={() => router.push("/intake/symptoms")}
+                onClick={() => router.push("/intake/medical-history")}
                 className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
               >
                 <ArrowLeft size={16} aria-hidden="true" />
@@ -311,7 +339,7 @@ export default function IDVerificationPage() {
                   onClick={handleContinue}
                   className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-md"
                 >
-                  Continue to Review
+                  Continue to Payment
                   <ArrowRight size={16} aria-hidden="true" />
                 </button>
               ) : verificationStatus === "verifying" ? (

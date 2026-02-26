@@ -3,12 +3,15 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { requireCap, CAP } from "../lib/capabilities";
 
 export const generate = action({
   args: {
     prescriptionId: v.id("prescriptions"),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args): Promise<{ storageId: string; url: string }> => {
+    await requireCap(ctx, args.sessionToken, CAP.RX_VIEW);
     // Fetch prescription data
     const rx = await ctx.runQuery(api.prescriptions.getById, {
       prescriptionId: args.prescriptionId,
@@ -310,7 +313,7 @@ export const generate = action({
     const pdfBytes = await pdfDoc.save();
 
     // Store in Convex file storage
-    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
     const storageId = await ctx.storage.store(blob);
     const url = (await ctx.storage.getUrl(storageId)) ?? "";
 

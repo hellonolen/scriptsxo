@@ -1,88 +1,36 @@
-import type { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Search,
-  ArrowUpDown,
-  Eye,
-} from "lucide-react";
+import { ArrowLeft, Search, ArrowUpDown, Eye, Loader2 } from "lucide-react";
 import { Nav } from "@/components/nav";
 import { Badge } from "@/components/ui/badge";
-
-export const metadata: Metadata = {
-  title: "My Patients",
-  description: "View and manage your patient roster.",
-};
-
-const PATIENTS = [
-  {
-    name: "Amara Johnson",
-    initials: "AJ",
-    dob: "Mar 15, 1988",
-    lastVisit: "Feb 10, 2026",
-    activeRx: 3,
-    status: "active" as const,
-  },
-  {
-    name: "Marcus Rivera",
-    initials: "MR",
-    dob: "Jul 22, 1975",
-    lastVisit: "Feb 8, 2026",
-    activeRx: 1,
-    status: "active" as const,
-  },
-  {
-    name: "Elena Vasquez",
-    initials: "EV",
-    dob: "Nov 3, 1992",
-    lastVisit: "Feb 7, 2026",
-    activeRx: 2,
-    status: "active" as const,
-  },
-  {
-    name: "David Chen",
-    initials: "DC",
-    dob: "Jan 18, 1983",
-    lastVisit: "Feb 5, 2026",
-    activeRx: 4,
-    status: "active" as const,
-  },
-  {
-    name: "Sophia Patel",
-    initials: "SP",
-    dob: "Sep 9, 1996",
-    lastVisit: "Feb 3, 2026",
-    activeRx: 1,
-    status: "active" as const,
-  },
-  {
-    name: "Robert Williams",
-    initials: "RW",
-    dob: "Dec 1, 1968",
-    lastVisit: "Jan 22, 2026",
-    activeRx: 2,
-    status: "inactive" as const,
-  },
-  {
-    name: "Keiko Tanaka",
-    initials: "KT",
-    dob: "May 14, 1990",
-    lastVisit: "Jan 15, 2026",
-    activeRx: 0,
-    status: "inactive" as const,
-  },
-  {
-    name: "Thomas Grant",
-    initials: "TG",
-    dob: "Aug 27, 1971",
-    lastVisit: "Jan 8, 2026",
-    activeRx: 1,
-    status: "active" as const,
-  },
-] as const;
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 export default function PatientsPage() {
-  const activeCount = PATIENTS.filter((p) => p.status === "active").length;
+  const patients = useQuery(api.patients.listAll);
+
+  const isLoading = patients === undefined;
+  const activeCount = patients?.filter(
+    (p) => p.idVerificationStatus === "verified"
+  ).length ?? 0;
+
+  function getInitials(email: string): string {
+    const parts = email.split("@")[0].split(/[._-]/);
+    return parts
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? "")
+      .join("");
+  }
+
+  function formatDate(timestamp: number | undefined): string {
+    if (!timestamp) return "—";
+    return new Date(timestamp).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
 
   return (
     <>
@@ -110,7 +58,9 @@ export default function PatientsPage() {
                   My Patients
                 </h1>
                 <p className="text-muted-foreground font-light mt-1">
-                  {PATIENTS.length} patients -- {activeCount} active
+                  {isLoading
+                    ? "Loading..."
+                    : `${patients.length} patients — ${activeCount} verified`}
                 </p>
               </div>
             </div>
@@ -126,7 +76,7 @@ export default function PatientsPage() {
               />
               <input
                 type="text"
-                placeholder="Search by name, DOB, or condition..."
+                placeholder="Search by email or condition..."
                 className="w-full pl-11 pr-4 py-3 bg-card border border-border rounded-sm text-foreground placeholder-muted-foreground font-light text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 transition-shadow"
                 aria-label="Search patients"
               />
@@ -136,95 +86,123 @@ export default function PatientsPage() {
                 All
               </button>
               <button className="px-5 py-3 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors">
-                Active
+                Verified
               </button>
               <button className="px-5 py-3 border border-border text-muted-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors">
-                Inactive
+                Pending
               </button>
             </div>
           </div>
 
+          {/* Loading state */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-20">
+              <Loader2
+                size={24}
+                className="animate-spin text-primary"
+                aria-label="Loading patients"
+              />
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!isLoading && patients.length === 0 && (
+            <div className="text-center py-20">
+              <p className="text-muted-foreground font-light">
+                No patients on record yet.
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Patients will appear here after completing intake.
+              </p>
+            </div>
+          )}
+
           {/* Table */}
-          <div className="table-container">
-            <table className="table-custom">
-              <thead>
-                <tr>
-                  <th>
-                    <button className="flex items-center gap-1.5 text-xs tracking-[0.1em] uppercase font-light hover:text-foreground transition-colors">
-                      Name
-                      <ArrowUpDown size={12} aria-hidden="true" />
-                    </button>
-                  </th>
-                  <th>
-                    <button className="flex items-center gap-1.5 text-xs tracking-[0.1em] uppercase font-light hover:text-foreground transition-colors">
-                      DOB
-                      <ArrowUpDown size={12} aria-hidden="true" />
-                    </button>
-                  </th>
-                  <th>
-                    <button className="flex items-center gap-1.5 text-xs tracking-[0.1em] uppercase font-light hover:text-foreground transition-colors">
-                      Last Visit
-                      <ArrowUpDown size={12} aria-hidden="true" />
-                    </button>
-                  </th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">
-                    Active Rx
-                  </th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">
-                    Status
-                  </th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light text-right">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {PATIENTS.map((patient) => (
-                  <tr key={patient.name}>
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
-                          {patient.initials}
-                        </div>
-                        <span className="text-sm font-light text-foreground">
-                          {patient.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="text-sm font-light text-muted-foreground">
-                      {patient.dob}
-                    </td>
-                    <td className="text-sm font-light text-muted-foreground">
-                      {patient.lastVisit}
-                    </td>
-                    <td>
-                      <span className="text-sm font-light text-foreground">
-                        {patient.activeRx}
-                      </span>
-                    </td>
-                    <td>
-                      <Badge
-                        variant={
-                          patient.status === "active" ? "success" : "secondary"
-                        }
-                      >
-                        {patient.status}
-                      </Badge>
-                    </td>
-                    <td className="text-right">
-                      <Link
-                        href={`/provider/patients/${patient.initials.toLowerCase()}`}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors"
-                      >
-                        <Eye size={12} aria-hidden="true" />
-                        View
-                      </Link>
-                    </td>
+          {!isLoading && patients.length > 0 && (
+            <div className="table-container">
+              <table className="table-custom">
+                <thead>
+                  <tr>
+                    <th>
+                      <button className="flex items-center gap-1.5 text-xs tracking-[0.1em] uppercase font-light hover:text-foreground transition-colors">
+                        Patient
+                        <ArrowUpDown size={12} aria-hidden="true" />
+                      </button>
+                    </th>
+                    <th>
+                      <button className="flex items-center gap-1.5 text-xs tracking-[0.1em] uppercase font-light hover:text-foreground transition-colors">
+                        DOB
+                        <ArrowUpDown size={12} aria-hidden="true" />
+                      </button>
+                    </th>
+                    <th>
+                      <button className="flex items-center gap-1.5 text-xs tracking-[0.1em] uppercase font-light hover:text-foreground transition-colors">
+                        Registered
+                        <ArrowUpDown size={12} aria-hidden="true" />
+                      </button>
+                    </th>
+                    <th className="text-xs tracking-[0.1em] uppercase font-light">
+                      State
+                    </th>
+                    <th className="text-xs tracking-[0.1em] uppercase font-light">
+                      ID Status
+                    </th>
+                    <th className="text-xs tracking-[0.1em] uppercase font-light text-right">
+                      Action
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {patients.map((patient) => {
+                    const initials = getInitials(patient.email);
+                    const isVerified =
+                      patient.idVerificationStatus === "verified";
+                    return (
+                      <tr key={patient._id}>
+                        <td>
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
+                              {initials}
+                            </div>
+                            <span className="text-sm font-light text-foreground">
+                              {patient.email}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="text-sm font-light text-muted-foreground">
+                          {patient.dateOfBirth || "—"}
+                        </td>
+                        <td className="text-sm font-light text-muted-foreground">
+                          {formatDate(patient.createdAt)}
+                        </td>
+                        <td>
+                          <span className="text-sm font-light text-foreground">
+                            {patient.state || "—"}
+                          </span>
+                        </td>
+                        <td>
+                          <Badge
+                            variant={isVerified ? "success" : "secondary"}
+                          >
+                            {patient.idVerificationStatus}
+                          </Badge>
+                        </td>
+                        <td className="text-right">
+                          <Link
+                            href={`/provider/patients/${patient._id}`}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors"
+                          >
+                            <Eye size={12} aria-hidden="true" />
+                            View
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </main>
     </>

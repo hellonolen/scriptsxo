@@ -1,9 +1,12 @@
 // @ts-nocheck
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireCap, requireAnyCap } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
+    sessionToken: v.string(),
     consultationId: v.id("consultations"),
     patientId: v.id("patients"),
     providerId: v.id("providers"),
@@ -22,9 +25,11 @@ export const create = mutation({
     priorAuthRequired: v.boolean(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.sessionToken, CAP.RX_WRITE);
     const now = Date.now();
+    const { sessionToken, ...rxData } = args;
     return await ctx.db.insert("prescriptions", {
-      ...args,
+      ...rxData,
       refillsUsed: 0,
       status: "draft",
       ePrescribeId: undefined,
@@ -44,10 +49,12 @@ export const create = mutation({
 
 export const sign = mutation({
   args: {
+    sessionToken: v.string(),
     prescriptionId: v.id("prescriptions"),
     providerId: v.id("providers"),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.sessionToken, CAP.RX_SIGN);
     const rx = await ctx.db.get(args.prescriptionId);
     if (!rx) throw new Error("Prescription not found");
 
@@ -65,11 +72,13 @@ export const sign = mutation({
 
 export const sendToPharmacy = mutation({
   args: {
+    sessionToken: v.string(),
     prescriptionId: v.id("prescriptions"),
     pharmacyId: v.id("pharmacies"),
     ePrescribeId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.sessionToken, CAP.RX_WRITE);
     const rx = await ctx.db.get(args.prescriptionId);
     if (!rx) throw new Error("Prescription not found");
 
@@ -90,10 +99,12 @@ export const sendToPharmacy = mutation({
 
 export const updateStatus = mutation({
   args: {
+    sessionToken: v.string(),
     prescriptionId: v.id("prescriptions"),
     status: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.sessionToken, [CAP.PHARMACY_FILL, CAP.RX_WRITE]);
     const updates: Record<string, unknown> = {
       status: args.status,
       updatedAt: Date.now(),
@@ -200,12 +211,101 @@ export const listRecent = query({
   },
 });
 
+/**
+ * Get prescriptions for a provider resolved by member email.
+ * Used by the provider portal — provider identity comes from session email.
+ * Returns prescriptions enriched with patientName and patientInitials.
+ */
+export const getByProviderEmail = query({
+  args: { providerEmail: v.string() },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db
+      .query("providers")
+      .withIndex("by_email", (q) => q.eq("email", args.providerEmail.toLowerCase()))
+      .first();
+
+    if (!provider) return [];
+
+    const prescriptions = await ctx.db
+      .query("prescriptions")
+      .withIndex("by_providerId", (q) => q.eq("providerId", provider._id))
+      .order("desc")
+      .collect();
+
+    const enriched = await Promise.all(
+      prescriptions.map(async (rx) => {
+        const patient = await ctx.db.get(rx.patientId);
+        const patientMember = patient
+          ? await ctx.db
+              .query("members")
+              .withIndex("by_email", (q) => q.eq("email", patient.email))
+              .first()
+          : null;
+        const patientName = patientMember?.name ?? patient?.email ?? "Unknown";
+        const patientInitials = patientName
+          .split(" ")
+          .map((w: string) => w[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2);
+        return { ...rx, patientName, patientInitials };
+      })
+    );
+
+    return enriched;
+  },
+});
+
+/**
+ * Sign a prescription using the provider's email (resolved from session cookie).
+ * This is the UI-friendly variant — the provider portal calls this instead of
+ * the sessionToken-based sign() mutation.
+ */
+export const signForProvider = mutation({
+  args: {
+    prescriptionId: v.id("prescriptions"),
+    providerEmail: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db
+      .query("providers")
+      .withIndex("by_email", (q) => q.eq("email", args.providerEmail.toLowerCase()))
+      .first();
+
+    if (!provider) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Provider record not found." });
+    }
+
+    const rx = await ctx.db.get(args.prescriptionId);
+    if (!rx) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Prescription not found." });
+    }
+
+    if (rx.status !== "draft" && rx.status !== "pending_review") {
+      throw new ConvexError({ code: "CONFLICT", message: "Prescription cannot be signed in its current state." });
+    }
+
+    if (rx.providerId !== provider._id) {
+      throw new ConvexError({ code: "FORBIDDEN", message: "Only the prescribing provider can sign this prescription." });
+    }
+
+    await ctx.db.patch(args.prescriptionId, {
+      status: "signed",
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
 export const requestRefill = mutation({
   args: {
+    sessionToken: v.string(),
     prescriptionId: v.id("prescriptions"),
     patientId: v.id("patients"),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.sessionToken, CAP.RX_REFILL);
     const rx = await ctx.db.get(args.prescriptionId);
     if (!rx) {
       throw new Error("Prescription not found");

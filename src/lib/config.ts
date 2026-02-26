@@ -29,17 +29,21 @@ export const SITECONFIG = {
     adminEmails: [
       "hellonolen@gmail.com",
       "nolen@doclish.com",
+      "nolen@scriptsxo.com",
     ],
+    // Provider and pharmacy roles are assigned by the agentic
+    // credential verification pipeline — no manual email lists needed.
   },
   billing: {
     provider: "Whop" as const,
     currency: "USD",
-    membershipFee: 9700, // $97/month in cents
-    providerCallFee: 19700, // $197 per 15-min same-day provider call in cents
+    membershipFee: 9700, // $97/month in cents — includes Office Hours
+    providerCallFee: 19700, // $197 per 15-min same-day provider consultation in cents
     providerCallDuration: 15, // minutes
     billingInterval: "monthly" as const,
     cancelAnytime: true,
     noRefund: true,
+    officeHoursIncluded: true, // weekly nurse Q&A included with membership
   },
   content: {
     stats: {
@@ -57,7 +61,24 @@ export const SITECONFIG = {
     enableAITriage: true,
     enableEPrescribe: true,
     enableAnalytics: true,
+    enableOfficeHours: true,
     maintenanceMode: false,
+  },
+  memberRequirements: {
+    governmentId: true,
+    activeCreditCard: true,
+    activeSubscription: true,
+  },
+  /**
+   * Terminology config — swap "patient" ↔ "client" across the entire UI
+   * without touching DB schema or internal role identifiers.
+   * Change clientTerm / clientTermPlural here to rebrand globally.
+   */
+  terminology: {
+    clientTerm: "client",         // singular: "client" or "patient"
+    clientTermPlural: "clients",  // plural:   "clients" or "patients"
+    clientTermTitle: "Client",    // title case
+    clientTermPluralTitle: "Clients",
   },
   social: { twitter: "", instagram: "", facebook: "", linkedin: "" },
   legal: {
@@ -91,6 +112,28 @@ export const SITECONFIG = {
 } as const;
 
 export type SiteConfig = typeof SITECONFIG;
+
+/**
+ * Returns the configured display term for the consumer role.
+ * Use instead of hardcoding "patient" anywhere in the UI.
+ *
+ * Examples:
+ *   term()           → "client"
+ *   term("plural")   → "clients"
+ *   term("title")    → "Client"
+ *   term("titlePlural") → "Clients"
+ */
+export function term(
+  form: "singular" | "plural" | "title" | "titlePlural" = "singular"
+): string {
+  const t = SITECONFIG.terminology;
+  switch (form) {
+    case "plural":      return t.clientTermPlural;
+    case "title":       return t.clientTermTitle;
+    case "titlePlural": return t.clientTermPluralTitle;
+    default:            return t.clientTerm;
+  }
+}
 
 export function formatPrice(cents: number): string {
   return new Intl.NumberFormat("en-US", {

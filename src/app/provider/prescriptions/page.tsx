@@ -1,214 +1,293 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { getSessionCookie } from "@/lib/auth";
 import {
   ArrowLeft,
   FileSignature,
   Eye,
   RefreshCw,
+  Send,
+  Loader2,
 } from "lucide-react";
-import { Nav } from "@/components/nav";
+import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 
-export const metadata: Metadata = {
-  title: "Provider Prescriptions",
-  description: "Review, sign, and manage prescription requests.",
-};
+/* ---------------------------------------------------------------------------
+   Types & constants
+   --------------------------------------------------------------------------- */
 
-type RxStatus = "signed" | "pending_review" | "sent" | "filling";
+type RxStatus =
+  | "draft"
+  | "signed"
+  | "pending_review"
+  | "sent"
+  | "filling"
+  | "ready"
+  | "picked_up"
+  | "delivered"
+  | "cancelled";
 
-const STATUS_VARIANT: Record<RxStatus, "success" | "warning" | "info" | "default"> = {
+const STATUS_VARIANT: Record<
+  RxStatus,
+  "success" | "warning" | "info" | "default" | "error"
+> = {
+  draft: "default",
   signed: "success",
   pending_review: "warning",
   sent: "info",
   filling: "default",
+  ready: "success",
+  picked_up: "success",
+  delivered: "success",
+  cancelled: "error",
 };
 
 const STATUS_LABEL: Record<RxStatus, string> = {
+  draft: "Draft",
   signed: "Signed",
   pending_review: "Pending Review",
   sent: "Sent to Pharmacy",
   filling: "Filling",
+  ready: "Ready",
+  picked_up: "Picked Up",
+  delivered: "Delivered",
+  cancelled: "Cancelled",
 };
 
-const PRESCRIPTIONS = [
-  {
-    patient: "Amara Johnson",
-    initials: "AJ",
-    medication: "Amoxicillin 500mg",
-    dosage: "3x daily, 10 days",
-    status: "pending_review" as RxStatus,
-    prescribed: "Feb 12, 2026",
-    refills: 0,
-  },
-  {
-    patient: "Marcus Rivera",
-    initials: "MR",
-    medication: "Lisinopril 10mg",
-    dosage: "1x daily, ongoing",
-    status: "signed" as RxStatus,
-    prescribed: "Feb 10, 2026",
-    refills: 3,
-  },
-  {
-    patient: "Elena Vasquez",
-    initials: "EV",
-    medication: "Fluconazole 150mg",
-    dosage: "Single dose",
-    status: "pending_review" as RxStatus,
-    prescribed: "Feb 12, 2026",
-    refills: 0,
-  },
-  {
-    patient: "David Chen",
-    initials: "DC",
-    medication: "Metformin 850mg",
-    dosage: "2x daily, ongoing",
-    status: "sent" as RxStatus,
-    prescribed: "Feb 8, 2026",
-    refills: 5,
-  },
-  {
-    patient: "Sophia Patel",
-    initials: "SP",
-    medication: "Sertraline 50mg",
-    dosage: "1x daily, ongoing",
-    status: "filling" as RxStatus,
-    prescribed: "Feb 5, 2026",
-    refills: 2,
-  },
-  {
-    patient: "Thomas Grant",
-    initials: "TG",
-    medication: "Atorvastatin 20mg",
-    dosage: "1x daily, ongoing",
-    status: "signed" as RxStatus,
-    prescribed: "Feb 3, 2026",
-    refills: 6,
-  },
-] as const;
+type FilterTab = "All" | "Pending Review" | "Active" | "Expired";
 
-const FILTER_TABS = [
-  { label: "All", count: PRESCRIPTIONS.length },
-  {
-    label: "Pending Review",
-    count: PRESCRIPTIONS.filter((rx) => rx.status === "pending_review").length,
-  },
-  {
-    label: "Active",
-    count: PRESCRIPTIONS.filter(
-      (rx) => rx.status === "signed" || rx.status === "sent" || rx.status === "filling"
-    ).length,
-  },
-  {
-    label: "Expired",
-    count: 0,
-  },
-] as const;
+/* ---------------------------------------------------------------------------
+   Helper — format a timestamp as a readable date
+   --------------------------------------------------------------------------- */
+
+function formatDate(ts: number): string {
+  return new Date(ts).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/* ---------------------------------------------------------------------------
+   Page
+   --------------------------------------------------------------------------- */
 
 export default function ProviderPrescriptionsPage() {
+  const session = getSessionCookie();
+  const providerEmail = session?.email;
+
+  const [activeTab, setActiveTab] = useState<FilterTab>("All");
+  const [signingId, setSigningId] = useState<string | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Query real prescriptions from Convex
+  const prescriptions = useQuery(
+    api.prescriptions.getByProviderEmail,
+    providerEmail ? { providerEmail } : "skip"
+  );
+
+  const signForProvider = useMutation(api.prescriptions.signForProvider);
+
+  // Filter prescriptions by tab
+  const now = Date.now();
+  const filtered = (prescriptions ?? []).filter((rx) => {
+    if (activeTab === "All") return true;
+    if (activeTab === "Pending Review") {
+      return rx.status === "pending_review" || rx.status === "draft";
+    }
+    if (activeTab === "Active") {
+      return (
+        rx.status === "signed" ||
+        rx.status === "sent" ||
+        rx.status === "filling" ||
+        rx.status === "ready"
+      );
+    }
+    if (activeTab === "Expired") {
+      return rx.status === "cancelled" || (rx.expiresAt && rx.expiresAt < now);
+    }
+    return true;
+  });
+
+  // Tab counts from real data
+  const counts = {
+    All: (prescriptions ?? []).length,
+    "Pending Review": (prescriptions ?? []).filter(
+      (rx) => rx.status === "pending_review" || rx.status === "draft"
+    ).length,
+    Active: (prescriptions ?? []).filter(
+      (rx) =>
+        rx.status === "signed" ||
+        rx.status === "sent" ||
+        rx.status === "filling" ||
+        rx.status === "ready"
+    ).length,
+    Expired: (prescriptions ?? []).filter(
+      (rx) => rx.status === "cancelled" || (rx.expiresAt && rx.expiresAt < now)
+    ).length,
+  };
+
+  async function handleSign(prescriptionId: string) {
+    if (!providerEmail) return;
+    setSigningId(prescriptionId);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      await signForProvider({
+        prescriptionId: prescriptionId as any,
+        providerEmail,
+      });
+      setSuccessMsg("Prescription signed successfully.");
+    } catch (err: any) {
+      setErrorMsg(err?.message ?? "Failed to sign prescription.");
+    } finally {
+      setSigningId(null);
+    }
+  }
+
+  const tabs: FilterTab[] = ["All", "Pending Review", "Active", "Expired"];
+
   return (
-    <>
-      <Nav />
-      <main className="min-h-screen pt-24 pb-20 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-[1400px] mx-auto">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10 pb-8 border-b border-border">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/provider"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Back to provider dashboard"
-              >
-                <ArrowLeft size={20} aria-hidden="true" />
-              </Link>
-              <div>
-                <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase mb-2 font-light">
-                  Provider Portal
-                </p>
-                <h1
-                  className="text-3xl lg:text-4xl text-foreground font-light tracking-tight"
-                  style={{ fontFamily: "var(--font-heading)" }}
-                >
-                  Prescriptions
-                </h1>
-                <p className="text-muted-foreground font-light mt-1">
-                  Review, sign, and manage prescription requests.
-                </p>
-              </div>
-            </div>
+    <AppShell>
+      <div className="p-6 lg:p-10 max-w-[1200px]">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-2">
+          <Link
+            href="/provider"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft size={20} aria-hidden="true" />
+          </Link>
+          <div>
+            <p className="eyebrow mb-0.5">PROVIDER PORTAL</p>
+            <h1
+              className="text-2xl lg:text-3xl font-light text-foreground tracking-[-0.02em]"
+              style={{ fontFamily: "var(--font-heading)" }}
+            >
+              Prescriptions
+            </h1>
           </div>
+        </div>
+        <p className="text-muted-foreground font-light mb-8 ml-8">
+          Review, sign, and manage prescription requests.
+        </p>
 
-          {/* Filter Tabs */}
-          <div className="flex gap-2 mb-8 overflow-x-auto pb-1">
-            {FILTER_TABS.map((tab, index) => (
-              <button
-                key={tab.label}
-                className={`px-5 py-3 text-[10px] tracking-[0.15em] uppercase font-light rounded-sm transition-colors whitespace-nowrap ${
-                  index === 0
-                    ? "bg-foreground text-background"
-                    : "border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                {tab.label}
-                <span className="ml-2 opacity-60">{tab.count}</span>
-              </button>
-            ))}
+        {/* Error / success banners */}
+        {errorMsg && (
+          <div className="mb-6 px-4 py-3 rounded-md border border-red-200 bg-red-50 text-sm text-red-700 font-light">
+            {errorMsg}
           </div>
+        )}
+        {successMsg && (
+          <div className="mb-6 px-4 py-3 rounded-md border border-green-200 bg-green-50 text-sm text-green-700 font-light">
+            {successMsg}
+          </div>
+        )}
 
-          {/* Table */}
-          <div className="table-container">
-            <table className="table-custom">
-              <thead>
+        {/* Filter Tabs */}
+        <div className="flex gap-2 mb-8 overflow-x-auto pb-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-3 text-[10px] tracking-[0.15em] uppercase font-light rounded-sm transition-colors whitespace-nowrap ${
+                activeTab === tab
+                  ? "bg-foreground text-background"
+                  : "border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              {tab}
+              <span className="ml-2 opacity-60">{counts[tab]}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Table */}
+        <div className="table-container">
+          <table className="table-custom">
+            <thead>
+              <tr>
+                <th className="text-xs tracking-[0.1em] uppercase font-light">
+                  Patient
+                </th>
+                <th className="text-xs tracking-[0.1em] uppercase font-light">
+                  Medication
+                </th>
+                <th className="text-xs tracking-[0.1em] uppercase font-light">
+                  Dosage
+                </th>
+                <th className="text-xs tracking-[0.1em] uppercase font-light">
+                  Status
+                </th>
+                <th className="text-xs tracking-[0.1em] uppercase font-light">
+                  Prescribed
+                </th>
+                <th className="text-xs tracking-[0.1em] uppercase font-light">
+                  Refills
+                </th>
+                <th className="text-xs tracking-[0.1em] uppercase font-light text-right">
+                  Action
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {prescriptions === undefined ? (
                 <tr>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">
-                    Patient
-                  </th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">
-                    Medication
-                  </th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">
-                    Dosage
-                  </th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">
-                    Status
-                  </th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">
-                    Prescribed
-                  </th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light">
-                    Refills
-                  </th>
-                  <th className="text-xs tracking-[0.1em] uppercase font-light text-right">
-                    Action
-                  </th>
+                  <td
+                    colSpan={7}
+                    className="text-center py-10 text-sm text-muted-foreground font-light"
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                      Loading prescriptions...
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {PRESCRIPTIONS.map((rx) => (
-                  <tr key={`${rx.patient}-${rx.medication}`}>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="text-center py-10 text-sm text-muted-foreground font-light"
+                  >
+                    No prescriptions yet
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((rx) => (
+                  <tr key={rx._id}>
                     <td>
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
-                          {rx.initials}
+                          {rx.patientInitials ?? "??"}
                         </div>
                         <span className="text-sm font-light text-foreground">
-                          {rx.patient}
+                          {rx.patientName ?? "Unknown"}
                         </span>
                       </div>
                     </td>
                     <td className="text-sm font-light text-foreground">
-                      {rx.medication}
+                      {rx.medicationName}
                     </td>
                     <td className="text-sm font-light text-muted-foreground">
                       {rx.dosage}
                     </td>
                     <td>
-                      <Badge variant={STATUS_VARIANT[rx.status]}>
-                        {STATUS_LABEL[rx.status]}
+                      <Badge
+                        variant={
+                          STATUS_VARIANT[rx.status as RxStatus] ?? "default"
+                        }
+                      >
+                        {STATUS_LABEL[rx.status as RxStatus] ?? rx.status}
                       </Badge>
                     </td>
                     <td className="text-sm font-light text-muted-foreground">
-                      {rx.prescribed}
+                      {formatDate(rx.createdAt)}
                     </td>
                     <td>
                       <div className="flex items-center gap-1.5">
@@ -218,16 +297,37 @@ export default function ProviderPrescriptionsPage() {
                           aria-hidden="true"
                         />
                         <span className="text-sm font-light text-foreground">
-                          {rx.refills}
+                          {rx.refillsAuthorized - rx.refillsUsed} / {rx.refillsAuthorized}
                         </span>
                       </div>
                     </td>
                     <td className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {rx.status === "pending_review" && (
-                          <button className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors">
-                            <FileSignature size={12} aria-hidden="true" />
+                        {(rx.status === "pending_review" || rx.status === "draft") && (
+                          <button
+                            onClick={() => handleSign(rx._id)}
+                            disabled={signingId === rx._id}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {signingId === rx._id ? (
+                              <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+                            ) : (
+                              <FileSignature size={12} aria-hidden="true" />
+                            )}
                             Sign
+                          </button>
+                        )}
+                        {rx.status === "signed" && (
+                          <button
+                            disabled={sendingId === rx._id}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {sendingId === rx._id ? (
+                              <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+                            ) : (
+                              <Send size={11} aria-hidden="true" />
+                            )}
+                            Send to Pharmacy
                           </button>
                         )}
                         <button className="inline-flex items-center gap-1.5 px-4 py-2 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors">
@@ -237,12 +337,12 @@ export default function ProviderPrescriptionsPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      </main>
-    </>
+      </div>
+    </AppShell>
   );
 }

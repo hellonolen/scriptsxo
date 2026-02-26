@@ -63,12 +63,17 @@ if [ "$CONVEX_ONLY" = false ]; then
   ok "Cloudflare authenticated"
 fi
 
+# Release gate: AUTH_BYPASS_ALLOWED must not be true in production
+if [ "${AUTH_BYPASS_ALLOWED:-}" = "true" ]; then
+  fail "AUTH_BYPASS_ALLOWED=true is set. This must never be enabled in production."
+fi
+
 # ==============================================================================
 # Step 2: Deploy Convex (backend functions + schema)
 # ==============================================================================
 if [ "$FRONTEND_ONLY" = false ]; then
   log "Deploying Convex functions to production..."
-  npx convex deploy --cmd 'echo skip'
+  npx convex deploy --yes --cmd 'echo skip'
   ok "Convex deployed to prod:striped-caribou-797"
 fi
 

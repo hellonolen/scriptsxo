@@ -1,14 +1,18 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireAnyCap } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
+    sessionToken: v.string(),
     email: v.string(),
     patientId: v.optional(v.id("patients")),
     chiefComplaint: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.sessionToken, [CAP.INTAKE_SELF, CAP.INTAKE_REVIEW]);
     const now = Date.now();
     return await ctx.db.insert("intakes", {
       email: args.email.toLowerCase(),
@@ -34,11 +38,13 @@ export const create = mutation({
 
 export const updateStep = mutation({
   args: {
+    sessionToken: v.string(),
     intakeId: v.id("intakes"),
     stepName: v.string(),
     data: v.any(),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.sessionToken, [CAP.INTAKE_SELF, CAP.INTAKE_REVIEW]);
     const intake = await ctx.db.get(args.intakeId);
     if (!intake) throw new Error("Intake not found");
 
@@ -80,9 +86,11 @@ export const updateStep = mutation({
 
 export const complete = mutation({
   args: {
+    sessionToken: v.string(),
     intakeId: v.id("intakes"),
   },
   handler: async (ctx, args) => {
+    await requireAnyCap(ctx, args.sessionToken, [CAP.INTAKE_SELF, CAP.INTAKE_REVIEW]);
     const intake = await ctx.db.get(args.intakeId);
     if (!intake) throw new Error("Intake not found");
 

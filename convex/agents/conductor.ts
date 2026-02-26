@@ -6,14 +6,18 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "../_generated/api";
+import { requireCap } from "../lib/serverAuth";
+import { CAP } from "../lib/capabilities";
 
 export const dispatch = action({
   args: {
     agentName: v.string(),
     action: v.string(),
     input: v.any(),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireCap(ctx, args.sessionToken, CAP.VIEW_DASHBOARD);
     const startTime = Date.now();
 
     try {
@@ -73,6 +77,22 @@ export const dispatch = action({
             api.agents.qualityAgent.run,
             args.input
           );
+          break;
+        case "credentialVerification":
+          // Route to credential verification agent
+          result = await ctx.runAction(
+            api.agents.credentialVerificationAgent[args.input.method || "verifyProviderNpi"],
+            args.input.params || {}
+          );
+          break;
+        case "composio":
+          // Route to Composio for external service integrations
+          result = await ctx.runAction(api.integrations.composio.execute, {
+            toolkit: args.input.toolkit,
+            actionName: args.input.actionName,
+            params: args.input.params || {},
+            userId: args.input.userId,
+          });
           break;
         default:
           throw new Error(`Unknown agent: ${args.agentName}`);

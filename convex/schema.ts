@@ -34,6 +34,17 @@ export default defineSchema({
     rateLimitKey: v.optional(v.string()),
   }).index("by_challenge", ["challenge"]),
 
+  // === MAGIC LINK CODES (email-based auth fallback) ===
+  magicLinks: defineTable({
+    email: v.string(),
+    code: v.string(),
+    expiresAt: v.number(),
+    consumed: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_email_code", ["email", "code"]),
+
   // === ORGANIZATIONS ===
   organizations: defineTable({
     name: v.string(),
@@ -44,12 +55,18 @@ export default defineSchema({
     whopMembershipId: v.optional(v.string()),
     maxProviders: v.optional(v.number()),
     maxPatients: v.optional(v.number()),
+    // Capability overrides — applied to all members of this org (deny wins)
+    capAllow: v.optional(v.array(v.string())),
+    capDeny: v.optional(v.array(v.string())),
     createdAt: v.number(),
   })
     .index("by_slug", ["slug"])
     .index("by_type", ["type"]),
 
-  // === MEMBERS (users of the system) ===
+  // === MEMBERS (one row per user-per-org membership) ===
+  // Each row is a scoped membership: a user may have multiple rows across orgs.
+  // orgId is optional for standalone users (patients, solo providers).
+  // requireOrgMember() verifies member.orgId === targetOrgId before org mutations.
   members: defineTable({
     orgId: v.optional(v.id("organizations")),
     email: v.string(),
@@ -61,6 +78,12 @@ export default defineSchema({
     role: v.string(), // "patient" | "provider" | "pharmacist" | "admin" | "staff"
     orgRole: v.optional(v.string()), // "owner" | "admin" | "member" — role within the org
     permissions: v.array(v.string()),
+    // Platform owner — grants all capabilities; set only via grantPlatformOwner mutation
+    // or seed script. Never set programmatically based on email.
+    isPlatformOwner: v.optional(v.boolean()),
+    // Per-member capability overrides (applied after role bundle + org overrides; deny wins)
+    capAllow: v.optional(v.array(v.string())),
+    capDeny: v.optional(v.array(v.string())),
     status: v.string(),
     avatar: v.optional(v.string()),
     governmentIdUrl: v.optional(v.string()),
@@ -405,7 +428,7 @@ export default defineSchema({
     .index("by_agentName", ["agentName"])
     .index("by_createdAt", ["createdAt"]),
 
-  // === AUDIT LOG ===
+  // === AUDIT LOG (general) ===
   auditLog: defineTable({
     action: v.string(),
     actorEmail: v.string(),
@@ -419,6 +442,39 @@ export default defineSchema({
     .index("by_actorEmail", ["actorEmail"])
     .index("by_entityType_entityId", ["entityType", "entityId"])
     .index("by_createdAt", ["createdAt"]),
+
+  // === SECURITY EVENTS (append-only privileged-action trail) ===
+  // Logged for: role changes, platform owner grant/revoke, cap overrides, PHI exports.
+  // Rows are NEVER deleted or updated — immutable audit record.
+  securityEvents: defineTable({
+    action: v.string(),           // e.g. "PLATFORM_OWNER_GRANT_REQUESTED", "ROLE_CHANGE"
+    actorMemberId: v.optional(v.string()),
+    actorOrgId: v.optional(v.string()),
+    targetId: v.optional(v.string()),
+    targetType: v.optional(v.string()),  // "member" | "org" | "platform"
+    diff: v.optional(v.any()),           // { from, to }
+    success: v.boolean(),
+    reason: v.optional(v.string()),      // failure reason or descriptive context
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("by_action", ["action"])
+    .index("by_actorMemberId", ["actorMemberId"])
+    .index("by_timestamp", ["timestamp"]),
+
+  // === PENDING PLATFORM OWNER GRANTS (two-step cooldown) ===
+  // Created by requestPlatformOwnerGrant, confirmed after 60s by confirmPlatformOwnerGrant.
+  pendingPlatformOwnerGrants: defineTable({
+    requestedBy: v.id("members"),
+    targetMemberId: v.id("members"),
+    requestedAt: v.number(),
+    confirmsAfter: v.number(),  // requestedAt + 60_000 (60s cooldown)
+    expiresAt: v.number(),      // requestedAt + 300_000 (5 min confirmation window)
+    status: v.string(),         // "pending" | "confirmed" | "cancelled" | "expired"
+  })
+    .index("by_requestedBy", ["requestedBy"])
+    .index("by_status", ["status"]),
 
   // === MESSAGES (patient-provider) ===
   messages: defineTable({
@@ -487,6 +543,58 @@ export default defineSchema({
     updatedBy: v.optional(v.string()),
   }).index("by_key", ["key"]),
 
+  // === CREDENTIAL VERIFICATIONS (agentic role verification pipeline) ===
+  credentialVerifications: defineTable({
+    memberId: v.id("members"),
+    email: v.string(),
+    selectedRole: v.string(), // "patient" | "provider" | "pharmacy"
+    status: v.string(), // "pending" | "in_progress" | "verified" | "rejected" | "expired"
+    currentStep: v.string(), // e.g. "role_selected" | "npi_check" | "license_scan" | "dea_entry" | "compliance_review" | "stripe_identity" | "ncpdp_check" | "complete"
+    completedSteps: v.array(v.string()),
+
+    // === Provider-specific verification data ===
+    providerNpi: v.optional(v.string()),
+    providerNpiResult: v.optional(v.any()), // NPI Registry response data
+    providerLicenseFileId: v.optional(v.string()), // file storage ID for license scan
+    providerLicenseScanResult: v.optional(v.any()), // Gemini OCR result
+    providerDeaNumber: v.optional(v.string()),
+    providerTitle: v.optional(v.string()), // "MD" | "DO" | "PA" | "NP" | "APRN"
+    providerSpecialties: v.optional(v.array(v.string())),
+    providerLicensedStates: v.optional(v.array(v.string())),
+
+    // === Patient-specific verification data ===
+    patientStripeSessionId: v.optional(v.string()),
+    patientStripeStatus: v.optional(v.string()), // "requires_input" | "processing" | "verified" | "canceled"
+    patientIdScanResult: v.optional(v.any()), // Gemini or Stripe result
+
+    // === Pharmacy-specific verification data ===
+    pharmacyNcpdpId: v.optional(v.string()),
+    pharmacyNpi: v.optional(v.string()),
+    pharmacyName: v.optional(v.string()),
+    pharmacyRegistryResult: v.optional(v.any()), // lookup result
+
+    // === Compliance / AI review ===
+    complianceSummary: v.optional(v.any()), // compliance agent output
+    complianceRecordIds: v.optional(v.array(v.string())), // IDs of created complianceRecords
+
+    // === Error tracking ===
+    errors: v.optional(v.array(v.object({
+      step: v.string(),
+      message: v.string(),
+      timestamp: v.number(),
+    }))),
+    retryCount: v.optional(v.number()),
+
+    // === Timestamps ===
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_memberId", ["memberId"])
+    .index("by_email", ["email"])
+    .index("by_status", ["status"])
+    .index("by_selectedRole", ["selectedRole"]),
+
   // === FAX LOGS ===
   faxLogs: defineTable({
     prescriptionId: v.id("prescriptions"),
@@ -505,6 +613,23 @@ export default defineSchema({
     .index("by_prescriptionId", ["prescriptionId"])
     .index("by_pharmacyId", ["pharmacyId"])
     .index("by_status", ["status"])
-    .index("by_createdAt", ["createdAt"])
-    .index("by_phaxioFaxId", ["phaxioFaxId"]),
+    .index("by_createdAt", ["createdAt"]),
+
+  // === SERVER SESSIONS (replaces client-supplied callerId) ===
+  // Created by passkey/magic link auth mutations. Clients present sessionToken
+  // (opaque, random) instead of memberId. Server resolves identity from this table.
+  // callerId is NEVER accepted from clients in production — the session IS the identity.
+  sessions: defineTable({
+    sessionToken: v.string(),           // opaque random token stored in cookie
+    memberId: v.id("members"),          // resolved server-side, never from client
+    email: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    userAgent: v.optional(v.string()),
+    ipAddress: v.optional(v.string()),
+  })
+    .index("by_token", ["sessionToken"])
+    .index("by_memberId", ["memberId"])
+    .index("by_email", ["email"]),
 });

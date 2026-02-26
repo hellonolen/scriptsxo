@@ -1,16 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CreditCard, Receipt, Download, DollarSign } from "lucide-react";
+import { CreditCard, Receipt, Download, DollarSign, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { formatPrice } from "@/lib/config";
-
-/* ---------------------------------------------------------------------------
-   PAGE
-   --------------------------------------------------------------------------- */
 
 export default function BillingPage() {
   const [email, setEmail] = useState<string | null>(null);
@@ -24,32 +20,24 @@ export default function BillingPage() {
     setSessionChecked(true);
   }, []);
 
-  // Fetch patient data
   const patient = useQuery(
     api.patients.getByEmail,
     email ? { email } : "skip"
   );
 
-  // Fetch billing records
   const billingRecords = useQuery(
     api.billing.getByPatient,
     patient ? { patientId: patient._id } : "skip"
   );
 
-  // Loading state — only show spinner while genuinely loading.
-  // When session has been checked and email is null, queries are skipped — not loading.
-  // When patient is null (not found), billing is skipped — treat as empty, not loading.
-  const isLoading = !sessionChecked
-    || (email !== null && patient === undefined)
-    || (patient && billingRecords === undefined);
-
-  if (isLoading) {
+  // Loading state
+  if (!sessionChecked || (email !== null && (patient === undefined || billingRecords === undefined))) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1100px]">
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "#7C3AED", borderTopColor: "transparent" }} />
+              <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
               <p className="text-sm text-muted-foreground">Loading billing...</p>
             </div>
           </div>
@@ -57,6 +45,8 @@ export default function BillingPage() {
       </AppShell>
     );
   }
+
+  const billList = billingRecords ?? [];
 
   return (
     <AppShell>
@@ -88,7 +78,7 @@ export default function BillingPage() {
                     Payment on file
                   </p>
                   <p className="text-[12px] text-muted-foreground font-light">
-                    Managed via Whop
+                    Managed via Stripe
                   </p>
                 </div>
               </div>
@@ -103,9 +93,9 @@ export default function BillingPage() {
         <section>
           <p className="eyebrow mb-4">Payment History</p>
 
-          {billingRecords && billingRecords.length > 0 ? (
+          {billList.length > 0 ? (
             <div className="glass-card p-0 divide-y divide-border">
-              {billingRecords.map((payment) => (
+              {billList.map((payment: any) => (
                 <div
                   key={payment._id}
                   className="flex items-center justify-between px-6 py-4"
@@ -118,7 +108,7 @@ export default function BillingPage() {
                     </div>
                     <div>
                       <p className="text-[14px] font-medium text-foreground capitalize">
-                        {payment.type.replace("_", " ")}
+                        {(payment.type ?? "").replace("_", " ")}
                       </p>
                       <p className="text-[12px] text-muted-foreground font-light">
                         {new Date(payment.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -161,7 +151,7 @@ export default function BillingPage() {
                 No Payment History
               </h3>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Your payment history will appear here after your first consultation.
+                No billing records yet. Your payment history will appear here after your first consultation.
               </p>
             </div>
           )}
