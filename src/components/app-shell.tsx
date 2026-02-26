@@ -63,15 +63,20 @@ const NAV_ITEMS: NavItem[] = [
       nurse: "/provider",
       pharmacy: "/pharmacy",
       admin: "/admin",
+      unverified: "/access/setup",
     },
-    matchPaths: ["/dashboard", "/provider", "/pharmacy", "/admin"],
+    matchPaths: ["/dashboard", "/provider", "/pharmacy", "/admin", "/access/setup", "/onboard"],
   },
   {
     id: "intake",
     label: "Intake",
     icon: ClipboardList,
     caps: [CAP.INTAKE_SELF, CAP.INTAKE_REVIEW],
-    href: "/intake",
+    href: "/intake/symptoms",
+    hrefByRole: {
+      provider: "/intake",
+      nurse: "/intake",
+    },
     matchPaths: ["/intake", "/start"],
   },
   {

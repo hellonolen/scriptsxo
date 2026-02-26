@@ -90,7 +90,14 @@ export type Role =
 // ---------------------------------------------------------------------------
 
 export const ROLE_CAPS: Record<Role, Capability[]> = {
-  unverified: [],
+  // Unverified users are logged in but haven't completed credential verification.
+  // They still need navigation: dashboard (→ setup), intake, and messaging.
+  unverified: [
+    CAP.VIEW_DASHBOARD,
+    CAP.INTAKE_SELF,
+    CAP.MSG_VIEW,
+    CAP.MSG_SEND,
+  ],
 
   patient: [
     CAP.VIEW_DASHBOARD,
