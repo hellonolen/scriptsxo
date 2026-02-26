@@ -315,7 +315,6 @@ Three-screen consultation flow to build (front end first):
 - Breakeven vs Daily.co: ~43 calls/month (self-hosted wins at any real volume)
 
 ### Open Items After This Session
-- **NEXT: Build consultation UI front end** (3 screens, no back end wiring yet — owner's explicit instruction)
 - Set STRIPE_SECRET_KEY in Convex prod (owner to add)
 - Set GEMINI_API_KEY, WEBAUTHN_ORIGIN, WEBAUTHN_RP_ID in Convex prod if not already set
 - Update SITE_URL in Convex prod (currently set to localhost)
@@ -332,3 +331,76 @@ Three-screen consultation flow to build (front end first):
 - ModMed API credentials for e-prescribe and EHR
 - Per-org terminology config (move clientTerm to organizations table for true multi-tenant)
 - AmazingXO component extraction (chat bubbles, voice hooks, glassmorphism patterns)
+
+---
+
+## Session: 2026-02-25 (Security Hardening, Demo Data Removal, Session Infrastructure)
+
+### Topics Discussed
+- Final Production Lockdown: completed Objectives 2-5 (owner immutability, audit trail, headers, tag)
+- Full Production Launch Inventory (8 sections, read-only audit)
+- Fix-everything directive: 12 phases of critical security and data hardening
+- BUG-002: Convex ACID rollback prevents failed security events from being persisted
+- callerId vs sessionToken architectural shift
+- Demo data removal across 12+ pages
+
+### Work Completed
+
+#### Security — Phase 0: Remove Dev Bypasses
+- `src/middleware.ts`: replaced `NODE_ENV === "development"` bypass with `AUTH_BYPASS_ALLOWED` flag (off by default)
+- `src/components/app-shell.tsx`: removed `isDev` admin role injection; always uses real session
+- `scripts/deploy.sh`: added release gate — fails if `AUTH_BYPASS_ALLOWED=true`
+
+#### Security — Phase 3: Stripe Webhook Verification
+- `convex/http.ts`: added `verifyStripeSignature()` using `crypto.subtle` HMAC-SHA256 (no SDK)
+- Both `/stripe-webhook` and `/stripe-identity-webhook` now reject requests with invalid signatures
+
+#### Security — Phase 4: devBypassVerification Crash Fix
+- Removed `useAction(api.actions.credentialVerificationOrchestrator.devBypassVerification)` from 4 onboard pages
+- `provider/page.tsx`, `patient/page.tsx`, `nurse/page.tsx`, `pharmacy/page.tsx`: now use `setSessionCookie` for dev and `finalizeVerification` for prod
+
+#### Security — Phase 7: BUG-002 Fix (Audit Trail Persistence)
+- Created `convex/lib/securityAuditInternal.ts`: `persistSecurityEvent` internalMutation
+- Rewrote `convex/lib/securityAudit.ts`: uses `ctx.scheduler.runAfter(0, ...)` so audit events survive parent rollback
+- Admin compliance page wired to real `securityEvents` and `credentialVerifications`
+
+#### Phase 1: Session Token Infrastructure
+- Added `sessions` table to `convex/schema.ts` (sessionToken, memberId, email, expiresAt, indexes)
+- Created `convex/lib/serverAuth.ts`: `getCaller()`, `requireCap()`, `requireAnyCap()`, `requireOrgScope()`, `createSession()`, `revokeSession()`, `revokeAllMemberSessions()`
+- Created `convex/sessions.ts`: `create` (internalMutation), `revoke`, `revokeAllForMember`, `cleanupExpired`
+- Updated `src/lib/auth.ts`: added `sessionToken` field to `Session`, added `getSessionToken()` export
+- **Wired session creation into auth actions**: `convex/actions/webauthn.ts` (register + auth) and `convex/actions/emailAuth.ts` (verifyCode) now call `internal.sessions.create` and return `sessionToken`
+- `src/app/page.tsx` `completeAuth()` now accepts `sessionToken?` and includes it in the cookie
+
+#### Phase 5/6: Consultation Queue + Prescriptions Backend
+- `convex/consultations.ts`: added `getWaitingQueue`, `getMyActiveConsultation`, `enqueue`, `claim`
+- `convex/prescriptions.ts`: updated to `sessionToken` auth; added `getByProviderEmail`, `signForProvider`
+- `convex/members.ts`: updated `updateRole`, `updateProfile`, `updateCapOverrides` to `sessionToken`; added `getAll`, `countByRole`
+
+#### Phase 11: Demo Data Removal (12+ pages)
+- `admin/page`, `admin/users`, `admin/compliance`: real Convex queries, real empty states
+- `provider/page`, `provider/prescriptions`: real consultation queue, real Rx data
+- `pharmacy/page`, `pharmacy/queue`: real prescription queries
+- `portal/messages`, `portal/prescriptions`, `portal/billing`, `portal/appointments`: real data
+- `consultation/waiting-room`, `consultation/room`: real queue + patient data
+
+#### Production Lockdown Completed
+- `platformAdmin:seed` run on prod — `hellonolen@gmail.com` is sole platform owner
+- Bootstrap permanently locked (second seed returns FORBIDDEN)
+- Git tag `v1-platform-secure` created
+
+### Decisions Made
+- ADR: audit events must use `ctx.scheduler.runAfter` — never synchronous insert before throw
+- ADR: sessionToken replaces callerId in all mutations — client cannot forge memberId
+- ADR: `AUTH_BYPASS_ALLOWED` env flag replaces all NODE_ENV dev mode bypass code
+
+### Open Items
+- **Remaining callerId migrations**: patients.ts, consultations.ts, organizations.ts, messages.ts, billing.ts, storage.ts, agents/conductor.ts, agents/llmGateway.ts still use callerId — Phase 1 completion work
+- **Phase 2 (Multi-org enforcement)**: `requireOrgScope` helper exists but not applied to org-scoped mutations
+- **Phase 5 (Real video)**: Daily.co/Twilio not integrated; `DAILY_API_KEY` env needed
+- **Phase 8 (Org management UI)**: Admin users page has Invite User placeholder only
+- **Phase 9 (File upload hardening)**: No size limits on `storage.generateUploadUrl`
+- **Phase 10 (Error tracking)**: Sentry not integrated
+- **Phase 12 (Prod env sanity)**: PHAXIO_API_KEY verification not added at startup
+- Set STRIPE_SECRET_KEY in Convex prod
+- Set WEBAUTHN_ORIGIN, WEBAUTHN_RP_ID in Convex prod
