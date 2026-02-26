@@ -512,18 +512,14 @@ export default function HomePage() {
                 </button>
               </div>
 
-              <div className="mt-10 space-y-2.5">
-                <div className="flex items-start gap-2.5 text-xs text-muted-foreground font-light">
-                  <Fingerprint size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
-                  <span>Sign in with Face ID or Touch ID on registered devices.</span>
+              <div className="mt-10 flex items-center gap-6 text-[10px] tracking-[0.2em] text-muted-foreground uppercase font-light">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={11} aria-hidden="true" />
+                  HIPAA
                 </div>
-                <div className="flex items-start gap-2.5 text-xs text-muted-foreground font-light">
-                  <Mail size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
-                  <span>No passkey? We&apos;ll send a one-time code to your email instead.</span>
-                </div>
-                <div className="flex items-start gap-2.5 text-xs text-muted-foreground font-light">
-                  <ShieldCheck size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
-                  <span>HIPAA-compliant. Your data is encrypted end-to-end.</span>
+                <div className="flex items-center gap-2">
+                  <Fingerprint size={11} aria-hidden="true" />
+                  Passkey
                 </div>
               </div>
             </>
@@ -598,10 +594,8 @@ export default function HomePage() {
                 </button>
               )}
 
-              <p className="mt-8 text-xs text-muted-foreground font-light leading-relaxed">
-                {passkeysAvailable
-                  ? "We'll use your device passkey to sign in. No passkey on this device? Use the email code option above."
-                  : "We'll send a 6-digit code to your email. No app or password needed."}
+              <p className="mt-6 text-xs text-muted-foreground font-light">
+                New to this device? Use the email code option above.
               </p>
             </>
           )}
