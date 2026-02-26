@@ -222,6 +222,41 @@ export const getByConsultation = query({
   },
 });
 
+/**
+ * Get all billing records for a provider by their email address.
+ * Joins: email → providers → billingRecords via consultationId.
+ * Used by the provider payouts page.
+ */
+export const getByProviderEmail = query({
+  args: { providerEmail: v.string() },
+  handler: async (ctx, args) => {
+    const provider = await ctx.db
+      .query("providers")
+      .withIndex("by_email", (q) => q.eq("email", args.providerEmail.toLowerCase()))
+      .first();
+
+    if (!provider) return [];
+
+    // Get all consultations for this provider, then collect their billing records
+    const consultations = await ctx.db
+      .query("consultations")
+      .withIndex("by_providerId", (q) => q.eq("providerId", provider._id))
+      .order("desc")
+      .collect();
+
+    const records: unknown[] = [];
+    for (const consult of consultations.slice(0, 50)) {
+      const billing = await ctx.db
+        .query("billingRecords")
+        .withIndex("by_consultationId", (q) => q.eq("consultationId", consult._id))
+        .first();
+      if (billing) records.push({ ...billing, consultationDate: consult.scheduledAt });
+    }
+
+    return records;
+  },
+});
+
 export const getByStatus = query({
   args: { status: v.string() },
   handler: async (ctx, args) => {

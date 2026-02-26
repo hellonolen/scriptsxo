@@ -107,7 +107,12 @@ type Role = "patient" | "provider" | "nurse" | "pharmacy" | "admin" | "unverifie
 
 // Role → capability bundles — mirror of src/lib/capabilities.ts
 const ROLE_CAPS: Record<Role, Capability[]> = {
-  unverified: [],
+  unverified: [
+    CAP.VIEW_DASHBOARD,
+    CAP.INTAKE_SELF,
+    CAP.MSG_VIEW,
+    CAP.MSG_SEND,
+  ],
 
   patient: [
     CAP.VIEW_DASHBOARD,
@@ -395,11 +400,16 @@ export function middleware(request: NextRequest) {
   // A user with a valid session but no assigned role can ONLY access /onboard/*,
   // the home page, and auth routes. All other paths redirect to /onboard.
   if (hasValidSession && isUnverified && !hasAdminAccess) {
-    if (
+    // Unverified users can access onboarding, home, auth, dashboard, intake, and messages.
+    const allowedForUnverified =
       matchesRoute(pathname, ONBOARD_ROUTES) ||
       pathname === "/" ||
-      matchesRoute(pathname, AUTH_ROUTES)
-    ) {
+      matchesRoute(pathname, AUTH_ROUTES) ||
+      pathname === "/dashboard" ||
+      pathname.startsWith("/dashboard/messages") ||
+      pathname.startsWith("/intake");
+
+    if (allowedForUnverified) {
       const response = NextResponse.next();
       applySecurityHeaders(response);
       return response;

@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   CalendarDays,
   Mic,
-  MicOff,
   Play,
 } from "lucide-react";
 import {
@@ -20,92 +19,23 @@ import {
   getNextOfficeHoursDate,
   formatOfficeHoursSchedule,
 } from "@/lib/membership-config";
-import type {
-  OfficeHoursQuestion,
-  OfficeHoursSessionStatus,
-} from "@/lib/membership-config";
-
-/* -----------------------------------------------------------------------
-   Demo data
-   ----------------------------------------------------------------------- */
-
-const DEMO_UPCOMING_SESSION = {
-  id: "oh-2026-02-25",
-  scheduledDate: getNextOfficeHoursDate().toISOString(),
-  startTime: DEFAULT_OFFICE_HOURS.startTime,
-  endTime: "15:00",
-  status: "open_for_questions" as OfficeHoursSessionStatus,
-  hostName: "Jessica Ramirez",
-  hostCredentials: "RN, BSN",
-  participantCount: 14,
-  maxParticipants: DEFAULT_OFFICE_HOURS.maxParticipants,
-  questions: [
-    {
-      id: "q1",
-      memberName: "Anonymous",
-      memberId: "m1",
-      question: "Can you help me understand my CMP results? My BUN/creatinine ratio seems high.",
-      submittedAt: new Date(Date.now() - 3600000).toISOString(),
-      isAnonymous: true,
-      status: "pending" as const,
-    },
-    {
-      id: "q2",
-      memberName: "David C.",
-      memberId: "m2",
-      question: "I was prescribed Lisinopril 10mg. Are there foods I should avoid while taking it?",
-      submittedAt: new Date(Date.now() - 7200000).toISOString(),
-      isAnonymous: false,
-      status: "pending" as const,
-    },
-    {
-      id: "q3",
-      memberName: "Anonymous",
-      memberId: "m3",
-      question: "What does it mean if my HbA1c went from 6.1 to 5.8 after starting Metformin?",
-      submittedAt: new Date(Date.now() - 10800000).toISOString(),
-      isAnonymous: true,
-      status: "pending" as const,
-    },
-  ] as OfficeHoursQuestion[],
-};
-
-const DEMO_PAST_SESSIONS = [
-  {
-    id: "oh-2026-02-18",
-    date: "Feb 18, 2026",
-    host: "Jessica Ramirez, RN",
-    participants: 22,
-    questionsAnswered: 8,
-    hasRecording: true,
-  },
-  {
-    id: "oh-2026-02-11",
-    date: "Feb 11, 2026",
-    host: "Jessica Ramirez, RN",
-    participants: 18,
-    questionsAnswered: 6,
-    hasRecording: true,
-  },
-  {
-    id: "oh-2026-02-04",
-    date: "Feb 4, 2026",
-    host: "Maria Santos, RN",
-    participants: 25,
-    questionsAnswered: 10,
-    hasRecording: true,
-  },
-];
+import { shouldShowDemoData } from "@/lib/demo";
+import { SEED_OFFICE_HOURS_SESSION, SEED_PAST_SESSIONS } from "@/lib/seed-data";
 
 /* -----------------------------------------------------------------------
    Component
    ----------------------------------------------------------------------- */
 
 export default function OfficeHoursPage() {
+  const [showDemo, setShowDemo]     = useState(false);
   const [newQuestion, setNewQuestion] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(true);
-  const [submitted, setSubmitted] = useState(false);
-  const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
+  const [submitted, setSubmitted]     = useState(false);
+  const [activeTab, setActiveTab]     = useState<"upcoming" | "past">("upcoming");
+
+  useEffect(() => {
+    setShowDemo(shouldShowDemoData());
+  }, []);
 
   const nextDate = useMemo(() => getNextOfficeHoursDate(), []);
   const schedule = useMemo(() => formatOfficeHoursSchedule(), []);
@@ -114,24 +44,20 @@ export default function OfficeHoursPage() {
 
   useEffect(() => {
     function update() {
-      const now = new Date();
+      const now  = new Date();
       const diff = nextDate.getTime() - now.getTime();
-      if (diff <= 0) {
-        setCountdown("Starting now");
-        return;
-      }
-      const days = Math.floor(diff / 86400000);
-      const hours = Math.floor((diff % 86400000) / 3600000);
-      const mins = Math.floor((diff % 3600000) / 60000);
-
+      if (diff <= 0) { setCountdown("Starting now"); return; }
+      const days  = Math.floor(diff / 86_400_000);
+      const hours = Math.floor((diff % 86_400_000) / 3_600_000);
+      const mins  = Math.floor((diff % 3_600_000) / 60_000);
       const parts: string[] = [];
-      if (days > 0) parts.push(`${days}d`);
+      if (days  > 0) parts.push(`${days}d`);
       if (hours > 0) parts.push(`${hours}h`);
       parts.push(`${mins}m`);
       setCountdown(parts.join(" "));
     }
     update();
-    const interval = setInterval(update, 60000);
+    const interval = setInterval(update, 60_000);
     return () => clearInterval(interval);
   }, [nextDate]);
 
@@ -142,6 +68,12 @@ export default function OfficeHoursPage() {
     setNewQuestion("");
     setTimeout(() => setSubmitted(false), 4000);
   }
+
+  // Use seed data for participant count when in demo mode; show 0 when authenticated (real data not yet wired)
+  const participantCount = showDemo ? SEED_OFFICE_HOURS_SESSION.participantCount : 0;
+  const maxParticipants  = showDemo ? SEED_OFFICE_HOURS_SESSION.maxParticipants  : DEFAULT_OFFICE_HOURS.maxParticipants;
+  const questions        = showDemo ? SEED_OFFICE_HOURS_SESSION.questions        : [];
+  const pastSessions     = showDemo ? SEED_PAST_SESSIONS : [];
 
   return (
     <AppShell>
@@ -155,7 +87,7 @@ export default function OfficeHoursPage() {
             Nurse Office Hours
           </h1>
           <p className="text-sm text-muted-foreground max-w-[600px]">
-            Weekly live Q&A with a registered nurse. Ask about blood work,
+            Weekly live Q&amp;A with a registered nurse. Ask about blood work,
             medications, wellness, and more. Audio only, no video required.
           </p>
         </div>
@@ -165,52 +97,34 @@ export default function OfficeHoursPage() {
           <div className="glass-card rounded-2xl p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <CalendarDays size={14} className="text-violet-500" />
-              <span className="text-[10px] tracking-widest uppercase text-muted-foreground">
-                SCHEDULE
-              </span>
+              <span className="text-[10px] tracking-widest uppercase text-muted-foreground">SCHEDULE</span>
             </div>
             <p className="text-sm font-medium text-foreground">{schedule}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {DEFAULT_OFFICE_HOURS.durationMinutes} minutes per session
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{DEFAULT_OFFICE_HOURS.durationMinutes} minutes per session</p>
           </div>
 
           <div className="glass-card rounded-2xl p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <Clock size={14} className="text-teal-500" />
-              <span className="text-[10px] tracking-widest uppercase text-muted-foreground">
-                NEXT SESSION
-              </span>
+              <span className="text-[10px] tracking-widest uppercase text-muted-foreground">NEXT SESSION</span>
             </div>
             <p className="text-lg font-semibold text-foreground">
-              {nextDate.toLocaleDateString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              })}
+              {nextDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Starts in {countdown}
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Starts in {countdown}</p>
           </div>
 
           <div className="glass-card rounded-2xl p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <Users size={14} className="text-violet-500" />
-              <span className="text-[10px] tracking-widest uppercase text-muted-foreground">
-                REGISTERED
-              </span>
+              <span className="text-[10px] tracking-widest uppercase text-muted-foreground">REGISTERED</span>
             </div>
-            <p className="text-lg font-semibold text-foreground">
-              {DEMO_UPCOMING_SESSION.participantCount}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              of {DEMO_UPCOMING_SESSION.maxParticipants} spots
-            </p>
+            <p className="text-lg font-semibold text-foreground">{participantCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">of {maxParticipants} spots</p>
           </div>
         </div>
 
-        {/* Disclaimer Banner */}
+        {/* Disclaimer */}
         <div
           className="rounded-xl p-4 mb-8 flex items-start gap-3"
           style={{ background: "rgba(124, 58, 237, 0.06)", border: "1px solid rgba(124, 58, 237, 0.12)" }}
@@ -223,26 +137,19 @@ export default function OfficeHoursPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-border">
-          <button
-            onClick={() => setActiveTab("upcoming")}
-            className={`px-4 py-2.5 text-xs tracking-wider uppercase transition-colors ${
-              activeTab === "upcoming"
-                ? "text-violet-600 border-b-2 border-violet-600 font-medium"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Upcoming Session
-          </button>
-          <button
-            onClick={() => setActiveTab("past")}
-            className={`px-4 py-2.5 text-xs tracking-wider uppercase transition-colors ${
-              activeTab === "past"
-                ? "text-violet-600 border-b-2 border-violet-600 font-medium"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Past Sessions
-          </button>
+          {(["upcoming", "past"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2.5 text-xs tracking-wider uppercase transition-colors ${
+                activeTab === tab
+                  ? "text-violet-600 border-b-2 border-violet-600 font-medium"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab === "upcoming" ? "Upcoming Session" : "Past Sessions"}
+            </button>
+          ))}
         </div>
 
         {activeTab === "upcoming" && (
@@ -254,8 +161,7 @@ export default function OfficeHoursPage() {
                 Submit Your Question
               </h3>
               <p className="text-xs text-muted-foreground mb-4">
-                Questions are collected before and during the session. The nurse
-                will address them in order.
+                Questions are collected before and during the session. The nurse will address them in order.
               </p>
 
               <form onSubmit={handleSubmitQuestion} className="space-y-3">
@@ -266,7 +172,6 @@ export default function OfficeHoursPage() {
                   className="w-full rounded-xl border border-border bg-white p-4 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 resize-none"
                   rows={3}
                 />
-
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
@@ -275,11 +180,8 @@ export default function OfficeHoursPage() {
                       onChange={(e) => setIsAnonymous(e.target.checked)}
                       className="w-4 h-4 rounded border-border text-violet-600 focus:ring-violet-500"
                     />
-                    <span className="text-xs text-muted-foreground">
-                      Ask anonymously
-                    </span>
+                    <span className="text-xs text-muted-foreground">Ask anonymously</span>
                   </label>
-
                   <button
                     type="submit"
                     disabled={!newQuestion.trim()}
@@ -300,78 +202,51 @@ export default function OfficeHoursPage() {
               </form>
             </div>
 
-            {/* Queued Questions */}
-            <div className="glass-card rounded-2xl p-6">
-              <h3 className="text-sm font-medium text-foreground mb-4 flex items-center gap-2">
-                <Headphones size={14} />
-                Questions Queue
-                <span className="ml-auto text-xs text-muted-foreground font-normal">
-                  {DEMO_UPCOMING_SESSION.questions.length} submitted
-                </span>
-              </h3>
-
-              <div className="space-y-3">
-                {DEMO_UPCOMING_SESSION.questions.map((q, i) => (
-                  <div
-                    key={q.id}
-                    className="rounded-xl p-4"
-                    style={{
-                      background: "rgba(124, 58, 237, 0.03)",
-                      border: "1px solid rgba(124, 58, 237, 0.06)",
-                    }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[10px] tracking-wider uppercase text-muted-foreground">
-                        Q{i + 1}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {q.isAnonymous ? "Anonymous" : q.memberName}
-                      </span>
-                      <span
-                        className="ml-auto text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider"
-                        style={{
-                          background: "rgba(45, 212, 191, 0.1)",
-                          color: "#14B8A6",
-                        }}
-                      >
-                        {q.status}
-                      </span>
+            {/* Question Queue */}
+            {questions.length > 0 && (
+              <div className="glass-card rounded-2xl p-6">
+                <h3 className="text-sm font-medium text-foreground mb-4 flex items-center gap-2">
+                  <Headphones size={14} />
+                  Questions Queue
+                  <span className="ml-auto text-xs text-muted-foreground font-normal">
+                    {questions.length} submitted
+                  </span>
+                </h3>
+                <div className="space-y-3">
+                  {questions.map((q, i) => (
+                    <div
+                      key={q.id}
+                      className="rounded-xl p-4"
+                      style={{ background: "rgba(124, 58, 237, 0.03)", border: "1px solid rgba(124, 58, 237, 0.06)" }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[10px] tracking-wider uppercase text-muted-foreground">Q{i + 1}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {q.isAnonymous ? "Anonymous" : q.memberName}
+                        </span>
+                        <span
+                          className="ml-auto text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider"
+                          style={{ background: "rgba(45, 212, 191, 0.1)", color: "#14B8A6" }}
+                        >
+                          {q.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-foreground leading-relaxed">{q.question}</p>
                     </div>
-                    <p className="text-sm text-foreground leading-relaxed">
-                      {q.question}
-                    </p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* How It Works */}
             <div className="glass-card rounded-2xl p-6">
-              <h3 className="text-sm font-medium text-foreground mb-4">
-                How Office Hours Work
-              </h3>
+              <h3 className="text-sm font-medium text-foreground mb-4">How Office Hours Work</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  {
-                    icon: Send,
-                    title: "Submit questions",
-                    desc: "Submit your question before or during the live session. You can ask anonymously.",
-                  },
-                  {
-                    icon: Headphones,
-                    title: "Join the audio call",
-                    desc: "At the scheduled time, join the live audio session. No video required.",
-                  },
-                  {
-                    icon: Mic,
-                    title: "Listen or speak",
-                    desc: "The nurse answers queued questions. You can unmute to discuss if comfortable.",
-                  },
-                  {
-                    icon: Play,
-                    title: "Replay anytime",
-                    desc: "Sessions are recorded and available for replay in case you miss one.",
-                  },
+                  { icon: Send,      title: "Submit questions", desc: "Submit your question before or during the live session. You can ask anonymously." },
+                  { icon: Headphones,title: "Join the audio call", desc: "At the scheduled time, join the live audio session. No video required." },
+                  { icon: Mic,       title: "Listen or speak", desc: "The nurse answers queued questions. You can unmute to discuss if comfortable." },
+                  { icon: Play,      title: "Replay anytime", desc: "Sessions are recorded and available for replay in case you miss one." },
                 ].map((step) => (
                   <div key={step.title} className="flex items-start gap-3">
                     <div
@@ -381,12 +256,8 @@ export default function OfficeHoursPage() {
                       <step.icon size={14} className="text-violet-500" />
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-foreground mb-0.5">
-                        {step.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        {step.desc}
-                      </p>
+                      <p className="text-xs font-medium text-foreground mb-0.5">{step.title}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{step.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -395,19 +266,13 @@ export default function OfficeHoursPage() {
 
             {/* Topics */}
             <div className="glass-card rounded-2xl p-6">
-              <h3 className="text-sm font-medium text-foreground mb-4">
-                Topics You Can Ask About
-              </h3>
+              <h3 className="text-sm font-medium text-foreground mb-4">Topics You Can Ask About</h3>
               <div className="flex flex-wrap gap-2">
                 {DEFAULT_OFFICE_HOURS.topics.map((topic) => (
                   <span
                     key={topic}
                     className="text-xs px-3 py-1.5 rounded-full"
-                    style={{
-                      background: "rgba(124, 58, 237, 0.06)",
-                      color: "#6D28D9",
-                      border: "1px solid rgba(124, 58, 237, 0.1)",
-                    }}
+                    style={{ background: "rgba(124, 58, 237, 0.06)", color: "#6D28D9", border: "1px solid rgba(124, 58, 237, 0.1)" }}
                   >
                     {topic}
                   </span>
@@ -419,51 +284,42 @@ export default function OfficeHoursPage() {
 
         {activeTab === "past" && (
           <div className="space-y-3">
-            {DEMO_PAST_SESSIONS.map((session) => (
-              <div
-                key={session.id}
-                className="glass-card rounded-2xl p-5 flex items-center justify-between"
-              >
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {session.date}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {session.host}
-                  </p>
-                </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-foreground">
-                      {session.participants}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      Joined
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-foreground">
-                      {session.questionsAnswered}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      Answered
-                    </p>
-                  </div>
-                  {session.hasRecording && (
-                    <button
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] tracking-wider uppercase transition-colors"
-                      style={{
-                        background: "rgba(124, 58, 237, 0.08)",
-                        color: "#7C3AED",
-                      }}
-                    >
-                      <Play size={11} />
-                      Replay
-                    </button>
-                  )}
-                </div>
+            {pastSessions.length === 0 ? (
+              <div className="glass-card rounded-2xl p-10 text-center">
+                <p className="text-sm text-muted-foreground">No past sessions yet.</p>
               </div>
-            ))}
+            ) : (
+              pastSessions.map((session) => (
+                <div
+                  key={session.id}
+                  className="glass-card rounded-2xl p-5 flex items-center justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{session.date}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{session.host}</p>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-foreground">{session.participants}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Joined</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-foreground">{session.questionsAnswered}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Answered</p>
+                    </div>
+                    {session.hasRecording && (
+                      <button
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] tracking-wider uppercase transition-colors"
+                        style={{ background: "rgba(124, 58, 237, 0.08)", color: "#7C3AED" }}
+                      >
+                        <Play size={11} />
+                        Replay
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
