@@ -97,6 +97,14 @@ export const sendToPharmacy = mutation({
   },
 });
 
+// Valid fulfillment state machine transitions
+const VALID_TRANSITIONS: Record<string, readonly string[]> = {
+  sent:    ["filling"],
+  filling: ["ready"],
+  ready:   ["picked_up", "shipped"],
+  shipped: ["delivered"],
+} as const;
+
 export const updateStatus = mutation({
   args: {
     sessionToken: v.string(),
@@ -105,16 +113,30 @@ export const updateStatus = mutation({
   },
   handler: async (ctx, args) => {
     await requireAnyCap(ctx, args.sessionToken, [CAP.PHARMACY_FILL, CAP.RX_WRITE]);
+
+    const rx = await ctx.db.get(args.prescriptionId);
+    if (!rx) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Prescription not found." });
+    }
+
+    const allowed = VALID_TRANSITIONS[rx.status as string];
+    if (!allowed || !allowed.includes(args.status)) {
+      throw new ConvexError({
+        code: "FORBIDDEN",
+        message: `Invalid transition: ${rx.status} → ${args.status}. Allowed: ${allowed?.join(", ") ?? "none"}.`,
+      });
+    }
+
     const updates: Record<string, unknown> = {
       status: args.status,
       updatedAt: Date.now(),
     };
 
-    if (args.status === "ready" || args.status === "picked_up" || args.status === "delivered") {
-      const rx = await ctx.db.get(args.prescriptionId);
-      if (rx && !rx.filledAt) {
-        updates.filledAt = Date.now();
-      }
+    if (
+      (args.status === "ready" || args.status === "picked_up" || args.status === "delivered") &&
+      !rx.filledAt
+    ) {
+      updates.filledAt = Date.now();
     }
 
     await ctx.db.patch(args.prescriptionId, updates);

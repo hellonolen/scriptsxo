@@ -3,7 +3,7 @@
  *
  * Verifies the four security properties the user requires:
  *
- *   1. TAMPER  — Org A callerId cannot mutate Org B data by swapping orgId
+ *   1. TAMPER  — Org A sessionToken cannot mutate Org B data by swapping orgId
  *   2. DIRECT  — Direct mutation calls fail for unprivileged roles
  *   3. OVERRIDE — org.capAllow + member.capDeny → deny wins (in handler context)
  *   4. PLATFORM — Platform owner cross-org scope is intentional and bounded
@@ -11,8 +11,8 @@
  * Architecture note
  * -----------------
  * All Convex mutations enforce security via:
- *   requireCap(ctx, callerId, cap)      — role bundle + per-org/member overrides
- *   requireOrgMember(ctx, callerId, orgId) — org boundary check
+ *   requireCap(ctx, sessionToken, cap)          — role bundle + per-org/member overrides
+ *   requireOrgScope(ctx, sessionToken, orgId)   — org boundary check
  *
  * Both functions are the only security gate between "UI called mutation"
  * and "direct Convex client call". There is NO additional gate in Convex's
@@ -52,8 +52,11 @@ import * as credVerifs      from "@convex/credentialVerifications";
 
 const ORG_A = "org_a_id";
 const ORG_B = "org_b_id";
+const NOW_MS = Date.now();
+const SESSION_TTL = NOW_MS + 86_400_000;
 
-const DB: Record<string, unknown> = {
+// Member fixture
+const MEMBERS: Record<string, unknown> = {
   org_a_id: { _id: ORG_A, name: "Clinic A", slug: "clinic-a", type: "clinic", status: "active", createdAt: 0 },
   org_b_id: { _id: ORG_B, name: "Clinic B", slug: "clinic-b", type: "clinic", status: "active", createdAt: 0 },
 
@@ -83,7 +86,7 @@ const DB: Record<string, unknown> = {
     type: "clinic",
     status: "active",
     createdAt: 0,
-    capAllow: ["rx:write"], // org grants it...
+    capAllow: ["rx:write"],
   },
   patient_allowed_rx: {
     _id: "patient_allowed_rx",
@@ -94,28 +97,80 @@ const DB: Record<string, unknown> = {
     joinedAt: 0,
     name: "AllowRx",
     status: "active",
-    capAllow: ["rx:write"], // member gets it via allow...
-    capDeny:  ["rx:write"], // ...but member deny removes it
+    capAllow: ["rx:write"],
+    capDeny:  ["rx:write"],
   },
 };
 
-// Fully chainable query builder mock — every method returns itself or a terminal
-function makeQueryChain(results: unknown[] = [], first: unknown = null) {
-  const chain: Record<string, unknown> = {};
-  const terminal = {
-    first:   vi.fn(async () => first),
-    collect: vi.fn(async () => results),
-    take:    vi.fn(async () => results),
-  };
-  // All builder methods return the same chain (which also has terminal methods)
-  const builder: Record<string, unknown> = {
-    ...terminal,
-    withIndex: vi.fn((_name: string, _fn?: Function) => builder),
-    filter:    vi.fn((_fn?: Function) => builder),
-    order:     vi.fn(() => builder),
-    eq:        vi.fn(() => builder),
-  };
-  return builder;
+// Session token → member ID mapping (sessionToken: "tok_<memberId>")
+const SESSIONS: Record<string, unknown> = Object.fromEntries(
+  Object.keys(MEMBERS)
+    .filter((id) => !["org_a_id", "org_b_id", "org_override"].includes(id))
+    .map((memberId) => [
+      `tok_${memberId}`,
+      {
+        _id: `sess_${memberId}`,
+        sessionToken: `tok_${memberId}`,
+        memberId,
+        email: (MEMBERS[memberId] as any).email,
+        expiresAt: SESSION_TTL,
+        lastUsedAt: NOW_MS,
+      },
+    ])
+);
+
+// Credential verifications — providers/patients need verified records
+const CRED_VERIFS: Record<string, unknown> = {
+  provider_org_a:    { memberId: "provider_org_a",    status: "verified", providerNpi: "1003000126", providerNpiResult: {}, providerLicenseFileId: "f_a" },
+  provider_org_b:    { memberId: "provider_org_b",    status: "verified", providerNpi: "1003000127", providerNpiResult: {}, providerLicenseFileId: "f_b" },
+  provider_denied_rx:{ memberId: "provider_denied_rx",status: "verified", providerNpi: "1003000128", providerNpiResult: {}, providerLicenseFileId: "f_d" },
+  patient_member:    { memberId: "patient_member",    status: "verified", patientStripeSessionId: "cs_p", patientStripeStatus: "verified" },
+  patient_allowed_rx:{ memberId: "patient_allowed_rx",status: "verified", patientStripeSessionId: "cs_a", patientStripeStatus: "verified" },
+  pharmacy_member:   { memberId: "pharmacy_member",   status: "verified", pharmacyNcpdpId: "123456", pharmacyRegistryResult: { registered: true } },
+};
+
+// Combined DB fixture
+const DB: Record<string, unknown> = { ...MEMBERS };
+
+// ─── Session-aware query builder ─────────────────────────────────────────────
+
+function makeSessionAwareQuery(db: Record<string, unknown>) {
+  return vi.fn((table: string) => {
+    const params: Record<string, unknown> = {};
+
+    const chain: Record<string, unknown> = {
+      withIndex: vi.fn((_name: string, fn?: Function) => {
+        if (fn) {
+          // Execute the callback to capture query params (e.g. sessionToken, memberId)
+          fn({
+            eq: (field: string, value: unknown) => {
+              params[field] = value;
+              return chain;
+            },
+          });
+        }
+        return chain;
+      }),
+      filter: vi.fn((_fn?: Function) => chain),
+      order:  vi.fn(() => chain),
+      first:  vi.fn(async () => {
+        if (table === "sessions") {
+          const token = params["sessionToken"] as string | undefined;
+          if (token) return SESSIONS[token] ?? null;
+          return null;
+        }
+        if (table === "credentialVerifications") {
+          const memberId = params["memberId"] as string | undefined;
+          if (memberId) return CRED_VERIFS[memberId] ?? null;
+          return null;
+        }
+        return null;
+      }),
+      collect: vi.fn(async () => []),
+      take:    vi.fn(async () => []),
+    };
+    return chain;
+  });
 }
 
 function makeCtx(extraInserts: Record<string, unknown> = {}) {
@@ -128,16 +183,17 @@ function makeCtx(extraInserts: Record<string, unknown> = {}) {
       get: vi.fn(async (id: string) => db[id] ?? null),
       insert: vi.fn(async (_table: string, data: unknown) => {
         const id = `inserted_${inserted.length}`;
-        inserted.push({ _id: id, ...( data as object) });
-        (db as Record<string,unknown>)[id] = { _id: id, ...(data as object) };
+        inserted.push({ _id: id, ...(data as object) });
+        (db as Record<string, unknown>)[id] = { _id: id, ...(data as object) };
         return id;
       }),
       patch: vi.fn(async (id: string, data: unknown) => {
         patched.push([id, data]);
       }),
       delete: vi.fn(async (_id: string) => {}),
-      query: vi.fn((_table: string) => makeQueryChain()),
+      query: makeSessionAwareQuery(db),
     },
+    scheduler: { runAfter: vi.fn(async () => {}) },
     _inserted: inserted,
     _patched: patched,
   };
@@ -152,13 +208,13 @@ function h(mod: { handler: Function }) { return mod.handler; }
 // 1. TAMPER TESTS — cross-org mutation attempts
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("1. TAMPER — Org A callerId cannot mutate Org B", () => {
+describe("1. TAMPER — Org A sessionToken cannot mutate Org B", () => {
   it("addMember: org_a provider tries to add to org_b → FORBIDDEN", async () => {
     const ctx = makeCtx();
     await expect(
       h(organizations.addMember)(ctx, {
-        callerId: "provider_org_a", // legitimate caller in org A
-        orgId: ORG_B,               // but targeting org B
+        sessionToken: "tok_provider_org_a", // legitimate caller in org A
+        orgId: ORG_B,                       // but targeting org B
         email: "new@b.com",
         name: "New",
         role: "provider",
@@ -171,7 +227,7 @@ describe("1. TAMPER — Org A callerId cannot mutate Org B", () => {
     const ctx = makeCtx();
     await expect(
       h(organizations.removeMember)(ctx, {
-        callerId: "provider_org_a",
+        sessionToken: "tok_provider_org_a",
         orgId: ORG_B,
         memberId: "provider_org_b",
       })
@@ -182,7 +238,7 @@ describe("1. TAMPER — Org A callerId cannot mutate Org B", () => {
     const ctx = makeCtx();
     await expect(
       h(organizations.update)(ctx, {
-        callerId: "admin_org_a",
+        sessionToken: "tok_admin_org_a",
         orgId: ORG_B,
         name: "Hijacked",
       })
@@ -190,11 +246,11 @@ describe("1. TAMPER — Org A callerId cannot mutate Org B", () => {
   });
 
   it("addMember: swapping orgId in same call → still FORBIDDEN", async () => {
-    // Even if callerId is valid for org A, swapping to org B must fail
+    // Even if sessionToken is valid for org A, swapping to org B must fail
     const ctx = makeCtx();
     await expect(
       h(organizations.addMember)(ctx, {
-        callerId: "admin_org_a",
+        sessionToken: "tok_admin_org_a",
         orgId: ORG_B,
         email: "hacked@b.com",
         name: "Hacked",
@@ -215,7 +271,7 @@ describe("2. DIRECT-CALL — wrong role fails on protected mutations", () => {
     const ctx = makeCtx();
     await expect(
       h(prescriptions.create)(ctx, {
-        callerId: "patient_member",
+        sessionToken: "tok_patient_member",
         consultationId: "c1" as any,
         patientId: "p1" as any,
         providerId: "prov1" as any,
@@ -243,7 +299,7 @@ describe("2. DIRECT-CALL — wrong role fails on protected mutations", () => {
     const ctx = makeCtx();
     await expect(
       h(patients.update)(ctx, {
-        callerId: "pharmacy_member",
+        sessionToken: "tok_pharmacy_member",
         patientId: "p1" as any,
         allergies: ["peanuts"],
       })
@@ -255,7 +311,7 @@ describe("2. DIRECT-CALL — wrong role fails on protected mutations", () => {
     const ctx = makeCtx();
     await expect(
       h(settings.set)(ctx, {
-        callerId: "provider_org_a",
+        sessionToken: "tok_provider_org_a",
         key: "featureFlag",
         value: true,
       })
@@ -267,7 +323,7 @@ describe("2. DIRECT-CALL — wrong role fails on protected mutations", () => {
     const ctx = makeCtx();
     await expect(
       h(organizations.addMember)(ctx, {
-        callerId: "provider_org_a",
+        sessionToken: "tok_provider_org_a",
         orgId: ORG_A,
         email: "new@a.com",
         name: "New",
@@ -277,12 +333,12 @@ describe("2. DIRECT-CALL — wrong role fails on protected mutations", () => {
     ).rejects.toMatchObject({ data: { code: "FORBIDDEN" } });
   });
 
-  // unauthenticated (no callerId) gets UNAUTHORIZED on any protected mutation
-  it("no callerId → prescriptions.create → UNAUTHORIZED", async () => {
+  // unauthenticated (no sessionToken) gets UNAUTHORIZED on any protected mutation
+  it("no sessionToken → prescriptions.create → UNAUTHORIZED", async () => {
     const ctx = makeCtx();
     await expect(
       h(prescriptions.create)(ctx, {
-        callerId: undefined,
+        sessionToken: undefined,
         consultationId: "c1" as any,
         patientId: "p1" as any,
         providerId: "prov1" as any,
@@ -305,10 +361,10 @@ describe("2. DIRECT-CALL — wrong role fails on protected mutations", () => {
     ).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
   });
 
-  it("no callerId → settings.set → UNAUTHORIZED", async () => {
+  it("no sessionToken → settings.set → UNAUTHORIZED", async () => {
     const ctx = makeCtx();
     await expect(
-      h(settings.set)(ctx, { callerId: undefined, key: "x", value: 1 })
+      h(settings.set)(ctx, { sessionToken: undefined, key: "x", value: 1 })
     ).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
   });
 
@@ -317,7 +373,7 @@ describe("2. DIRECT-CALL — wrong role fails on protected mutations", () => {
     const ctx = makeCtx();
     await expect(
       h(members.updateRole)(ctx, {
-        callerId: "patient_member",
+        sessionToken: "tok_patient_member",
         memberId: "patient_member" as any, // claiming to update self
         role: "admin",
       })
@@ -329,7 +385,7 @@ describe("2. DIRECT-CALL — wrong role fails on protected mutations", () => {
     const ctx = makeCtx();
     await expect(
       h(members.updateProfile)(ctx, {
-        callerId: "patient_member",
+        sessionToken: "tok_patient_member",
         memberId: "provider_org_a" as any,
         name: "Hacked Name",
       })
@@ -341,7 +397,7 @@ describe("2. DIRECT-CALL — wrong role fails on protected mutations", () => {
     const ctx = makeCtx();
     await expect(
       h(credVerifs.complete)(ctx, {
-        callerId: "patient_member",
+        sessionToken: "tok_patient_member",
         id: "cv1" as any,
         status: "verified",
       })
@@ -361,7 +417,7 @@ describe("3. OVERRIDE PRECEDENCE — deny wins in mutation handler", () => {
     const ctx = makeCtx();
     await expect(
       h(prescriptions.create)(ctx, {
-        callerId: "provider_denied_rx",
+        sessionToken: "tok_provider_denied_rx",
         consultationId: "c1" as any,
         patientId: "p1" as any,
         providerId: "prov1" as any,
@@ -389,7 +445,7 @@ describe("3. OVERRIDE PRECEDENCE — deny wins in mutation handler", () => {
     const ctx = makeCtx();
     await expect(
       h(prescriptions.create)(ctx, {
-        callerId: "patient_allowed_rx",
+        sessionToken: "tok_patient_allowed_rx",
         consultationId: "c1" as any,
         patientId: "p1" as any,
         providerId: "prov1" as any,
@@ -420,7 +476,7 @@ describe("3. OVERRIDE PRECEDENCE — deny wins in mutation handler", () => {
     // just that the cap check passes)
     await expect(
       h(prescriptions.create)(ctx, {
-        callerId: "provider_org_a",
+        sessionToken: "tok_provider_org_a",
         consultationId: "c1" as any,
         patientId: "p1" as any,
         providerId: "prov1" as any,
@@ -451,7 +507,7 @@ describe("3. OVERRIDE PRECEDENCE — deny wins in mutation handler", () => {
 describe("4. PLATFORM OWNER SCOPE — cross-org access", () => {
   /**
    * Design decision (see convex/platformAdmin.ts):
-   *   Platform owners bypass requireOrgMember() to support break-glass
+   *   Platform owners bypass requireOrgScope() to support break-glass
    *   administration across all orgs.
    *
    *   This is INTENTIONAL for a SaaS context where the operator must be
@@ -471,7 +527,7 @@ describe("4. PLATFORM OWNER SCOPE — cross-org access", () => {
     // Platform owner has all caps (USER_MANAGE ✓) and bypasses org check.
     await expect(
       h(organizations.addMember)(ctx, {
-        callerId: "platform_owner",
+        sessionToken: "tok_platform_owner",
         orgId: ORG_B,           // different org from owner's orgId
         email: "new@b.com",
         name: "New",
@@ -485,7 +541,7 @@ describe("4. PLATFORM OWNER SCOPE — cross-org access", () => {
     const ctx = makeCtx();
     await expect(
       h(organizations.update)(ctx, {
-        callerId: "platform_owner",
+        sessionToken: "tok_platform_owner",
         orgId: ORG_B,
         name: "Updated by PO",
       })
@@ -497,7 +553,7 @@ describe("4. PLATFORM OWNER SCOPE — cross-org access", () => {
     const ctx = makeCtx();
     await expect(
       h(organizations.addMember)(ctx, {
-        callerId: "admin_org_a",
+        sessionToken: "tok_admin_org_a",
         orgId: ORG_B,
         email: "sneak@b.com",
         name: "Sneak",
@@ -511,7 +567,7 @@ describe("4. PLATFORM OWNER SCOPE — cross-org access", () => {
     const ctx = makeCtx();
     await expect(
       h(prescriptions.create)(ctx, {
-        callerId: "platform_owner",
+        sessionToken: "tok_platform_owner",
         consultationId: "c1" as any,
         patientId: "p1" as any,
         providerId: "prov1" as any,
@@ -570,9 +626,13 @@ describe("5. STATIC COMPLETENESS — every protected handler has requireCap", ()
   for (const file of PROTECTED_MUTATIONS) {
     it(`${file} contains requireCap or requireAnyCap`, () => {
       const content = fs.readFileSync(path.join(CONVEX_DIR, file), "utf-8");
+      // requireCapSession / requireAnyCapSession are aliases of requireCap / requireAnyCap
+      // (imported as aliases in some files, e.g. members.ts)
       const hasCapCheck =
         content.includes("requireCap(") ||
-        content.includes("requireAnyCap(");
+        content.includes("requireAnyCap(") ||
+        content.includes("requireCapSession(") ||
+        content.includes("requireAnyCapSession(");
       expect(
         hasCapCheck,
         `${file} has mutations but no requireCap/requireAnyCap call`
@@ -590,12 +650,12 @@ describe("5. STATIC COMPLETENESS — every protected handler has requireCap", ()
    *   The REAL enforcement gate for actions is in the mutations they call via
    *   ctx.runMutation(). Every action calls at least one protected mutation.
    *
-   *   This test verifies that action files that ARE action-gated have callerId
+   *   This test verifies that action files that ARE action-gated have sessionToken
    *   threaded through to their underlying mutations, OR are in the intentional
    *   public list (pre-identity auth flows, public lookup utilities).
    *
    *   Action files fall into three categories:
-   *   A) "enforced-at-mutation" — threads callerId to protected mutations
+   *   A) "enforced-at-mutation" — threads sessionToken to protected mutations
    *   B) "pre-identity public"  — auth flows, no session yet
    *   C) "public utility"       — read-only, no DB writes, intentionally open
    */
@@ -616,7 +676,7 @@ describe("5. STATIC COMPLETENESS — every protected handler has requireCap", ()
     "whopCheckout.ts",     // Whop payment flow
   ]);
 
-  // Category A: enforced-at-mutation (must thread callerId through)
+  // Category A: enforced-at-mutation (must thread sessionToken through)
   const ENFORCED_AT_MUTATION_ACTIONS = new Set([
     "credentialVerificationOrchestrator.ts",  // calls credentialVerifications + members mutations
     "aiChat.ts",                               // calls aiConversations mutations
@@ -626,6 +686,7 @@ describe("5. STATIC COMPLETENESS — every protected handler has requireCap", ()
     "verifyLicense.ts",                        // calls compliance mutations
     "medicalIntelligence.ts",                  // read-only external API; no DB writes
     "scanDocument.ts",                         // document scan; no direct DB writes
+    "videoRoom.ts",                            // creates consultation room; threads sessionToken
   ]);
 
   it("all action files are categorized (no uncategorized action files)", () => {
@@ -643,20 +704,20 @@ describe("5. STATIC COMPLETENESS — every protected handler has requireCap", ()
     ).toHaveLength(0);
   });
 
-  it("enforced-at-mutation actions contain callerId arg", () => {
+  it("enforced-at-mutation actions contain sessionToken arg", () => {
     const actionsDir = path.join(CONVEX_DIR, "actions");
     const missing: string[] = [];
     for (const file of ENFORCED_AT_MUTATION_ACTIONS) {
       const fullPath = path.join(actionsDir, file);
       if (!fs.existsSync(fullPath)) continue; // skip if file doesn't exist yet
       const content = fs.readFileSync(fullPath, "utf-8");
-      // medicalIntelligence and scanDocument are read-only external calls — no callerId needed
+      // medicalIntelligence and scanDocument are read-only external calls — no sessionToken needed
       if (file === "medicalIntelligence.ts" || file === "scanDocument.ts") continue;
-      if (!content.includes("callerId")) missing.push(file);
+      if (!content.includes("sessionToken")) missing.push(file);
     }
     expect(
       missing,
-      `Enforced-at-mutation actions missing callerId arg: ${missing.join(", ")}`
+      `Enforced-at-mutation actions missing sessionToken arg: ${missing.join(", ")}`
     ).toHaveLength(0);
   });
 
