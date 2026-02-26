@@ -12,7 +12,7 @@ export interface PageHeaderProps {
   border?: boolean;
   /** Right-side slot (CTA, status badge, etc.) — only rendered when backHref is absent */
   cta?: React.ReactNode;
-  /** "lg" = text-3xl lg:text-4xl (dashboard pages), "md" = text-2xl lg:text-3xl (sub-pages) */
+  /** "lg" = text-3xl lg:text-5xl (dashboard pages), "md" = text-2xl lg:text-4xl (sub-pages) */
   size?: "md" | "lg";
 }
 
@@ -34,8 +34,8 @@ export function PageHeader({
 }: PageHeaderProps) {
   const headingClass =
     size === "lg"
-      ? "text-3xl lg:text-4xl text-foreground font-light tracking-[-0.02em]"
-      : "text-2xl lg:text-3xl text-foreground font-light tracking-[-0.02em]";
+      ? "text-3xl lg:text-5xl text-foreground font-light tracking-[-0.03em]"
+      : "text-2xl lg:text-4xl text-foreground font-light tracking-[-0.02em]";
 
   if (backHref) {
     return (

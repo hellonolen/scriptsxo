@@ -293,7 +293,7 @@ export function AppShell({ children, sidebarExtra }: AppShellProps) {
               {isActive && (
                 <div
                   className="ml-auto w-1 h-1 rounded-full"
-                  style={{ background: "#A78BFA" }}
+                  style={{ background: "var(--sidebar-primary)" }}
                 />
               )}
             </Link>
@@ -317,7 +317,7 @@ export function AppShell({ children, sidebarExtra }: AppShellProps) {
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-medium shrink-0"
             style={{
-              background: "linear-gradient(135deg, #7C3AED, #2DD4BF)",
+              background: "var(--brand-gradient)",
               color: "#FFFFFF",
             }}
           >

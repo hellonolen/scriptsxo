@@ -88,7 +88,11 @@ export default function WorkflowsPage() {
             return (
               <div
                 key={wf.id}
-                className="bg-card border border-border rounded-lg flex flex-col sm:flex-row sm:items-center gap-4"
+                className={`bg-card border rounded-lg flex flex-col sm:flex-row sm:items-center gap-4 ${
+                  wf.priority === "urgent"
+                    ? "border-warning/40 ring-1 ring-warning/20"
+                    : "border-border"
+                }`}
                 style={{ padding: "20px 24px" }}
               >
                 {/* Icon */}

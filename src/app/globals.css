@@ -82,7 +82,7 @@
   --brand-secondary-hover: #14B8A6;
 
   /* Surfaces */
-  --background: #F8F7FF;
+  --background: #F5F4FB;
   --foreground: #09090B;
 
   --card: rgba(255, 255, 255, 0.72);
@@ -107,11 +107,11 @@
   --destructive: #DC2626;
   --destructive-foreground: #FFFFFF;
 
-  --border: rgba(91, 33, 182, 0.08);
+  --border: rgba(91, 33, 182, 0.14);
   --input: rgba(91, 33, 182, 0.10);
   --ring: #7C3AED;
 
-  --radius: 16px;
+  --radius: 12px;
 
   /* Status */
   --success: #059669;
@@ -130,7 +130,7 @@
 
   /* Sidebar — Deep rich panel */
   --sidebar-background: #1E1037;
-  --sidebar-foreground: rgba(255, 255, 255, 0.55);
+  --sidebar-foreground: rgba(255, 255, 255, 0.65);
   --sidebar-primary: #A78BFA;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: rgba(167, 139, 250, 0.12);
@@ -434,9 +434,9 @@
   /* ---- Stat number — oversized dramatic ---- */
   .stat-value {
     font-family: var(--font-heading);
-    font-size: 3rem;
+    font-size: 3.25rem;
     line-height: 1;
-    font-weight: 300;
+    font-weight: 400;
     letter-spacing: -0.03em;
     background: linear-gradient(135deg, var(--foreground), var(--brand));
     -webkit-background-clip: text;
