@@ -483,7 +483,7 @@ export default function HomePage() {
                   }}
                   className="w-full flex items-center justify-between px-6 py-4 rounded-xl bg-[#7C3AED] text-white text-sm font-light tracking-wide hover:bg-[#6D28D9] transition-colors"
                 >
-                  <span>Get Care Today</span>
+                  <span>Get Your Prescription</span>
                   <ArrowRight size={16} aria-hidden="true" />
                 </button>
 
@@ -502,6 +502,15 @@ export default function HomePage() {
               <p className="text-xs text-center text-muted-foreground mt-3 font-light">
                 From $97/month · Cancel anytime · No contracts
               </p>
+
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setStep("email")}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors font-light"
+                >
+                  Already have an account? <span className="underline underline-offset-2">Sign in</span>
+                </button>
+              </div>
 
               <div className="mt-12 flex items-center gap-8 text-[10px] tracking-[0.25em] text-muted-foreground uppercase font-light">
                 <div className="flex items-center gap-2">
