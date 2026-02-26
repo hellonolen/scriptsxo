@@ -71,8 +71,7 @@ export const deleteRecord = mutation({
       throw new ConvexError({ code: "FORBIDDEN", message: "Cannot delete a file you do not own." });
     }
 
-    // TODO: Delete from Convex storage if storageId exists
-    // if (file.storageId) await ctx.storage.delete(file.storageId);
+    if (file.storageId) await ctx.storage.delete(file.storageId);
 
     await ctx.db.delete(args.fileId);
     return { success: true };

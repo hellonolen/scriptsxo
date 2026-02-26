@@ -286,7 +286,7 @@ export function usePasskey(): UsePasskeyReturn {
     async (
       email?: string
     ): Promise<{ success: boolean; email?: string; error?: string }> => {
-      console.log("[SXO-AUTH] Starting authentication...");
+      console.debug("[SXO-AUTH] Starting authentication...");
 
       if (!isPasskeySupported()) {
         console.error("[SXO-AUTH] Device not supported:", {
@@ -302,7 +302,7 @@ export function usePasskey(): UsePasskeyReturn {
       setError(null);
 
       try {
-        console.log("[SXO-AUTH] Step 1: Reading IndexedDB...");
+        console.debug("[SXO-AUTH] Step 1: Reading IndexedDB...");
         let localCreds: StoredCredential[];
 
         if (email) {
@@ -312,7 +312,7 @@ export function usePasskey(): UsePasskeyReturn {
           localCreds = await getLocalCredentials();
         }
 
-        console.log(`[SXO-AUTH] Found ${localCreds.length} credential(s)`);
+        console.debug(`[SXO-AUTH] Found ${localCreds.length} credential(s)`);
 
         if (localCreds.length === 0) {
           setError(
@@ -322,7 +322,7 @@ export function usePasskey(): UsePasskeyReturn {
         }
 
         const credential = localCreds[0];
-        console.log(
+        console.debug(
           `[SXO-AUTH] Step 2: Requesting challenge for ${credential.email}...`
         );
 
@@ -330,10 +330,10 @@ export function usePasskey(): UsePasskeyReturn {
           email: credential.email,
           type: "authentication",
         });
-        console.log("[SXO-AUTH] Step 3: Got challenge, signing...");
+        console.debug("[SXO-AUTH] Step 3: Got challenge, signing...");
 
         const signature = await signChallenge(credential.privateKey, challenge);
-        console.log("[SXO-AUTH] Step 4: Signed, verifying with server...");
+        console.debug("[SXO-AUTH] Step 4: Signed, verifying with server...");
 
         const result = await verifyCredential({
           credentialId: credential.credentialId,
@@ -346,7 +346,7 @@ export function usePasskey(): UsePasskeyReturn {
           throw new Error(result.error || "Verification failed");
         }
 
-        console.log("[SXO-AUTH] Step 5: Verified! Creating session...");
+        console.debug("[SXO-AUTH] Step 5: Verified! Creating session...");
 
         const session = createSession(
           result.email!,
@@ -355,7 +355,7 @@ export function usePasskey(): UsePasskeyReturn {
         setSessionCookie(session);
         localStorage.setItem(SESSIONKEY, JSON.stringify(session));
 
-        console.log("[SXO-AUTH] Authentication complete.");
+        console.debug("[SXO-AUTH] Authentication complete.");
         return { success: true, email: result.email };
       } catch (err) {
         const message =
