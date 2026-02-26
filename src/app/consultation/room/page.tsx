@@ -175,7 +175,7 @@ function AiSidebar({ patient }: { patient: PatientData }) {
       {tab === "patient" && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div>
-            <p className="text-[10px] tracking-widest text-white/40 uppercase mb-2">Patient</p>
+            <p className="text-[10px] tracking-widest text-white/40 uppercase mb-2">Client</p>
             <p className="text-white font-medium">{patient.name}</p>
             {patient.dob && <p className="text-white/50 text-xs mt-0.5">DOB: {patient.dob}</p>}
           </div>

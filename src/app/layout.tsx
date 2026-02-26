@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   keywords: [
     "telehealth",
     "prescription concierge",
-    "online doctor",
+    "online provider",
     "prescription",
     "virtual consultation",
     "premium telehealth",

@@ -406,7 +406,7 @@ export default function HomePage() {
               className="text-5xl xl:text-[4.25rem] text-white/85 font-light leading-[1.08] tracking-[-0.02em]"
               style={{ fontFamily: "var(--font-heading)" }}
             >
-              See a doctor.
+              See a provider.
               <br />
               <em className="gradient-text-soft">Get your prescription. Today.</em>
             </h1>

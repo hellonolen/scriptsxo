@@ -951,7 +951,7 @@ export default function StartPage() {
 
     let contextHint: string;
     if (userRole === "provider") {
-      contextHint = `This is a provider using the AI assistant. They may ask about their patient queue, clinical questions, prescriptions, or practice management. Answer helpfully and concisely.`;
+      contextHint = `This is a provider using the AI assistant. They may ask about their client queue, clinical questions, prescriptions, or practice management. Answer helpfully and concisely.`;
     } else if (userRole === "admin") {
       contextHint = `This is a platform admin using the AI assistant. They may ask about platform stats, client records, revenue, prescriptions, or compliance. Answer with real data when available.`;
     } else {
@@ -1563,7 +1563,7 @@ export default function StartPage() {
                       onChange={(e) =>
                         setVerificationData((p) => ({ ...p, previousPrescriber: e.target.value }))
                       }
-                      placeholder="Doctor name, practice, or clinic"
+                      placeholder="Provider name, practice, or clinic"
                       className="w-full px-4 py-3 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
                     />
                   </div>

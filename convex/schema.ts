@@ -55,6 +55,10 @@ export default defineSchema({
     whopMembershipId: v.optional(v.string()),
     maxProviders: v.optional(v.number()),
     maxPatients: v.optional(v.number()),
+    // Terminology mode — controls how the UI labels the people being served.
+    // "client" = default (ScriptsXO direct-to-consumer)
+    // "patient" = clinical orgs (hospitals, clinics) that prefer medical terminology
+    terminologyMode: v.optional(v.string()), // "client" | "patient"
     // Capability overrides — applied to all members of this org (deny wins)
     capAllow: v.optional(v.array(v.string())),
     capDeny: v.optional(v.array(v.string())),

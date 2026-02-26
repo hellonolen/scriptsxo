@@ -9,10 +9,18 @@ import {
   Globe,
   Users,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 
 const SETTINGS_SECTIONS = [
+  {
+    title: "Terminology",
+    description: "Configure how people are labeled across the platform — \"client\" (default) or \"patient\" per organization.",
+    href: "/admin/settings/terminology",
+    icon: MessageSquare,
+    badge: "Client mode",
+  },
   {
     title: "Payment Methods",
     description: "Configure accepted payment methods: insurance, ACH, wire, crypto, Zelle, and credit cards.",
@@ -22,7 +30,7 @@ const SETTINGS_SECTIONS = [
   },
   {
     title: "Notifications",
-    description: "Email, SMS, and push notification preferences for staff and patients.",
+    description: "Email, SMS, and push notification preferences for staff and clients.",
     href: "/admin/settings/notifications",
     icon: Bell,
     badge: "Coming soon",
