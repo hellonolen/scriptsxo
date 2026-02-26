@@ -1,12 +1,13 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireAnyCap, CAP } from "./lib/capabilities";
+import { requireAnyCap } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 import { ConvexError } from "convex/values";
 
 export const createRecord = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     ownerId: v.string(),
     fileName: v.string(),
     fileType: v.string(),
@@ -16,8 +17,8 @@ export const createRecord = mutation({
     purpose: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.VIEW_DASHBOARD]);
-    const { callerId: _c, ...record } = args;
+    await requireAnyCap(ctx, args.sessionToken, [CAP.INTAKE_SELF, CAP.VIEW_DASHBOARD]);
+    const { sessionToken: _s, ...record } = args;
     return await ctx.db.insert("fileStorage", {
       ...record,
       createdAt: Date.now(),
@@ -53,12 +54,12 @@ export const getByPurpose = query({
 
 export const deleteRecord = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     fileId: v.id("fileStorage"),
     ownerId: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.VIEW_DASHBOARD]);
+    await requireAnyCap(ctx, args.sessionToken, [CAP.INTAKE_SELF, CAP.VIEW_DASHBOARD]);
 
     const file = await ctx.db.get(args.fileId);
     if (!file) {
@@ -91,10 +92,10 @@ export const getById = query({
  */
 export const generateUploadUrl = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAnyCap(ctx, args.callerId, [CAP.INTAKE_SELF, CAP.VIEW_DASHBOARD]);
+    await requireAnyCap(ctx, args.sessionToken, [CAP.INTAKE_SELF, CAP.VIEW_DASHBOARD]);
     return await ctx.storage.generateUploadUrl();
   },
 });

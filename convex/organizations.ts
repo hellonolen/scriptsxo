@@ -6,7 +6,8 @@
  */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireCap, requireOrgMember, CAP } from "./lib/capabilities";
+import { requireCap, requireOrgScope } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 import { logSecurityEvent } from "./lib/securityAudit";
 
 /**
@@ -14,7 +15,7 @@ import { logSecurityEvent } from "./lib/securityAudit";
  */
 export const create = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     name: v.string(),
     slug: v.string(),
     type: v.string(), // "clinic" | "hospital" | "pharmacy"
@@ -23,7 +24,7 @@ export const create = mutation({
     maxPatients: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.SETTINGS_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.SETTINGS_MANAGE);
     // Check slug uniqueness
     const existing = await ctx.db
       .query("organizations")
@@ -108,7 +109,7 @@ export const getMembers = query({
  */
 export const addMember = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     orgId: v.id("organizations"),
     email: v.string(),
     name: v.string(),
@@ -116,8 +117,8 @@ export const addMember = mutation({
     orgRole: v.string(), // "owner" | "admin" | "member"
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.USER_MANAGE);
-    await requireOrgMember(ctx, args.callerId, args.orgId);
+    await requireCap(ctx, args.sessionToken, CAP.USER_MANAGE);
+    await requireOrgScope(ctx, args.sessionToken, args.orgId);
     const emailLower = args.email.toLowerCase();
 
     // Check if member already exists in org
@@ -168,13 +169,13 @@ export const addMember = mutation({
  */
 export const removeMember = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     orgId: v.id("organizations"),
     memberId: v.id("members"),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.USER_MANAGE);
-    await requireOrgMember(ctx, args.callerId, args.orgId);
+    await requireCap(ctx, args.sessionToken, CAP.USER_MANAGE);
+    await requireOrgScope(ctx, args.sessionToken, args.orgId);
     const member = await ctx.db.get(args.memberId);
     if (!member) throw new Error("Member not found");
 
@@ -192,7 +193,7 @@ export const removeMember = mutation({
  */
 export const update = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     orgId: v.id("organizations"),
     name: v.optional(v.string()),
     status: v.optional(v.string()),
@@ -202,9 +203,9 @@ export const update = mutation({
     maxPatients: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.SETTINGS_MANAGE);
-    await requireOrgMember(ctx, args.callerId, args.orgId);
-    const { callerId: _c, orgId, ...updates } = args;
+    await requireCap(ctx, args.sessionToken, CAP.SETTINGS_MANAGE);
+    await requireOrgScope(ctx, args.sessionToken, args.orgId);
+    const { sessionToken: _s, orgId, ...updates } = args;
     const filteredUpdates: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(updates)) {
@@ -281,19 +282,20 @@ export const getStats = query({
  */
 export const updateCapOverrides = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     orgId: v.id("organizations"),
     capAllow: v.optional(v.array(v.string())),
     capDeny: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    let caller;
     try {
-      await requireCap(ctx, args.callerId, CAP.SETTINGS_MANAGE);
-      await requireOrgMember(ctx, args.callerId, args.orgId);
+      caller = await requireCap(ctx, args.sessionToken, CAP.SETTINGS_MANAGE);
+      await requireOrgScope(ctx, args.sessionToken, args.orgId);
     } catch (err) {
       await logSecurityEvent(ctx, {
         action: "ORG_CAP_OVERRIDE_CHANGE",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: null,
         targetId: args.orgId,
         targetType: "org",
         success: false,
@@ -313,7 +315,7 @@ export const updateCapOverrides = mutation({
 
     await logSecurityEvent(ctx, {
       action: "ORG_CAP_OVERRIDE_CHANGE",
-      actorMemberId: args.callerId ?? null,
+      actorMemberId: caller?.memberId ?? null,
       targetId: args.orgId,
       targetType: "org",
       diff: {

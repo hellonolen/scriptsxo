@@ -196,10 +196,11 @@ function ProviderWaitingQueue() {
 
   const session = getSessionCookie();
   const memberId = session?.memberId;
+  const sessionToken = session?.sessionToken;
 
   const queue = useQuery(
     api.consultations.getWaitingQueue,
-    memberId ? { callerId: memberId as any } : "skip"
+    sessionToken ? { sessionToken } : "skip"
   );
 
   const claimConsultation = useMutation(api.consultations.claim);
@@ -218,7 +219,7 @@ function ProviderWaitingQueue() {
     setErrorMsg(null);
     try {
       await claimConsultation({
-        callerId: memberId as any,
+        sessionToken: sessionToken as any,
         consultationId: consultationId as any,
       });
       router.push(`/consultation/room?id=${consultationId}`);

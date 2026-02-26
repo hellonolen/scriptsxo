@@ -6,7 +6,7 @@ import { requireCap, requireAnyCap, CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     patientId: v.id("patients"),
     providerId: v.id("providers"),
     intakeId: v.optional(v.id("intakes")),
@@ -17,7 +17,7 @@ export const create = mutation({
     cost: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireAnyCap(ctx, args.callerId, [CAP.CONSULT_START, CAP.CONSULT_JOIN]);
+    await requireAnyCap(ctx, args.sessionToken, [CAP.CONSULT_START, CAP.CONSULT_JOIN]);
     const now = Date.now();
     return await ctx.db.insert("consultations", {
       ...args,
@@ -45,14 +45,14 @@ export const create = mutation({
 
 export const schedule = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     consultationId: v.id("consultations"),
     scheduledAt: v.number(),
     roomUrl: v.optional(v.string()),
     roomToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
+    await requireCap(ctx, args.sessionToken, CAP.CONSULT_START);
     await ctx.db.patch(args.consultationId, {
       scheduledAt: args.scheduledAt,
       roomUrl: args.roomUrl,
@@ -66,11 +66,11 @@ export const schedule = mutation({
 
 export const start = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     consultationId: v.id("consultations"),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
+    await requireCap(ctx, args.sessionToken, CAP.CONSULT_START);
     await ctx.db.patch(args.consultationId, {
       status: "in_progress",
       startedAt: Date.now(),
@@ -94,7 +94,7 @@ export const start = mutation({
 
 export const complete = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     consultationId: v.id("consultations"),
     notes: v.optional(v.string()),
     diagnosis: v.optional(v.string()),
@@ -104,7 +104,7 @@ export const complete = mutation({
     followUpDate: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
+    await requireCap(ctx, args.sessionToken, CAP.CONSULT_START);
     const now = Date.now();
     const consultation = await ctx.db.get(args.consultationId);
     if (!consultation) throw new Error("Consultation not found");
@@ -142,12 +142,12 @@ export const complete = mutation({
 
 export const cancel = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     consultationId: v.id("consultations"),
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireAnyCap(ctx, args.callerId, [CAP.CONSULT_START, CAP.CONSULT_JOIN]);
+    await requireAnyCap(ctx, args.sessionToken, [CAP.CONSULT_START, CAP.CONSULT_JOIN]);
     await ctx.db.patch(args.consultationId, {
       status: "cancelled",
       notes: args.reason,
@@ -236,14 +236,14 @@ export const getById = query({
  */
 export const createFromIntake = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     intakeId: v.id("intakes"),
     patientId: v.id("patients"),
     recording: v.optional(v.string()),
     patientState: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAnyCap(ctx, args.callerId, [CAP.CONSULT_START, CAP.CONSULT_JOIN]);
+    await requireAnyCap(ctx, args.sessionToken, [CAP.CONSULT_START, CAP.CONSULT_JOIN]);
     const now = Date.now();
 
     // Get available providers for the patient's state
@@ -312,7 +312,7 @@ export const createFromIntake = mutation({
  * chief complaint, and computed wait time in minutes.
  */
 export const getWaitingQueue = query({
-  args: { callerId: v.optional(v.id("members")) },
+  args: { sessionToken: v.string() },
   handler: async (ctx, args) => {
     const waiting = await ctx.db
       .query("consultations")
@@ -385,14 +385,14 @@ export const getMyActiveConsultation = query({
  */
 export const enqueue = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     chiefComplaint: v.string(),
     patientState: v.string(),
     intakeId: v.optional(v.id("intakes")),
     type: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const member = args.callerId ? await ctx.db.get(args.callerId) : null;
+    const member = args.sessionToken ? await ctx.db.get(args.sessionToken) : null;
     if (!member) {
       throw new ConvexError({ code: "UNAUTHORIZED", message: "Authentication required." });
     }
@@ -451,11 +451,11 @@ export const enqueue = mutation({
  */
 export const claim = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     consultationId: v.id("consultations"),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.CONSULT_START);
+    await requireCap(ctx, args.sessionToken, CAP.CONSULT_START);
 
     const consult = await ctx.db.get(args.consultationId);
     if (!consult) {
@@ -465,7 +465,7 @@ export const claim = mutation({
       throw new ConvexError({ code: "CONFLICT", message: "Consultation is no longer waiting." });
     }
 
-    const member = args.callerId ? await ctx.db.get(args.callerId) : null;
+    const member = args.sessionToken ? await ctx.db.get(args.sessionToken) : null;
     const provider = member
       ? await ctx.db
           .query("providers")

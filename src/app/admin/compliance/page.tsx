@@ -60,14 +60,16 @@ export default function CompliancePage() {
   const session = getSessionCookie();
   const memberId = session?.memberId;
 
+  const sessionToken = session?.sessionToken;
+
   const events = useQuery(
     api.platformAdmin.listSecurityEvents,
-    memberId ? { callerId: memberId as any, limit: 50 } : "skip"
+    sessionToken ? { sessionToken, limit: 50 } : "skip"
   );
 
   const pendingVerifications = useQuery(
     api.credentialVerifications.getPending,
-    memberId ? { callerId: memberId as any } : "skip"
+    sessionToken ? { sessionToken } : "skip"
   );
 
   const isLoadingEvents = events === undefined;

@@ -60,10 +60,10 @@ async function stripeGet(
 export const createVerificationSession = action({
   args: {
     patientEmail: v.string(),
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.INTAKE_SELF);
+    await requireCap(ctx, args.sessionToken, CAP.INTAKE_SELF);
     const apiKey = process.env.STRIPE_SECRET_KEY;
     if (!apiKey) {
       throw new Error("STRIPE_SECRET_KEY not configured");
@@ -100,10 +100,10 @@ export const checkVerificationStatus = action({
   args: {
     verificationSessionId: v.string(),
     patientEmail: v.string(),
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.INTAKE_SELF);
+    await requireCap(ctx, args.sessionToken, CAP.INTAKE_SELF);
     const apiKey = process.env.STRIPE_SECRET_KEY;
     if (!apiKey) {
       throw new Error("STRIPE_SECRET_KEY not configured");

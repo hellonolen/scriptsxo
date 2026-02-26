@@ -1,7 +1,8 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireAnyCap, CAP } from "./lib/capabilities";
+import { requireAnyCap } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 
 /**
  * Match a patient to an available provider based on state licensing and availability.
@@ -50,7 +51,7 @@ export const matchProvider = query({
  */
 export const bookConsultation = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     patientId: v.id("patients"),
     providerId: v.id("providers"),
     intakeId: v.optional(v.id("intakes")),
@@ -60,7 +61,7 @@ export const bookConsultation = mutation({
     patientState: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAnyCap(ctx, args.callerId, [CAP.CONSULT_JOIN, CAP.CONSULT_START]);
+    await requireAnyCap(ctx, args.sessionToken, [CAP.CONSULT_JOIN, CAP.CONSULT_START]);
     const provider = await ctx.db.get(args.providerId);
     if (!provider) throw new Error("Provider not found");
 

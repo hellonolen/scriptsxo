@@ -1,11 +1,12 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireCap, CAP } from "./lib/capabilities";
+import { requireCap } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     name: v.string(),
     ncpdpId: v.optional(v.string()),
     npiNumber: v.optional(v.string()),
@@ -24,7 +25,7 @@ export const create = mutation({
     tier: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     const now = Date.now();
     return await ctx.db.insert("pharmacies", {
       ...args,
@@ -72,12 +73,12 @@ export const getByState = query({
 
 export const updateStatus = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     pharmacyId: v.id("pharmacies"),
     status: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     await ctx.db.patch(args.pharmacyId, {
       status: args.status,
       updatedAt: Date.now(),
@@ -88,12 +89,12 @@ export const updateStatus = mutation({
 
 export const update = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     pharmacyId: v.id("pharmacies"),
     updates: v.any(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     await ctx.db.patch(args.pharmacyId, {
       ...args.updates,
       updatedAt: Date.now(),

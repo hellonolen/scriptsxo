@@ -173,6 +173,67 @@ export async function revokeSession(
 }
 
 /**
+ * Read-only variant of getCaller for use inside Convex QUERIES.
+ * Queries are read-only; ctx.db.patch is forbidden.
+ * This version validates the session without updating lastUsedAt.
+ */
+export async function getCallerQuery(
+  ctx: any,
+  sessionToken: string | undefined
+): Promise<CallerContext> {
+  if (!sessionToken) {
+    throw new ConvexError({ code: "UNAUTHORIZED", message: "Authentication required." });
+  }
+
+  const session = await ctx.db
+    .query("sessions")
+    .withIndex("by_token", (q: any) => q.eq("sessionToken", sessionToken))
+    .first();
+
+  if (!session) {
+    throw new ConvexError({ code: "UNAUTHORIZED", message: "Session not found or expired." });
+  }
+
+  if (session.expiresAt < Date.now()) {
+    throw new ConvexError({ code: "UNAUTHORIZED", message: "Session expired. Please log in again." });
+  }
+
+  const member = await ctx.db.get(session.memberId);
+  if (!member) {
+    throw new ConvexError({ code: "UNAUTHORIZED", message: "Member not found." });
+  }
+
+  const caps = await getMemberEffectiveCaps(ctx, session.memberId);
+
+  return {
+    memberId: session.memberId,
+    email: session.email,
+    orgId: member.orgId,
+    role: member.role as Role,
+    isPlatformOwner: member.isPlatformOwner === true,
+    caps,
+  };
+}
+
+/**
+ * Require a capability in a QUERY context (read-only, no lastUsedAt update).
+ */
+export async function requireCapQuery(
+  ctx: any,
+  sessionToken: string | undefined,
+  cap: Capability
+): Promise<CallerContext> {
+  const caller = await getCallerQuery(ctx, sessionToken);
+  if (!caller.caps.has(cap)) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: `Missing required capability: ${cap}`,
+    });
+  }
+  return caller;
+}
+
+/**
  * Revoke ALL sessions for a member (e.g., password reset, role change).
  */
 export async function revokeAllMemberSessions(

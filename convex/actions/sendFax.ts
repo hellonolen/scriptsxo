@@ -10,10 +10,10 @@ export const send = action({
   args: {
     prescriptionId: v.id("prescriptions"),
     pharmacyId: v.id("pharmacies"),
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args): Promise<{ faxLogId: string; phaxioFaxId?: string }> => {
-    await requireCap(ctx, args.callerId, CAP.RX_VIEW);
+    await requireCap(ctx, args.sessionToken, CAP.RX_VIEW);
     // Get pharmacy fax number
     const pharmacy = await ctx.runQuery(api.pharmacies.getById, {
       pharmacyId: args.pharmacyId,

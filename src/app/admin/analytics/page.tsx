@@ -1,106 +1,129 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, ArrowLeft, TrendingUp, Users, DollarSign, Clock, Activity } from "lucide-react";
-import { AppShell } from "@/components/app-shell";
-
-const METRICS = [
-  { icon: Users, label: "Total Patients", value: "1,247", change: "+12%", period: "vs last month" },
-  { icon: Activity, label: "Consultations", value: "438", change: "+8%", period: "this month" },
-  { icon: DollarSign, label: "Revenue", value: "$32,850", change: "+15%", period: "this month" },
-  { icon: Clock, label: "Avg Wait Time", value: "8 min", change: "-22%", period: "vs last month" },
-];
-
-const TOP_SPECIALTIES = [
-  { name: "General Medicine", consultations: 156, percentage: 36 },
-  { name: "Urgent Care", consultations: 98, percentage: 22 },
-  { name: "Dermatology", consultations: 72, percentage: 16 },
-  { name: "Mental Health", consultations: 65, percentage: 15 },
-  { name: "Other", consultations: 47, percentage: 11 },
-];
+import { BarChart3, ArrowLeft, Users, Activity, DollarSign, Clock } from "lucide-react";
+import { Nav } from "@/components/nav";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 
 export default function AnalyticsPage() {
+  const patientCount = useQuery(api.members.countByRole, { role: "patient" });
+  const providerCount = useQuery(api.members.countByRole, { role: "provider" });
+  const consultationCount = useQuery(api.consultations.countAll);
+
+  const isLoading =
+    patientCount === undefined ||
+    providerCount === undefined ||
+    consultationCount === undefined;
+
   return (
-    <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1000px]">
-        <div className="flex items-center gap-3 mb-2">
-          <Link href="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft size={20} aria-hidden="true" />
-          </Link>
-          <div>
-            <p className="eyebrow mb-0.5">ADMINISTRATION</p>
-            <h1
-              className="text-2xl lg:text-3xl font-light text-foreground tracking-[-0.02em]"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              Analytics
-            </h1>
-          </div>
-        </div>
-        <p className="text-muted-foreground font-light mb-8 ml-8">
-          Platform performance and revenue metrics.
-        </p>
-
-        {/* Key Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-          {METRICS.map((metric, i) => (
-            <div key={i} className="bg-card border border-border rounded-lg p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <metric.icon size={16} className="text-primary" aria-hidden="true" />
-                <span className="text-xs text-muted-foreground">{metric.label}</span>
-              </div>
-              <div className="text-2xl font-bold text-foreground mb-1">
-                {metric.value}
-              </div>
-              <div className="flex items-center gap-1">
-                <TrendingUp size={12} className="text-green-500" aria-hidden="true" />
-                <span className="text-xs text-green-600">{metric.change}</span>
-                <span className="text-xs text-muted-foreground">{metric.period}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Specialty Breakdown */}
-        <div className="bg-card border border-border rounded-lg p-6 mb-10">
-          <h2 className="text-sm font-semibold text-foreground mb-6">
-            Consultations by Specialty
-          </h2>
-          <div className="space-y-4">
-            {TOP_SPECIALTIES.map((specialty, i) => (
-              <div key={i} className="flex items-center gap-4">
-                <span className="text-sm text-foreground w-36 flex-shrink-0">
-                  {specialty.name}
-                </span>
-                <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary rounded-full transition-all"
-                    style={{ width: `${specialty.percentage}%` }}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground w-16 text-right">
-                  {specialty.consultations}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Revenue Chart Placeholder */}
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h2 className="text-sm font-semibold text-foreground mb-4">
-            Revenue Trend (Last 30 Days)
-          </h2>
-          <div className="h-48 bg-muted/50 rounded-lg flex items-center justify-center">
-            <div className="text-center">
-              <BarChart3 size={32} className="text-muted-foreground mx-auto mb-2" aria-hidden="true" />
+    <>
+      <Nav />
+      <main className="min-h-screen pt-24 pb-20 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-center gap-3 mb-8">
+            <Link href="/admin" className="text-muted-foreground hover:text-foreground">
+              <ArrowLeft size={20} aria-hidden="true" />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tighter text-foreground">
+                Analytics
+              </h1>
               <p className="text-sm text-muted-foreground">
-                Chart visualization will render with real data
+                Platform performance and revenue metrics.
               </p>
             </div>
           </div>
+
+          {/* Key Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+            {/* Patients */}
+            <div className="bg-card border border-border rounded-lg p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Users size={16} className="text-primary" aria-hidden="true" />
+                <span className="text-xs text-muted-foreground">Total Patients</span>
+              </div>
+              <div className="text-2xl font-bold text-foreground mb-1">
+                {isLoading ? "—" : patientCount}
+              </div>
+              <div className="text-xs text-muted-foreground">registered members</div>
+            </div>
+
+            {/* Providers */}
+            <div className="bg-card border border-border rounded-lg p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Users size={16} className="text-primary" aria-hidden="true" />
+                <span className="text-xs text-muted-foreground">Providers</span>
+              </div>
+              <div className="text-2xl font-bold text-foreground mb-1">
+                {isLoading ? "—" : providerCount}
+              </div>
+              <div className="text-xs text-muted-foreground">active clinicians</div>
+            </div>
+
+            {/* Consultations */}
+            <div className="bg-card border border-border rounded-lg p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Activity size={16} className="text-primary" aria-hidden="true" />
+                <span className="text-xs text-muted-foreground">Consultations</span>
+              </div>
+              <div className="text-2xl font-bold text-foreground mb-1">
+                {isLoading ? "—" : consultationCount}
+              </div>
+              <div className="text-xs text-muted-foreground">all time</div>
+            </div>
+
+            {/* Revenue — needs Stripe, not yet available */}
+            <div className="bg-card border border-border rounded-lg p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <DollarSign size={16} className="text-primary" aria-hidden="true" />
+                <span className="text-xs text-muted-foreground">Revenue</span>
+              </div>
+              <div className="text-2xl font-bold text-foreground mb-1">—</div>
+              <div className="text-xs text-muted-foreground">Stripe not connected</div>
+            </div>
+          </div>
+
+          {/* Wait Time — needs telemetry */}
+          <div className="bg-card border border-border rounded-lg p-5 mb-6 flex items-center gap-4">
+            <Clock size={18} className="text-primary flex-shrink-0" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-foreground">Avg Wait Time</p>
+              <p className="text-xs text-muted-foreground">
+                — &nbsp;Telemetry not yet connected. Wait time will be calculated from consultation
+                start times once tracking is enabled.
+              </p>
+            </div>
+          </div>
+
+          {/* Specialty Breakdown — coming soon */}
+          <div className="bg-card border border-border rounded-lg p-6 mb-10">
+            <h2 className="text-sm font-semibold text-foreground mb-4">
+              Consultations by Specialty
+            </h2>
+            <div className="h-24 flex items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                Specialty breakdown available once consultation data accumulates.
+              </p>
+            </div>
+          </div>
+
+          {/* Revenue Chart Placeholder */}
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h2 className="text-sm font-semibold text-foreground mb-4">
+              Revenue Trend (Last 30 Days)
+            </h2>
+            <div className="h-48 bg-muted/50 rounded-lg flex items-center justify-center">
+              <div className="text-center">
+                <BarChart3 size={32} className="text-muted-foreground mx-auto mb-2" aria-hidden="true" />
+                <p className="text-sm text-muted-foreground">
+                  Chart renders with real Stripe revenue data
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </AppShell>
+      </main>
+    </>
   );
 }

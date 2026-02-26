@@ -6,7 +6,8 @@
  */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireCap, CAP } from "./lib/capabilities";
+import { requireCap } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 
 /**
  * Get a setting by key.
@@ -45,13 +46,13 @@ export const getMany = query({
  */
 export const set = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     key: v.string(),
     value: v.any(),
     updatedBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.SETTINGS_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.SETTINGS_MANAGE);
     const existing = await ctx.db
       .query("settings")
       .withIndex("by_key", (q) => q.eq("key", args.key))
@@ -81,11 +82,11 @@ export const set = mutation({
  */
 export const remove = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     key: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.SETTINGS_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.SETTINGS_MANAGE);
     const existing = await ctx.db
       .query("settings")
       .withIndex("by_key", (q) => q.eq("key", args.key))

@@ -5,14 +5,15 @@
  */
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireCap, CAP } from "./lib/capabilities";
+import { requireCap } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 
 /**
  * Send a message.
  */
 export const send = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     senderEmail: v.string(),
     senderRole: v.string(),
     recipientEmail: v.string(),
@@ -21,7 +22,7 @@ export const send = mutation({
     attachments: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.MSG_SEND);
+    await requireCap(ctx, args.sessionToken, CAP.MSG_SEND);
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderEmail: args.senderEmail.toLowerCase(),
@@ -89,11 +90,11 @@ export const getUnreadCount = query({
  */
 export const markRead = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     messageId: v.id("messages"),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.MSG_VIEW);
+    await requireCap(ctx, args.sessionToken, CAP.MSG_VIEW);
     await ctx.db.patch(args.messageId, {
       readAt: Date.now(),
     });

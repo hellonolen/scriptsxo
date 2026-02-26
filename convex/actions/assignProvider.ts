@@ -7,10 +7,10 @@ import { requireCap, CAP } from "../lib/capabilities";
 export const assign = action({
   args: {
     patientState: v.string(),
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args): Promise<{ providerId: string }> => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     // Get active providers licensed in patient's state
     const providers = await ctx.runQuery(api.providers.getByState, {
       state: args.patientState,

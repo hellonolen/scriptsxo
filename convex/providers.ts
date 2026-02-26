@@ -1,11 +1,12 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireCap, CAP } from "./lib/capabilities";
+import { requireCap } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     memberId: v.id("members"),
     email: v.string(),
     firstName: v.string(),
@@ -19,7 +20,7 @@ export const create = mutation({
     maxDailyConsultations: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     const now = Date.now();
 
     // Verify NPI is unique
@@ -99,14 +100,14 @@ export const getByState = query({
 
 export const updateAvailability = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     providerId: v.id("providers"),
     acceptingPatients: v.optional(v.boolean()),
     availability: v.optional(v.any()),
     maxDailyConsultations: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
     if (args.acceptingPatients !== undefined) updates.acceptingPatients = args.acceptingPatients;
     if (args.availability !== undefined) updates.availability = args.availability;
@@ -120,13 +121,13 @@ export const updateAvailability = mutation({
 
 export const verifyCredentials = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     providerId: v.id("providers"),
     deaNumber: v.optional(v.string()),
     licenseNumbers: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     const updates: Record<string, unknown> = {
       status: "active",
       credentialVerifiedAt: Date.now(),
@@ -142,12 +143,12 @@ export const verifyCredentials = mutation({
 
 export const updateStatus = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     providerId: v.id("providers"),
     status: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     await ctx.db.patch(args.providerId, {
       status: args.status,
       updatedAt: Date.now(),
@@ -175,7 +176,7 @@ export const listAll = query({
 
 export const update = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     providerId: v.id("providers"),
     firstName: v.optional(v.string()),
     lastName: v.optional(v.string()),
@@ -190,7 +191,7 @@ export const update = mutation({
     acceptingPatients: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     const { providerId, ...fields } = args;
     const updates: Record<string, unknown> = { updatedAt: Date.now() };
 
@@ -207,11 +208,11 @@ export const update = mutation({
 
 export const remove = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     providerId: v.id("providers"),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     await ctx.db.patch(args.providerId, {
       status: "inactive",
       updatedAt: Date.now(),
@@ -222,11 +223,11 @@ export const remove = mutation({
 
 export const incrementQueue = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     providerId: v.id("providers"),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.PROVIDER_MANAGE);
+    await requireCap(ctx, args.sessionToken, CAP.PROVIDER_MANAGE);
     const provider = await ctx.db.get(args.providerId);
     if (!provider) throw new Error("Provider not found");
     await ctx.db.patch(args.providerId, {

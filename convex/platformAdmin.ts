@@ -18,20 +18,20 @@
  *
  *   Step 1 — request:
  *     npx convex run platformAdmin:requestPlatformOwnerGrant \
- *       '{"callerId":"<id>","targetMemberId":"<id>","confirmationPhrase":"GRANT_PLATFORM_OWNER"}'
+ *       '{"sessionToken":"<token>","targetMemberId":"<id>","confirmationPhrase":"GRANT_PLATFORM_OWNER"}'
  *     → returns { requestId, confirmsAfter }
  *
  *   Wait 60 seconds.
  *
  *   Step 2 — confirm:
  *     npx convex run platformAdmin:confirmPlatformOwnerGrant \
- *       '{"callerId":"<id>","requestId":"<id>"}'
+ *       '{"sessionToken":"<token>","requestId":"<id>"}'
  *     → grant applied
  *
  * ─── Revoke ───────────────────────────────────────────────────────────────────
  *
  *   npx convex run platformAdmin:revokePlatformOwner \
- *     '{"callerId":"<id>","targetMemberId":"<id>","confirmationPhrase":"REVOKE_PLATFORM_OWNER"}'
+ *     '{"sessionToken":"<token>","targetMemberId":"<id>","confirmationPhrase":"REVOKE_PLATFORM_OWNER"}'
  *
  * ─── What you must NOT do ─────────────────────────────────────────────────────
  *
@@ -54,6 +54,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
 import { logSecurityEvent } from "./lib/securityAudit";
+import { getCaller, getCallerQuery } from "./lib/serverAuth";
 
 const GRANT_PHRASE = "GRANT_PLATFORM_OWNER";
 const REVOKE_PHRASE = "REVOKE_PLATFORM_OWNER";
@@ -62,12 +63,12 @@ const GRANT_WINDOW_MS = 300_000;   // 5 minutes to confirm after cooldown
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-async function requirePlatformOwner(ctx: any, callerId: string | null | undefined) {
-  if (!callerId) {
-    throw new ConvexError({ code: "UNAUTHORIZED", message: "callerId required." });
+async function requirePlatformOwner(ctx: any, sessionToken: string | null | undefined) {
+  if (!sessionToken) {
+    throw new ConvexError({ code: "UNAUTHORIZED", message: "Authentication required." });
   }
-  const caller = await ctx.db.get(callerId);
-  if (!caller?.isPlatformOwner) {
+  const caller = await getCaller(ctx, sessionToken);
+  if (!caller.isPlatformOwner) {
     throw new ConvexError({
       code: "FORBIDDEN",
       message: "Only a platform owner may perform this action.",
@@ -159,7 +160,7 @@ export const seed = mutation({
  */
 export const requestPlatformOwnerGrant = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     targetMemberId: v.id("members"),
     confirmationPhrase: v.string(),
   },
@@ -168,7 +169,7 @@ export const requestPlatformOwnerGrant = mutation({
     if (args.confirmationPhrase !== GRANT_PHRASE) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_GRANT_REQUESTED",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: null,
         targetId: args.targetMemberId,
         targetType: "member",
         success: false,
@@ -183,11 +184,11 @@ export const requestPlatformOwnerGrant = mutation({
     // Caller must be platform owner
     let caller;
     try {
-      caller = await requirePlatformOwner(ctx, args.callerId);
+      caller = await requirePlatformOwner(ctx, args.sessionToken);
     } catch (err) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_GRANT_REQUESTED",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: null,
         targetId: args.targetMemberId,
         targetType: "member",
         success: false,
@@ -200,7 +201,7 @@ export const requestPlatformOwnerGrant = mutation({
     if (!target) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_GRANT_REQUESTED",
-        actorMemberId: args.callerId,
+        actorMemberId: caller.memberId,
         targetId: args.targetMemberId,
         targetType: "member",
         success: false,
@@ -212,7 +213,7 @@ export const requestPlatformOwnerGrant = mutation({
     if (target.isPlatformOwner) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_GRANT_REQUESTED",
-        actorMemberId: args.callerId,
+        actorMemberId: caller.memberId,
         targetId: args.targetMemberId,
         targetType: "member",
         success: false,
@@ -226,7 +227,7 @@ export const requestPlatformOwnerGrant = mutation({
 
     const now = Date.now();
     const requestId = await ctx.db.insert("pendingPlatformOwnerGrants", {
-      requestedBy: args.callerId,
+      requestedBy: caller.memberId,
       targetMemberId: args.targetMemberId,
       requestedAt: now,
       confirmsAfter: now + COOLDOWN_MS,
@@ -236,7 +237,7 @@ export const requestPlatformOwnerGrant = mutation({
 
     await logSecurityEvent(ctx, {
       action: "PLATFORM_OWNER_GRANT_REQUESTED",
-      actorMemberId: args.callerId,
+      actorMemberId: caller.memberId,
       actorOrgId: caller.orgId ?? null,
       targetId: args.targetMemberId,
       targetType: "member",
@@ -265,15 +266,18 @@ export const requestPlatformOwnerGrant = mutation({
  */
 export const confirmPlatformOwnerGrant = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     requestId: v.id("pendingPlatformOwnerGrants"),
   },
   handler: async (ctx, args) => {
+    // Resolve caller first — all subsequent checks need the memberId
+    const caller = await requirePlatformOwner(ctx, args.sessionToken);
+
     const grant = await ctx.db.get(args.requestId);
     if (!grant) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_GRANT_CONFIRMED",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: caller.memberId,
         targetId: args.requestId,
         targetType: "platform",
         success: false,
@@ -285,7 +289,7 @@ export const confirmPlatformOwnerGrant = mutation({
     if (grant.status !== "pending") {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_GRANT_CONFIRMED",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: caller.memberId,
         targetId: grant.targetMemberId,
         targetType: "member",
         success: false,
@@ -298,10 +302,10 @@ export const confirmPlatformOwnerGrant = mutation({
     }
 
     // Must be the same caller who requested
-    if (args.callerId !== grant.requestedBy.toString()) {
+    if (caller.memberId !== grant.requestedBy) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_GRANT_CONFIRMED",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: caller.memberId,
         targetId: grant.targetMemberId,
         targetType: "member",
         success: false,
@@ -319,7 +323,7 @@ export const confirmPlatformOwnerGrant = mutation({
       const remaining = Math.ceil((grant.confirmsAfter - now) / 1000);
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_GRANT_CONFIRMED",
-        actorMemberId: args.callerId,
+        actorMemberId: caller.memberId,
         targetId: grant.targetMemberId,
         targetType: "member",
         success: false,
@@ -335,7 +339,7 @@ export const confirmPlatformOwnerGrant = mutation({
       await ctx.db.patch(args.requestId, { status: "expired" });
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_GRANT_CONFIRMED",
-        actorMemberId: args.callerId,
+        actorMemberId: caller.memberId,
         targetId: grant.targetMemberId,
         targetType: "member",
         success: false,
@@ -353,7 +357,7 @@ export const confirmPlatformOwnerGrant = mutation({
 
     await logSecurityEvent(ctx, {
       action: "PLATFORM_OWNER_GRANT_CONFIRMED",
-      actorMemberId: args.callerId,
+      actorMemberId: caller.memberId,
       targetId: grant.targetMemberId,
       targetType: "member",
       diff: { isPlatformOwner: { from: false, to: true } },
@@ -373,10 +377,13 @@ export const confirmPlatformOwnerGrant = mutation({
  */
 export const cancelPlatformOwnerGrantRequest = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     requestId: v.id("pendingPlatformOwnerGrants"),
   },
   handler: async (ctx, args) => {
+    // Resolve caller to get memberId for comparison
+    const caller = await getCaller(ctx, args.sessionToken);
+
     const grant = await ctx.db.get(args.requestId);
     if (!grant || grant.status !== "pending") {
       throw new ConvexError({
@@ -385,32 +392,30 @@ export const cancelPlatformOwnerGrantRequest = mutation({
       });
     }
 
-    let caller;
-    try {
-      caller = await requirePlatformOwner(ctx, args.callerId);
-    } catch {
-      // Also allow original requester to cancel their own request
-      if (args.callerId !== grant.requestedBy.toString()) {
-        await logSecurityEvent(ctx, {
-          action: "PLATFORM_OWNER_GRANT_CANCELLED",
-          actorMemberId: args.callerId ?? null,
-          targetId: grant.targetMemberId,
-          targetType: "member",
-          success: false,
-          reason: "Caller is neither a platform owner nor the original requester.",
-        });
-        throw new ConvexError({
-          code: "FORBIDDEN",
-          message: "Only the original requester or a platform owner may cancel.",
-        });
-      }
+    // Allow if caller is platform owner OR is the original requester
+    const isOwner = caller.isPlatformOwner;
+    const isRequester = caller.memberId === grant.requestedBy;
+
+    if (!isOwner && !isRequester) {
+      await logSecurityEvent(ctx, {
+        action: "PLATFORM_OWNER_GRANT_CANCELLED",
+        actorMemberId: caller.memberId,
+        targetId: grant.targetMemberId,
+        targetType: "member",
+        success: false,
+        reason: "Caller is neither a platform owner nor the original requester.",
+      });
+      throw new ConvexError({
+        code: "FORBIDDEN",
+        message: "Only the original requester or a platform owner may cancel.",
+      });
     }
 
     await ctx.db.patch(args.requestId, { status: "cancelled" });
 
     await logSecurityEvent(ctx, {
       action: "PLATFORM_OWNER_GRANT_CANCELLED",
-      actorMemberId: args.callerId ?? null,
+      actorMemberId: caller.memberId,
       targetId: grant.targetMemberId,
       targetType: "member",
       success: true,
@@ -433,7 +438,7 @@ export const cancelPlatformOwnerGrantRequest = mutation({
  */
 export const revokePlatformOwner = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     targetMemberId: v.id("members"),
     confirmationPhrase: v.string(),
   },
@@ -441,7 +446,7 @@ export const revokePlatformOwner = mutation({
     if (args.confirmationPhrase !== REVOKE_PHRASE) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_REVOKE",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: null,
         targetId: args.targetMemberId,
         targetType: "member",
         success: false,
@@ -455,11 +460,11 @@ export const revokePlatformOwner = mutation({
 
     let caller;
     try {
-      caller = await requirePlatformOwner(ctx, args.callerId);
+      caller = await requirePlatformOwner(ctx, args.sessionToken);
     } catch (err) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_REVOKE",
-        actorMemberId: args.callerId ?? null,
+        actorMemberId: null,
         targetId: args.targetMemberId,
         targetType: "member",
         success: false,
@@ -468,10 +473,11 @@ export const revokePlatformOwner = mutation({
       throw err;
     }
 
-    if (args.callerId === args.targetMemberId) {
+    // Prevent self-revoke
+    if (caller.memberId === args.targetMemberId) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_REVOKE",
-        actorMemberId: args.callerId,
+        actorMemberId: caller.memberId,
         targetId: args.targetMemberId,
         targetType: "member",
         success: false,
@@ -487,7 +493,7 @@ export const revokePlatformOwner = mutation({
     if (!target?.isPlatformOwner) {
       await logSecurityEvent(ctx, {
         action: "PLATFORM_OWNER_REVOKE",
-        actorMemberId: args.callerId,
+        actorMemberId: caller.memberId,
         targetId: args.targetMemberId,
         targetType: "member",
         success: false,
@@ -503,7 +509,7 @@ export const revokePlatformOwner = mutation({
 
     await logSecurityEvent(ctx, {
       action: "PLATFORM_OWNER_REVOKE",
-      actorMemberId: args.callerId,
+      actorMemberId: caller.memberId,
       actorOrgId: caller.orgId ?? null,
       targetId: args.targetMemberId,
       targetType: "member",
@@ -521,14 +527,11 @@ export const revokePlatformOwner = mutation({
 /** List current platform owners. Caller must be a platform owner. */
 export const listOwners = query({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    if (!args.callerId) {
-      throw new ConvexError({ code: "UNAUTHORIZED", message: "callerId required." });
-    }
-    const caller = await ctx.db.get(args.callerId);
-    if (!caller?.isPlatformOwner) {
+    const caller = await getCallerQuery(ctx, args.sessionToken);
+    if (!caller.isPlatformOwner) {
       throw new ConvexError({ code: "FORBIDDEN", message: "Platform owners only." });
     }
     return await ctx.db
@@ -543,15 +546,12 @@ export const listOwners = query({
 /** Fetch recent security events. Platform owner only. */
 export const listSecurityEvents = query({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    if (!args.callerId) {
-      throw new ConvexError({ code: "UNAUTHORIZED", message: "callerId required." });
-    }
-    const caller = await ctx.db.get(args.callerId);
-    if (!caller?.isPlatformOwner) {
+    const caller = await getCallerQuery(ctx, args.sessionToken);
+    if (!caller.isPlatformOwner) {
       throw new ConvexError({ code: "FORBIDDEN", message: "Platform owners only." });
     }
     const limit = args.limit ?? 100;

@@ -8,10 +8,10 @@ import { requireCap, CAP } from "../lib/capabilities";
 export const generate = action({
   args: {
     prescriptionId: v.id("prescriptions"),
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args): Promise<{ storageId: string; url: string }> => {
-    await requireCap(ctx, args.callerId, CAP.RX_VIEW);
+    await requireCap(ctx, args.sessionToken, CAP.RX_VIEW);
     // Fetch prescription data
     const rx = await ctx.runQuery(api.prescriptions.getById, {
       prescriptionId: args.prescriptionId,

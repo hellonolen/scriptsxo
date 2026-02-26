@@ -1,17 +1,18 @@
 // @ts-nocheck
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireCap, CAP } from "./lib/capabilities";
+import { requireCap } from "./lib/serverAuth";
+import { CAP } from "./lib/capabilities";
 
 export const create = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     prescriptionId: v.id("prescriptions"),
     patientId: v.id("patients"),
     pharmacyId: v.optional(v.id("pharmacies")),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.RX_REFILL);
+    await requireCap(ctx, args.sessionToken, CAP.RX_REFILL);
     // Validate prescription exists and has refills remaining
     const rx = await ctx.db.get(args.prescriptionId);
     if (!rx) throw new Error("Prescription not found");
@@ -41,12 +42,12 @@ export const create = mutation({
 
 export const approve = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     refillId: v.id("refillRequests"),
     providerId: v.id("providers"),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.RX_SIGN);
+    await requireCap(ctx, args.sessionToken, CAP.RX_SIGN);
     const refill = await ctx.db.get(args.refillId);
     if (!refill) throw new Error("Refill request not found");
 
@@ -73,13 +74,13 @@ export const approve = mutation({
 
 export const deny = mutation({
   args: {
-    callerId: v.optional(v.id("members")),
+    sessionToken: v.string(),
     refillId: v.id("refillRequests"),
     providerId: v.id("providers"),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.RX_SIGN);
+    await requireCap(ctx, args.sessionToken, CAP.RX_SIGN);
     await ctx.db.patch(args.refillId, {
       status: "denied",
       processedAt: Date.now(),

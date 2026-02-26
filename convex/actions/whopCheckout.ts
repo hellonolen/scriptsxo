@@ -48,10 +48,10 @@ async function whopRequest(
 export const createCheckoutSession = action({
   args: {
     patientEmail: v.string(),
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.INTAKE_SELF);
+    await requireCap(ctx, args.sessionToken, CAP.INTAKE_SELF);
     const apiKey = process.env.WHOP_API_KEY;
     if (!apiKey) {
       throw new Error("WHOP_API_KEY not configured");
@@ -92,10 +92,10 @@ export const createCheckoutSession = action({
 export const verifyMembership = action({
   args: {
     patientEmail: v.string(),
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.INTAKE_SELF);
+    await requireCap(ctx, args.sessionToken, CAP.INTAKE_SELF);
     const apiKey = process.env.WHOP_API_KEY;
     if (!apiKey) {
       throw new Error("WHOP_API_KEY not configured");

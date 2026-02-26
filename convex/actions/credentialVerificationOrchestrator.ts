@@ -31,7 +31,7 @@ import { api, internal } from "../_generated/api";
  */
 export const initializeVerification = action({
   args: {
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
     memberId: v.string(),
     email: v.string(),
     selectedRole: v.string(), // "patient" | "provider" | "pharmacy"
@@ -40,7 +40,7 @@ export const initializeVerification = action({
     const verificationId = await ctx.runMutation(
       api.credentialVerifications.create,
       {
-        callerId: args.callerId,
+        sessionToken: args.sessionToken,
         memberId: args.memberId,
         email: args.email.toLowerCase(),
         selectedRole: args.selectedRole,
@@ -66,7 +66,7 @@ export const initializeVerification = action({
  */
 export const finalizeVerification = action({
   args: {
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
     verificationId: v.string(),
     memberId: v.string(),
   },
@@ -92,7 +92,7 @@ export const finalizeVerification = action({
       if (reviewResult.finalStatus === "verified") {
         const npiData = verification.providerNpiResult || {};
         await ctx.runMutation(api.providers.create, {
-          callerId: args.callerId,
+          sessionToken: args.sessionToken,
           memberId: args.memberId,
           email: verification.email,
           firstName: npiData.firstName || "",
@@ -107,7 +107,7 @@ export const finalizeVerification = action({
         });
 
         await ctx.runMutation(api.members.updateRole, {
-          callerId: args.callerId,
+          sessionToken: args.sessionToken,
           memberId: args.memberId,
           role: "provider",
         });
@@ -116,7 +116,7 @@ export const finalizeVerification = action({
       }
 
       await ctx.runMutation(api.credentialVerifications.complete, {
-        callerId: args.callerId,
+        sessionToken: args.sessionToken,
         id: args.verificationId,
         status: reviewResult.finalStatus,
         complianceSummary: reviewResult.complianceResult,
@@ -130,7 +130,7 @@ export const finalizeVerification = action({
 
       if (reviewResult.finalStatus === "verified") {
         await ctx.runMutation(api.members.updateRole, {
-          callerId: args.callerId,
+          sessionToken: args.sessionToken,
           memberId: args.memberId,
           role: "patient",
         });
@@ -138,7 +138,7 @@ export const finalizeVerification = action({
       }
 
       await ctx.runMutation(api.credentialVerifications.complete, {
-        callerId: args.callerId,
+        sessionToken: args.sessionToken,
         id: args.verificationId,
         status: reviewResult.finalStatus,
         complianceSummary: reviewResult.complianceResult,
@@ -152,7 +152,7 @@ export const finalizeVerification = action({
 
       if (reviewResult.finalStatus === "verified") {
         await ctx.runMutation(api.members.updateRole, {
-          callerId: args.callerId,
+          sessionToken: args.sessionToken,
           memberId: args.memberId,
           role: "pharmacy",
         });
@@ -160,7 +160,7 @@ export const finalizeVerification = action({
       }
 
       await ctx.runMutation(api.credentialVerifications.complete, {
-        callerId: args.callerId,
+        sessionToken: args.sessionToken,
         id: args.verificationId,
         status: reviewResult.finalStatus,
         complianceSummary: reviewResult.complianceResult,

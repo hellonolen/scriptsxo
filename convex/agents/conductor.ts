@@ -6,17 +6,18 @@
 import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "../_generated/api";
-import { requireCap, CAP } from "../lib/capabilities";
+import { requireCap } from "../lib/serverAuth";
+import { CAP } from "../lib/capabilities";
 
 export const dispatch = action({
   args: {
     agentName: v.string(),
     action: v.string(),
     input: v.any(),
-    callerId: v.optional(v.string()),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireCap(ctx, args.callerId, CAP.VIEW_DASHBOARD);
+    await requireCap(ctx, args.sessionToken, CAP.VIEW_DASHBOARD);
     const startTime = Date.now();
 
     try {
