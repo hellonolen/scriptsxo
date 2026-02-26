@@ -113,7 +113,7 @@ export default function FulfillmentPage() {
         <PageHeader
           eyebrow="PHARMACY"
           title="Fulfillment"
-          subtitle="Track and manage order fulfillment."
+          description="Track and manage order fulfillment."
           backHref="/pharmacy"
         />
 

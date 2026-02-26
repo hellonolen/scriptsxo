@@ -80,7 +80,7 @@ export default function ProviderSchedulePage() {
         <PageHeader
           eyebrow="PROVIDER PORTAL"
           title="Schedule"
-          subtitle={`${today} — ${rows.length} appointment${rows.length !== 1 ? "s" : ""}`}
+          description={`${today} — ${rows.length} appointment${rows.length !== 1 ? "s" : ""}`}
           backHref="/provider"
         />
 

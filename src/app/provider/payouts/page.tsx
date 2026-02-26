@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { DollarSign, TrendingUp, Calendar, CreditCard, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { getSessionCookie } from "@/lib/auth";
@@ -57,24 +58,15 @@ export default function ProviderPayoutsPage() {
           <PageHeader
             eyebrow="PROVIDER PORTAL"
             title="Payouts"
-            subtitle="Earnings, payout history, and pending consultation fees."
+            description="Earnings, payout history, and pending consultation fees."
             backHref="/provider"
           />
 
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-            {SEED_PAYOUT_STATS.map((stat, i) => {
-              const Icon = STAT_ICONS[i];
-              return (
-                <div key={stat.label} className="stats-card">
-                  <div className="flex items-center justify-between">
-                    <span className="stats-card-label">{stat.label}</span>
-                    <Icon size={16} className="text-muted-foreground" aria-hidden="true" />
-                  </div>
-                  <div className="stats-card-value text-foreground">{stat.value}</div>
-                </div>
-              );
-            })}
+            {SEED_PAYOUT_STATS.map((stat, i) => (
+              <StatCard key={stat.label} label={stat.label} value={stat.value} icon={STAT_ICONS[i]} />
+            ))}
           </div>
 
           <PayoutSections
@@ -114,24 +106,15 @@ export default function ProviderPayoutsPage() {
         <PageHeader
           eyebrow="PROVIDER PORTAL"
           title="Payouts"
-          subtitle="Earnings, payout history, and pending consultation fees."
+          description="Earnings, payout history, and pending consultation fees."
           backHref="/provider"
         />
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {realStats.map((stat, i) => {
-            const Icon = STAT_ICONS[i];
-            return (
-              <div key={stat.label} className="stats-card">
-                <div className="flex items-center justify-between">
-                  <span className="stats-card-label">{stat.label}</span>
-                  <Icon size={16} className="text-muted-foreground" aria-hidden="true" />
-                </div>
-                <div className="stats-card-value text-foreground">{stat.value}</div>
-              </div>
-            );
-          })}
+          {realStats.map((stat, i) => (
+            <StatCard key={stat.label} label={stat.label} value={stat.value} icon={STAT_ICONS[i]} />
+          ))}
         </div>
 
         {records.length === 0 ? (

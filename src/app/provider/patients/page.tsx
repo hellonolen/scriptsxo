@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Search, ArrowUpDown, Eye, Loader2 } from "lucide-react";
-import { Nav } from "@/components/nav";
+import { Search, ArrowUpDown, Eye, Loader2 } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -33,38 +34,15 @@ export default function PatientsPage() {
   }
 
   return (
-    <>
-      <Nav />
-      <main className="min-h-screen pt-24 pb-20 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-[1400px] mx-auto">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10 pb-8 border-b border-border">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/provider"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Back to provider dashboard"
-              >
-                <ArrowLeft size={20} aria-hidden="true" />
-              </Link>
-              <div>
-                <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase mb-2 font-light">
-                  Provider Portal
-                </p>
-                <h1
-                  className="text-3xl lg:text-4xl text-foreground font-light tracking-tight"
-                  style={{ fontFamily: "var(--font-heading)" }}
-                >
-                  My Patients
-                </h1>
-                <p className="text-muted-foreground font-light mt-1">
-                  {isLoading
-                    ? "Loading..."
-                    : `${patients.length} patients — ${activeCount} verified`}
-                </p>
-              </div>
-            </div>
-          </div>
+    <AppShell>
+      <div className="p-6 lg:p-10 max-w-[1400px]">
+        <PageHeader
+          eyebrow="PROVIDER PORTAL"
+          title="My Clients"
+          description={isLoading ? "Loading..." : `${patients.length} clients — ${activeCount} verified`}
+          backHref="/provider"
+          size="lg"
+        />
 
           {/* Search & Filter */}
           <div className="flex flex-col sm:flex-row gap-4 mb-8">
@@ -203,8 +181,7 @@ export default function PatientsPage() {
               </table>
             </div>
           )}
-        </div>
-      </main>
-    </>
+      </div>
+    </AppShell>
   );
 }

@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Loader2, Clock, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { StatCard } from "@/components/ui/stat-card";
 import { getSessionCookie } from "@/lib/auth";
 import { CAP, hasCap, parseRolesFromSession } from "@/lib/capabilities";
 import { Badge } from "@/components/ui/badge";
@@ -255,22 +256,9 @@ function ProviderWaitingQueue() {
 
         {/* Stats bar */}
         <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="stats-card">
-            <span className="stats-card-label">Waiting</span>
-            <span className="stats-card-value">
-              {queue === undefined ? "—" : waitingCount}
-            </span>
-          </div>
-          <div className="stats-card">
-            <span className="stats-card-label">Avg Wait</span>
-            <span className="stats-card-value">
-              {avgWait !== null ? `${avgWait} min` : "—"}
-            </span>
-          </div>
-          <div className="stats-card">
-            <span className="stats-card-label">Next</span>
-            <span className="stats-card-value text-sm font-light">{nextPatient}</span>
-          </div>
+          <StatCard label="Waiting" value={queue === undefined ? "—" : waitingCount} />
+          <StatCard label="Avg Wait" value={avgWait !== null ? `${avgWait} min` : "—"} />
+          <StatCard label="Next" value={nextPatient} />
         </div>
 
         {/* Queue table */}
