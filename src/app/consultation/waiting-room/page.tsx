@@ -232,7 +232,7 @@ function ProviderWaitingQueue() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1100px]">
+      <div className="p-6 lg:p-10 max-w-[1200px]">
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10 pb-6 border-b border-border">

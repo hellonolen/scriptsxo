@@ -1,8 +1,10 @@
 "use client";
 
-import { ClipboardList, Clock, CheckCircle2, Circle, ArrowRight } from "lucide-react";
+import { ClipboardList, Clock, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import Link from "next/link";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
+import { Badge } from "@/components/ui/badge";
 
 const DEMO_WORKFLOWS = [
   {
@@ -12,7 +14,7 @@ const DEMO_WORKFLOWS = [
     step: "Medical History",
     stepsTotal: 5,
     stepsComplete: 3,
-    priority: "high",
+    priority: "urgent",
     due: "Today",
   },
   {
@@ -45,82 +47,62 @@ const DEMO_WORKFLOWS = [
     priority: "low",
     due: "This week",
   },
-];
+] as const;
 
-const PRIORITY_STYLES: Record<string, string> = {
-  high: "tag tag-active",
-  normal: "tag",
-  low: "tag",
-};
+type Priority = "urgent" | "normal" | "low";
 
-const PRIORITY_LABELS: Record<string, string> = {
-  high: "Urgent",
-  normal: "Normal",
-  low: "Low",
+const PRIORITY_VARIANT: Record<Priority, "warning" | "secondary" | "default"> = {
+  urgent:  "warning",
+  normal:  "secondary",
+  low:     "secondary",
 };
 
 export default function WorkflowsPage() {
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1100px]">
-
-        {/* Header */}
-        <header className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            <p className="eyebrow mb-2">CLINICAL</p>
-            <h1
-              className="text-3xl lg:text-4xl font-light text-foreground tracking-[-0.02em]"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              Workflows
-            </h1>
-          </div>
-          <div className="flex gap-3">
-            <span className="tag tag-violet">4 Active</span>
-            <span className="tag tag-active">1 Urgent</span>
-          </div>
-        </header>
+      <div className="app-content">
+        <PageHeader
+          eyebrow="CLINICAL"
+          title="Workflows"
+          description="Active clinical tasks and care coordination."
+          cta={
+            <div className="flex items-center gap-2">
+              <Badge variant="default">4 Active</Badge>
+              <Badge variant="warning">1 Urgent</Badge>
+            </div>
+          }
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {[
-            { label: "Active", value: "4" },
-            { label: "Completed Today", value: "7" },
-            { label: "Avg. Time", value: "2.4h" },
-            { label: "On Track", value: "92%" },
-          ].map((s) => (
-            <div key={s.label} className="glass-card flex flex-col gap-2">
-              <span className="stat-label">{s.label}</span>
-              <span className="stat-value">{s.value}</span>
-            </div>
-          ))}
+          <StatCard label="Active"          value="4"    icon={ClipboardList} />
+          <StatCard label="Completed Today" value="7"    icon={ClipboardList} />
+          <StatCard label="Avg. Time"       value="2.4h" icon={Clock} />
+          <StatCard label="On Track"        value="92%"  icon={ClipboardList} />
         </div>
 
-        {/* Workflow list */}
+        {/* Workflow list — surface cards (not glass-card; these are list items) */}
         <div className="space-y-3">
           {DEMO_WORKFLOWS.map((wf) => {
             const pct = Math.round((wf.stepsComplete / wf.stepsTotal) * 100);
             return (
               <div
                 key={wf.id}
-                className="glass-card flex flex-col sm:flex-row sm:items-center gap-4"
+                className="bg-card border border-border rounded-lg flex flex-col sm:flex-row sm:items-center gap-4"
                 style={{ padding: "20px 24px" }}
               >
                 {/* Icon */}
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: "rgba(124, 58, 237, 0.08)" }}
-                >
-                  <ClipboardList size={16} style={{ color: "#7C3AED" }} />
+                <div className="w-10 h-10 rounded-xl bg-brand-secondary-muted flex items-center justify-center shrink-0">
+                  <ClipboardList size={16} className="text-primary" aria-hidden="true" />
                 </div>
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <h3 className="text-[14px] font-medium text-foreground">{wf.title}</h3>
-                    <span className={PRIORITY_STYLES[wf.priority]}>
-                      {PRIORITY_LABELS[wf.priority]}
-                    </span>
+                    <Badge variant={PRIORITY_VARIANT[wf.priority]}>
+                      {wf.priority === "urgent" ? "Urgent" : wf.priority === "low" ? "Low" : "Normal"}
+                    </Badge>
                   </div>
                   <p className="text-[12px] text-muted-foreground mb-2">
                     {wf.patient} — Current step: {wf.step}
@@ -130,10 +112,7 @@ export default function WorkflowsPage() {
                     <div className="flex-1 h-1 rounded-full bg-border overflow-hidden">
                       <div
                         className="h-full rounded-full"
-                        style={{
-                          width: `${pct}%`,
-                          background: "linear-gradient(135deg, #7C3AED, #2DD4BF)",
-                        }}
+                        style={{ width: `${pct}%`, background: "var(--brand-gradient)" }}
                       />
                     </div>
                     <span className="text-[11px] text-muted-foreground shrink-0">
@@ -144,16 +123,16 @@ export default function WorkflowsPage() {
 
                 {/* Due + action */}
                 <div className="flex items-center gap-4 shrink-0">
-                  <div className="text-right">
-                    <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                      <Clock size={12} />
-                      <span>{wf.due}</span>
-                    </div>
+                  <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                    <Clock size={12} aria-hidden="true" />
+                    <span>{wf.due}</span>
                   </div>
-                  <button className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] tracking-[0.1em] uppercase font-medium text-white hover:opacity-90 transition-opacity"
-                    style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}>
+                  <button
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] tracking-[0.1em] uppercase font-medium text-white hover:opacity-90 transition-opacity rounded-md"
+                    style={{ background: "var(--brand-gradient)" }}
+                  >
                     Continue
-                    <ArrowRight size={11} />
+                    <ArrowRight size={11} aria-hidden="true" />
                   </button>
                 </div>
               </div>

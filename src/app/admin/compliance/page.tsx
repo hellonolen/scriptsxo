@@ -76,7 +76,7 @@ export default function CompliancePage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1000px]">
+      <div className="p-6 lg:p-10 max-w-[1200px]">
         <PageHeader
           eyebrow="ADMINISTRATION"
           title="Compliance"

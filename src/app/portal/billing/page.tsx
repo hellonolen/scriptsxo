@@ -34,7 +34,7 @@ export default function BillingPage() {
   if (!sessionChecked || (email !== null && (patient === undefined || billingRecords === undefined))) {
     return (
       <AppShell>
-        <div className="p-6 lg:p-10 max-w-[1100px]">
+        <div className="p-6 lg:p-10 max-w-[1200px]">
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
@@ -50,7 +50,7 @@ export default function BillingPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1100px]">
+      <div className="p-6 lg:p-10 max-w-[1200px]">
 
         {/* ---- HEADER ---- */}
         <header className="mb-10">

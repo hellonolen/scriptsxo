@@ -48,7 +48,7 @@ export default function AdminUsersPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1100px]">
+      <div className="p-6 lg:p-10 max-w-[1200px]">
 
         {/* Header */}
         <header className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">

@@ -491,6 +491,34 @@
     @apply mx-auto w-full max-w-[1200px] px-8 lg:px-16;
   }
 
+  /* ---- Standard authenticated page containers ---- */
+  /* Use .app-content for all portal/admin/provider/pharmacy content areas.        */
+  /* Use .app-content-sm for focused settings/form pages.                          */
+  .app-content {
+    padding: 1.5rem;
+    max-width: 1200px;
+  }
+  @media (min-width: 1024px) {
+    .app-content { padding: 2.5rem; }
+  }
+  .app-content-sm {
+    padding: 1.5rem;
+    max-width: 800px;
+  }
+  @media (min-width: 1024px) {
+    .app-content-sm { padding: 2.5rem; }
+  }
+
+  /* ---- Section heading — use for h2 within app-content panels ---- */
+  /* Replaces ad-hoc font-medium/semibold/bold h2s across portal pages.            */
+  .section-heading {
+    font-size: 1rem;
+    font-weight: 300;
+    font-family: var(--font-heading);
+    letter-spacing: -0.01em;
+    color: var(--foreground);
+  }
+
   /* ---- Stats card (borderless) ---- */
   .stats-card {
     @apply flex flex-col gap-2 p-0;
@@ -520,11 +548,11 @@
     @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
   }
 
-  /* ---- Badge styles ---- */
-  .badge-success { @apply bg-green-500/10 text-green-600; border-radius: 100px; }
-  .badge-warning { @apply bg-yellow-500/10 text-yellow-600; border-radius: 100px; }
-  .badge-error { @apply bg-red-500/10 text-red-600; border-radius: 100px; }
-  .badge-info { background: rgba(124, 58, 237, 0.10); color: #7C3AED; border-radius: 100px; }
+  /* ---- Badge styles (use semantic tokens) ---- */
+  .badge-success { background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); border-radius: 100px; }
+  .badge-warning { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning); border-radius: 100px; }
+  .badge-error   { background: color-mix(in srgb, var(--destructive) 12%, transparent); color: var(--destructive); border-radius: 100px; }
+  .badge-info    { background: color-mix(in srgb, var(--brand) 10%, transparent); color: var(--brand); border-radius: 100px; }
 
   /* ---- Table ---- */
   .table-container { @apply overflow-x-auto rounded-2xl border; }
