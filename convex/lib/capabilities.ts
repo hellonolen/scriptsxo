@@ -179,7 +179,61 @@ export async function getMemberEffectiveCaps(
     }
 
     const role = member.role as Role;
-    const base: Capability[] = role && role in ROLE_CAPS ? ROLE_CAPS[role] : [];
+
+    // ─── Verification gate ─────────────────────────────────────────────────────
+    // Role bundle caps are only active when the member has a verified credential
+    // record. Platform owners and admins are exempt. "unverified" has no base
+    // caps anyway so no check needed.
+    let passedVerificationGate = true;
+
+    if (role !== "admin" && role !== "unverified" && member.isPlatformOwner !== true) {
+      const verification = await ctx.db
+        .query("credentialVerifications")
+        .withIndex("by_memberId", (q: any) => q.eq("memberId", memberId))
+        .filter((q: any) => q.eq(q.field("status"), "verified"))
+        .first();
+
+      if (!verification) {
+        passedVerificationGate = false;
+      } else {
+        // Belt-and-suspenders: check role-specific required fields
+        switch (role) {
+          case "patient":
+            // payment_verified: Stripe checkout session initiated
+            // identity_verified: Stripe Identity session verified OR ID scan result present
+            passedVerificationGate =
+              !!verification.patientStripeSessionId &&
+              (verification.patientStripeStatus === "verified" ||
+                !!verification.patientIdScanResult);
+            break;
+          case "provider":
+            // npi_verified: NPI number and registry result present
+            // license_verified: license file or scan result present
+            passedVerificationGate =
+              !!verification.providerNpi &&
+              !!verification.providerNpiResult &&
+              (!!verification.providerLicenseFileId ||
+                !!verification.providerLicenseScanResult);
+            break;
+          case "pharmacy":
+            // ncpdp_verified: NCPDP ID and registry lookup result present
+            passedVerificationGate =
+              !!verification.pharmacyNcpdpId && !!verification.pharmacyRegistryResult;
+            break;
+          case "nurse":
+            // license_verified AND org_association_verified (has orgId)
+            passedVerificationGate =
+              (!!verification.providerLicenseFileId ||
+                !!verification.providerLicenseScanResult) && !!member.orgId;
+            break;
+          default:
+            passedVerificationGate = true;
+        }
+      }
+    }
+
+    const base: Capability[] =
+      role && role in ROLE_CAPS && passedVerificationGate ? ROLE_CAPS[role as Role] : [];
 
     // Collect org-level overrides
     let orgAllow: Set<string> = new Set();
