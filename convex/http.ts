@@ -86,34 +86,20 @@ http.route({
       switch (event.type) {
         case "checkout.session.completed": {
           const session = event.data.object;
-          const memberId: string | undefined = session.metadata?.memberId;
-          const orgId: string | undefined = session.metadata?.orgId;
-          const consultationId: string | undefined = session.metadata?.consultationId;
+          const patientEmail: string | undefined =
+            session.customer_email ?? session.metadata?.email;
 
-          console.log(`[SXO-WEBHOOK] checkout.session.completed: ${session.id} memberId=${memberId}`);
+          console.log(
+            `[SXO-WEBHOOK] checkout.session.completed: ${session.id} email=${patientEmail}`
+          );
 
-          if (memberId) {
-            // Update passkey payment status
-            await ctx.runMutation(
-              // @ts-expect-error internal ref
-              { _path: "passkeys:updatePaymentStatusByEmail" },
-              { email: session.customer_email ?? session.metadata?.email, paymentStatus: "active" }
-            );
-          }
-
-          if (consultationId) {
-            // Mark consultation as paid
-            await ctx.runMutation(
-              // @ts-expect-error internal ref
-              { _path: "billing:markConsultationPaid" },
-              {
-                consultationId,
-                stripeSessionId: session.id,
-                stripeCustomerId: session.customer,
-                amount: session.amount_total,
-              }
-            );
-          }
+          // Mark billing record paid (idempotent via stripeSessionId check)
+          await ctx.runMutation(internal.billing.markConsultationPaid, {
+            stripeSessionId: session.id,
+            stripeCustomerId: session.customer ?? undefined,
+            patientEmail: patientEmail ?? undefined,
+            amountTotal: session.amount_total ?? undefined,
+          });
           break;
         }
 
@@ -125,17 +111,17 @@ http.route({
 
         case "payment_intent.payment_failed": {
           const pi = event.data.object;
-          const memberId: string | undefined = pi.metadata?.memberId;
-          console.error(`[SXO-WEBHOOK] payment_intent.payment_failed: ${pi.id} memberId=${memberId}`);
+          const patientEmail: string | undefined =
+            pi.receipt_email ?? pi.metadata?.email ?? undefined;
+          console.error(
+            `[SXO-WEBHOOK] payment_intent.payment_failed: ${pi.id} email=${patientEmail}`
+          );
 
-          if (memberId) {
-            // Mark billing as failed and log security event
-            await ctx.runMutation(
-              // @ts-expect-error internal ref
-              { _path: "billing:markPaymentFailed" },
-              { stripePaymentIntentId: pi.id, memberId }
-            );
-          }
+          await ctx.runMutation(internal.billing.markPaymentFailed, {
+            stripePaymentIntentId: pi.id,
+            patientEmail,
+            failureMessage: pi.last_payment_error?.message ?? undefined,
+          });
           break;
         }
 
