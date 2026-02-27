@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { Loader2, Clock, ArrowRight } from "lucide-react";
+import { Loader2, Clock, ArrowRight, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { StatCard } from "@/components/ui/stat-card";
 import { getSessionCookie } from "@/lib/auth";
@@ -81,104 +81,133 @@ function PatientWaitingRoom() {
 
   return (
     <AppShell>
-      <div className="min-h-[80vh] flex items-center justify-center p-6">
-        <div className="max-w-md w-full space-y-8">
+      <div className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12 bg-background">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="lg:grid lg:grid-cols-12 lg:gap-16">
 
-          {/* Header */}
-          <div className="text-center">
-            <p className="eyebrow mb-3">CONSULTATION</p>
-            <h1
-              className="text-3xl lg:text-4xl font-light text-foreground tracking-[-0.02em]"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              Your provider will join shortly
-            </h1>
-          </div>
+            {/* Left Column - Context & Actions */}
+            <div className="lg:col-span-4 lg:col-start-2 xl:col-span-3 xl:col-start-2">
+              <div className="sticky top-28 mb-12 lg:mb-0 space-y-8">
 
-          {/* Status card */}
-          <div className="glass-card p-6">
-            <div className="flex items-center gap-4 mb-5">
-              <span
-                className="relative flex h-3 w-3 shrink-0"
-                aria-label="Connected"
-              >
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
-              </span>
-              <span className="text-sm font-light text-foreground">
-                {statusLabel}
-              </span>
-            </div>
+                {/* Header */}
+                <div>
+                  <p className="text-xs tracking-[0.2em] text-brand-secondary uppercase font-light mb-3">
+                    CONSULTATION
+                  </p>
+                  <h1
+                    className="text-3xl lg:text-4xl font-light text-foreground tracking-[-0.02em] leading-tight mb-4"
+                    style={{ fontFamily: "var(--font-heading)" }}
+                  >
+                    Your provider will join shortly
+                  </h1>
+                  <p className="text-muted-foreground font-light leading-relaxed">
+                    Please keep this window open. Your consultation will begin automatically once your provider connects.
+                  </p>
+                </div>
 
-            <div className="flex items-center justify-between text-sm border-t border-border pt-4">
-              <div className="flex items-center gap-2 text-muted-foreground font-light">
-                <Clock size={13} aria-hidden="true" />
-                <span>Wait time</span>
+                {/* Actions */}
+                <div className="space-y-4 pt-4 border-t border-border/50">
+                  <button
+                    disabled
+                    aria-disabled="true"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-sm font-light tracking-wide text-white opacity-60 cursor-not-allowed bg-brand-secondary"
+                  >
+                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                    Waiting for Provider...
+                  </button>
+
+                  <button
+                    onClick={() => router.push("/dashboard")}
+                    className="w-full text-sm font-light text-muted-foreground hover:text-foreground transition-colors py-3 border border-transparent hover:border-border rounded-xl"
+                  >
+                    Leave waiting room
+                  </button>
+                </div>
+
+                {/* Trust bar */}
+                <div className="flex flex-col gap-2 pt-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground font-light">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#7C3AED]" />
+                    End-to-End Encrypted
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground font-light">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#7C3AED]" />
+                    HIPAA Compliant
+                  </div>
+                </div>
+
               </div>
-              <div className="text-right">
-                <span className="font-mono text-foreground text-sm">
-                  {formatElapsed(elapsed)}
-                </span>
-                <p className="text-[10px] text-muted-foreground tracking-wide uppercase mt-0.5">
-                  Avg. 3-8 minutes
-                </p>
+            </div>
+
+            {/* Right Column - Status & Tips */}
+            <div className="lg:col-span-6 xl:col-span-6">
+              <div className="space-y-8">
+
+                {/* Status card */}
+                <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
+                  <div className="flex items-center gap-4 mb-8 pb-8 border-b border-border/50">
+                    <div className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#A78BFA] opacity-40" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#7C3AED]" />
+                    </div>
+                    <span className="text-lg font-light text-foreground">
+                      {statusLabel}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8">
+                    <div>
+                      <div className="flex items-center gap-2 text-muted-foreground font-light mb-2">
+                        <Clock size={16} aria-hidden="true" />
+                        <span className="text-sm">Current Wait</span>
+                      </div>
+                      <span className="font-mono text-3xl font-light text-foreground">
+                        {formatElapsed(elapsed)}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 text-muted-foreground font-light mb-2">
+                        <span className="text-sm">Estimated Total</span>
+                      </div>
+                      <span className="text-2xl font-light text-foreground">
+                        3-8 min
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tip carousel */}
+                <div className="bg-[#7C3AED]/[0.02] border border-[#7C3AED]/20 rounded-2xl p-8">
+                  <p className="text-xs tracking-[0.2em] text-[#7C3AED] uppercase font-medium mb-6">
+                    WHILE YOU WAIT
+                  </p>
+                  <div className="min-h-[80px] flex items-center">
+                    <p
+                      key={tipIndex}
+                      className="text-lg font-light text-foreground leading-relaxed transition-opacity duration-300 antialiased"
+                    >
+                      {TIPS[tipIndex]}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 mt-8">
+                    {TIPS.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setTipIndex(i)}
+                        aria-label={`Tip ${i + 1}`}
+                        className="h-1.5 rounded-full transition-all duration-300"
+                        style={{
+                          width: i === tipIndex ? "32px" : "12px",
+                          background: i === tipIndex ? "var(--brand-secondary)" : "var(--border)",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
               </div>
             </div>
-          </div>
 
-          {/* Tip carousel */}
-          <div className="glass-card p-5">
-            <p className="eyebrow mb-3">WHILE YOU WAIT</p>
-            <p
-              key={tipIndex}
-              className="text-sm font-light text-foreground leading-relaxed transition-opacity duration-300"
-            >
-              {TIPS[tipIndex]}
-            </p>
-            <div className="flex gap-1.5 mt-4">
-              {TIPS.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setTipIndex(i)}
-                  aria-label={`Tip ${i + 1}`}
-                  className="h-1 rounded-full transition-all duration-300"
-                  style={{
-                    width: i === tipIndex ? "20px" : "8px",
-                    background:
-                      i === tipIndex
-                        ? "linear-gradient(135deg, #7C3AED, #2DD4BF)"
-                        : "var(--border)",
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="space-y-3">
-            <button
-              disabled
-              aria-disabled="true"
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 text-sm font-light tracking-wide text-white opacity-60 cursor-not-allowed"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
-            >
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
-              Waiting for Provider...
-            </button>
-
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="w-full text-sm font-light text-muted-foreground hover:text-foreground transition-colors py-2"
-            >
-              Leave waiting room
-            </button>
-          </div>
-
-          {/* Trust bar */}
-          <div className="flex items-center justify-center gap-6 text-[10px] tracking-[0.25em] text-muted-foreground uppercase font-light pt-2">
-            <span>End-to-End Encrypted</span>
-            <span className="w-4 h-px bg-border" />
-            <span>HIPAA Compliant</span>
           </div>
         </div>
       </div>
@@ -194,15 +223,16 @@ function ProviderWaitingQueue() {
   const router = useRouter();
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [memberId, setMemberId] = useState<string | null>(null);
 
-  const session = getSessionCookie();
-  const memberId = session?.memberId;
-  const sessionToken = session?.sessionToken;
+  useEffect(() => {
+    const session = getSessionCookie();
+    if (session?.sessionToken) setSessionToken(session.sessionToken);
+    if (session?.memberId) setMemberId(session.memberId);
+  }, []);
 
-  const queue = useQuery(
-    api.consultations.getWaitingQueue,
-    sessionToken ? { sessionToken } : "skip"
-  );
+  const queue = useQuery(api.consultations.getWaitingQueue, {});
 
   const claimConsultation = useMutation(api.consultations.claim);
 
@@ -256,9 +286,9 @@ function ProviderWaitingQueue() {
 
         {/* Stats bar */}
         <div className="grid grid-cols-3 gap-4 mb-8">
-          <StatCard label="Waiting" value={queue === undefined ? "—" : waitingCount} />
-          <StatCard label="Avg Wait" value={avgWait !== null ? `${avgWait} min` : "—"} />
-          <StatCard label="Next" value={nextPatient} />
+          <StatCard label="Waiting" value={queue === undefined ? "—" : waitingCount} icon={Users} />
+          <StatCard label="Avg Wait" value={avgWait !== null ? `${avgWait} min` : "—"} icon={Clock} />
+          <StatCard label="Next" value={nextPatient} icon={ArrowRight} />
         </div>
 
         {/* Queue table */}

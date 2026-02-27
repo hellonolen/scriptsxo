@@ -99,7 +99,7 @@ export default function ProviderDashboard() {
           cta={
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <CircleDot size={14} className="text-success" aria-hidden="true" />
+                <CircleDot size={14} className="text-primary" aria-hidden="true" />
                 <Badge variant="success">Online</Badge>
               </div>
               <span className="text-xs text-muted-foreground font-light tracking-wide">
@@ -145,14 +145,14 @@ export default function ProviderDashboard() {
               <tbody>
                 {queue === undefined ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-12">
+                    <td colSpan={5} className="text-left py-12">
                       <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto mb-2" />
                       <p className="text-sm text-muted-foreground">Loading queue...</p>
                     </td>
                   </tr>
                 ) : waitingQueue.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-12">
+                    <td colSpan={5} className="text-left py-12">
                       <p className="text-sm text-muted-foreground">No patients currently in queue.</p>
                     </td>
                   </tr>

@@ -9,6 +9,7 @@ import { api } from "../../../../convex/_generated/api";
 
 export default function MessagesPage() {
   const [email, setEmail] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -17,6 +18,9 @@ export default function MessagesPage() {
     const session = getSessionCookie();
     if (session?.email) {
       setEmail(session.email);
+    }
+    if (session?.sessionToken) {
+      setSessionToken(session.sessionToken);
     }
     setSessionChecked(true);
   }, []);
@@ -39,6 +43,7 @@ export default function MessagesPage() {
         senderRole: "patient",
         recipientEmail: "support@scriptsxo.com",
         content: newMessage.trim(),
+        sessionToken: sessionToken as any,
       });
       setNewMessage("");
     } catch (error) {
@@ -54,9 +59,9 @@ export default function MessagesPage() {
   if (isLoading) {
     return (
       <AppShell>
-        <div className="p-6 lg:p-10 max-w-[1200px]">
+        <div className="p-6 lg:p-10 max-w-[1400px]">
           <div className="flex items-center justify-center py-20">
-            <div className="text-center">
+            <div className="text-left">
               <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
               <p className="text-sm text-muted-foreground">Loading messages...</p>
             </div>
@@ -70,7 +75,7 @@ export default function MessagesPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
 
         {/* ---- HEADER ---- */}
         <header className="mb-10">
@@ -132,12 +137,12 @@ export default function MessagesPage() {
             })}
           </div>
         ) : (
-          <div className="glass-card text-center py-16 mb-8">
-            <MessageCircle size={48} className="text-muted-foreground mx-auto mb-4" />
+          <div className="glass-card py-16 px-10 mb-8">
+            <MessageCircle size={48} className="text-muted-foreground mb-4" />
             <h3 className="text-xl font-light text-foreground mb-2" style={{ fontFamily: "var(--font-heading)" }}>
               No Messages Yet
             </h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            <p className="text-sm text-muted-foreground w-full">
               No messages yet — start a conversation with your care team.
             </p>
           </div>
@@ -167,7 +172,7 @@ export default function MessagesPage() {
                 onClick={handleSendMessage}
                 disabled={!newMessage.trim() || sending}
                 className="w-11 h-11 flex items-center justify-center hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50 rounded-md"
-                style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                style={{ background: "#5B21B6" }}
                 aria-label="Send message"
               >
                 {sending ? (

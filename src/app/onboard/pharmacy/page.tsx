@@ -278,7 +278,7 @@ export default function PharmacyOnboardPage() {
           <div className="text-center py-12 space-y-8">
             <div
               className="w-16 h-16 rounded-full mx-auto flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+              style={{ background: "#5B21B6" }}
             >
               <CheckCircle2 size={28} className="text-white" />
             </div>

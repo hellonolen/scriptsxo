@@ -224,7 +224,7 @@ function PayPageInner() {
               <li key={feature.label} className="flex items-start gap-3">
                 <div
                   className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
-                  style={{ background: "linear-gradient(135deg, #7C3AED15, #2DD4BF15)" }}
+                  style={{ background: "rgba(91,33,182,0.08)" }}
                 >
                   <feature.icon
                     size={16}
@@ -267,7 +267,7 @@ function PayPageInner() {
             disabled={loading || !email}
             className="w-full py-3.5 px-6 rounded-xl text-sm font-medium text-white transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
-              background: "linear-gradient(135deg, #7C3AED, #2DD4BF)",
+              background: "#5B21B6",
               boxShadow: "0 4px 14px rgba(124, 58, 237, 0.3)",
             }}
           >

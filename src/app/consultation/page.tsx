@@ -1,153 +1,306 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Video, Phone, Clock, Shield } from "lucide-react";
+import { useState } from "react";
+import { Video, Calendar, Clock, CheckCircle2, ChevronRight, Phone, Plus, User, Stethoscope, FileText, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { getSessionCookie } from "@/lib/auth";
+import Link from "next/link";
 
-/* ---------------------------------------------------------------------------
-   CONSULTATION LANDING — Entry point for booking a consultation
-   --------------------------------------------------------------------------- */
+/* ── Mock Data ── */
+const STATS = [
+  { label: "Scheduled Today", value: 3, sub: "next at 2:30 PM", color: "#5B21B6" },
+  { label: "In Progress", value: 1, sub: "ongoing consultation", color: "#0369A1" },
+  { label: "Completed (30d)", value: 47, sub: "4 this week", color: "#059669" },
+];
 
-export default function ConsultationPage() {
-  const router = useRouter();
-  const [chiefComplaint, setChiefComplaint] = useState("");
-  const [_email, setEmail] = useState<string | null>(null);
+const UPCOMING_SESSIONS = [
+  {
+    id: "c1",
+    type: "video",
+    patient: "Sarah Mitchell",
+    provider: "Dr. James Carter, MD",
+    time: "2:30 PM",
+    date: "Today, Feb 26",
+    reason: "Weight management follow-up",
+    status: "scheduled",
+  },
+  {
+    id: "c2",
+    type: "video",
+    patient: "Marcus Johnson",
+    provider: "Dr. Angela White, MD",
+    time: "4:00 PM",
+    date: "Today, Feb 26",
+    reason: "GLP-1 medication initiation",
+    status: "scheduled",
+  },
+  {
+    id: "c3",
+    type: "phone",
+    patient: "Diana Perez",
+    provider: "Dr. James Carter, MD",
+    time: "9:00 AM",
+    date: "Tomorrow, Feb 27",
+    reason: "Medication adjustment",
+    status: "scheduled",
+  },
+];
 
-  useEffect(() => {
-    const session = getSessionCookie();
-    if (session?.email) {
-      setEmail(session.email);
-    }
-  }, []);
+const RECENT_SESSIONS = [
+  {
+    id: "r1",
+    patient: "Tyler Brooks",
+    provider: "Dr. Angela White, MD",
+    type: "video",
+    date: "Feb 25, 2026",
+    duration: "18 min",
+    outcome: "Prescription issued",
+    rxId: "RX-20240143",
+  },
+  {
+    id: "r2",
+    patient: "Aisha Thompson",
+    provider: "Dr. James Carter, MD",
+    type: "video",
+    date: "Feb 25, 2026",
+    duration: "22 min",
+    outcome: "Follow-up scheduled",
+    rxId: null,
+  },
+  {
+    id: "r3",
+    patient: "Robert Chen",
+    provider: "Dr. Angela White, MD",
+    type: "phone",
+    date: "Feb 24, 2026",
+    duration: "12 min",
+    outcome: "Prescription issued",
+    rxId: "RX-20240149",
+  },
+  {
+    id: "r4",
+    patient: "Lisa Nguyen",
+    provider: "Dr. James Carter, MD",
+    type: "video",
+    date: "Feb 24, 2026",
+    duration: "25 min",
+    outcome: "Prescription issued",
+    rxId: "RX-20240141",
+  },
+];
 
-  function handleJoinQueue(path: string) {
-    if (!chiefComplaint.trim()) return;
-    router.push(path);
-  }
-
-  const complaintFilled = chiefComplaint.trim().length > 0;
+export default function TelehealthCenterPage() {
+  const [activeSection, setActiveSection] = useState<"upcoming" | "history">("upcoming");
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[900px]">
-        <header className="mb-10">
-          <p className="eyebrow mb-2">CONSULTATIONS</p>
-          <h1
-            className="text-3xl lg:text-4xl font-light text-foreground tracking-[-0.02em]"
-            style={{ fontFamily: "var(--font-heading)" }}
-          >
-            Request a{" "}
-            <span className="gradient-text">Consultation</span>
-          </h1>
-          <p className="text-muted-foreground font-light mt-3 max-w-lg">
-            Connect with a board-certified physician for a private telehealth
-            consultation. Available same-day or by appointment.
-          </p>
+      <div className="p-6 lg:p-10 max-w-[1400px]">
+
+        {/* ── Header ── */}
+        <header className="mb-8">
+          <p className="text-[10px] tracking-[0.2em] font-medium uppercase text-muted-foreground mb-2">TELEHEALTH</p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-light text-foreground tracking-[-0.02em]">
+                Telehealth Center
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Schedule, manage, and review all patient consultations.
+              </p>
+            </div>
+            <Link
+              href="/consultation/waiting-room"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#5B21B6] hover:bg-[#4C1D95] text-white text-xs font-medium tracking-wide rounded-lg transition-colors"
+            >
+              <Plus size={14} />
+              New Consultation
+            </Link>
+          </div>
         </header>
 
-        {/* Chief Complaint */}
-        <div className="glass-card mb-6" style={{ padding: "24px" }}>
-          <label
-            htmlFor="chief-complaint"
-            className="block text-xs font-medium text-muted-foreground mb-2"
-          >
-            What brings you in today?
-          </label>
-          <textarea
-            id="chief-complaint"
-            value={chiefComplaint}
-            onChange={(e) => setChiefComplaint(e.target.value)}
-            placeholder="Describe your reason for visit..."
-            required
-            rows={4}
-            className="w-full border border-border bg-background rounded-lg px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 resize-none transition-colors"
-          />
-          {!complaintFilled && (
-            <p className="text-[11px] text-muted-foreground mt-1.5">
-              Required before joining the queue.
+        {/* ── Stats ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          {STATS.map((s) => (
+            <div key={s.label} className="bg-card border border-border rounded-xl p-5">
+              <p className="text-3xl font-light text-foreground mb-1" style={{ color: s.color }}>
+                {s.value}
+              </p>
+              <p className="text-sm font-medium text-foreground">{s.label}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{s.sub}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Active consultation banner ── */}
+        <div className="mb-8 bg-[#5B21B6] rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+            <Video size={18} className="text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="text-white font-medium text-sm">Consultation in progress</p>
+            <p className="text-white/70 text-xs mt-0.5">
+              Marcus Johnson · with Dr. Angela White · Started 14 min ago
             </p>
-          )}
+          </div>
+          <Link
+            href="/consultation/room"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-[#5B21B6] text-xs font-medium rounded-lg hover:bg-white/90 transition-colors"
+          >
+            <ArrowRight size={13} />
+            Join Room
+          </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {/* Video Consultation Card */}
-          <div className="glass-card glow-accent flex flex-col">
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center"
-                style={{ background: "rgba(124, 58, 237, 0.08)" }}
-              >
-                <Video size={20} style={{ color: "#7C3AED" }} aria-hidden="true" />
+        {/* ── Section Switch ── */}
+        <div className="flex gap-1 border-b border-border mb-6">
+          {(["upcoming", "history"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setActiveSection(s)}
+              className={`px-4 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeSection === s
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+            >
+              {s === "upcoming" ? "Upcoming Sessions" : "Session History"}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Upcoming Sessions ── */}
+        {activeSection === "upcoming" && (
+          <div className="space-y-3 animate-in fade-in duration-200">
+            {UPCOMING_SESSIONS.map((session) => (
+              <div key={session.id} className="bg-card border border-border rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                {/* Type Icon */}
+                <div
+                  className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ background: "rgba(91,33,182,0.08)" }}
+                >
+                  {session.type === "video" ? (
+                    <Video size={18} className="text-primary" />
+                  ) : (
+                    <Phone size={18} className="text-primary" />
+                  )}
+                </div>
+
+                {/* Details */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-sm font-medium text-foreground">{session.patient}</span>
+                    <span
+                      className="text-[10px] tracking-wide px-2 py-0.5 rounded-full font-medium capitalize"
+                      style={{ background: "rgba(91,33,182,0.08)", color: "#5B21B6" }}
+                    >
+                      {session.type}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                    <span className="flex items-center gap-1.5">
+                      <Stethoscope size={11} />
+                      {session.provider}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Calendar size={11} />
+                      {session.date}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <Clock size={11} />
+                      {session.time}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5 italic">{session.reason}</p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button className="px-4 py-2 text-xs font-medium border border-border rounded-lg text-foreground hover:bg-muted transition-colors">
+                    Reschedule
+                  </button>
+                  <Link
+                    href="/consultation/room"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#5B21B6] hover:bg-[#4C1D95] text-white text-xs font-medium rounded-lg transition-colors"
+                  >
+                    <Video size={12} />
+                    Join
+                    <ChevronRight size={12} />
+                  </Link>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-medium text-foreground">Video Visit</h2>
-                <p className="text-xs text-muted-foreground">Face-to-face with your provider</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-6">
-              <span className="flex items-center gap-1.5">
-                <Clock size={12} aria-hidden="true" /> 15 min
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Shield size={12} aria-hidden="true" /> HIPAA Encrypted
-              </span>
-            </div>
-            <div className="mt-auto">
-              <button
-                onClick={() => handleJoinQueue("/consultation/waiting-room")}
-                disabled={!complaintFilled}
-                className="w-full px-4 py-3 text-white text-sm font-medium rounded-lg transition-opacity disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
-                style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+            ))}
+
+            {/* Schedule New */}
+            <div className="flex items-center justify-center py-6 border border-dashed border-border rounded-xl">
+              <Link
+                href="/consultation/waiting-room"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
               >
-                Join Queue — Video
-              </button>
+                <Plus size={15} />
+                Schedule a new consultation
+              </Link>
             </div>
           </div>
+        )}
 
-          {/* Nurse Call Card */}
-          <div className="glass-card flex flex-col">
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center"
-                style={{ background: "rgba(45, 212, 191, 0.08)" }}
-              >
-                <Phone size={20} style={{ color: "#14B8A6" }} aria-hidden="true" />
-              </div>
-              <div>
-                <h2 className="text-lg font-medium text-foreground">Nurse Call</h2>
-                <p className="text-xs text-muted-foreground">Quick same-day nurse callback</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground mb-6">
-              <span className="flex items-center gap-1.5">
-                <Clock size={12} aria-hidden="true" /> 10 min
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Shield size={12} aria-hidden="true" /> Secure Line
-              </span>
-            </div>
-            <div className="mt-auto">
-              <button
-                onClick={() => handleJoinQueue("/dashboard/office-hours")}
-                disabled={!complaintFilled}
-                className="w-full px-4 py-3 text-sm font-medium rounded-lg border border-border text-foreground bg-background transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/30"
-              >
-                Schedule Nurse Call
-              </button>
+        {/* ── Session History ── */}
+        {activeSection === "history" && (
+          <div className="animate-in fade-in duration-200">
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/20">
+                    {["Patient", "Provider", "Type", "Date", "Duration", "Outcome", ""].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground tracking-wide">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {RECENT_SESSIONS.map((s) => (
+                    <tr key={s.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <User size={12} className="text-primary" />
+                          </div>
+                          <span className="font-medium text-foreground text-sm">{s.patient}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-muted-foreground text-xs">{s.provider}</td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full capitalize"
+                          style={{ background: "rgba(91,33,182,0.08)", color: "#5B21B6" }}
+                        >
+                          {s.type === "video" ? <Video size={9} /> : <Phone size={9} />}
+                          {s.type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-muted-foreground">{s.date}</td>
+                      <td className="px-4 py-3.5 text-xs text-muted-foreground">{s.duration}</td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 size={12} className="text-emerald-600" />
+                          <span className="text-xs text-foreground">{s.outcome}</span>
+                        </div>
+                        {s.rxId && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{s.rxId}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
+                          <FileText size={12} />
+                          Notes
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Trust bar */}
-        <div className="flex items-center justify-center gap-8 text-[10px] tracking-[0.25em] text-muted-foreground uppercase font-light pt-4">
-          <span>Board Certified</span>
-          <span className="w-5 h-px bg-border" />
-          <span>Same-Day</span>
-          <span className="w-5 h-px bg-border" />
-          <span>HIPAA Encrypted</span>
-        </div>
       </div>
     </AppShell>
   );

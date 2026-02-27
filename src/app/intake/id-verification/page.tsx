@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Heart,
   Stethoscope,
@@ -13,6 +14,7 @@ import {
   CheckCircle2,
   XCircle,
   CreditCard,
+  Lock
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { useAction } from "convex/react";
@@ -40,7 +42,7 @@ export default function IDVerificationPage() {
   const createVerificationSession = useAction(api.actions.stripeIdentity.createVerificationSession);
   const checkVerificationStatus = useAction(api.actions.stripeIdentity.checkVerificationStatus);
 
-  const currentStep = 2;
+  const currentStep = 2; // Verification step is index 2
 
   useEffect(() => {
     setIsDevMode(isDev());
@@ -126,241 +128,289 @@ export default function IDVerificationPage() {
 
   return (
     <AppShell>
-      <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
+      <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12 bg-background">
         <div className="max-w-[1400px] mx-auto">
-          {/* Progress bar */}
-          <div className="max-w-2xl mb-12">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                Step 3 of 5
-              </span>
-            </div>
-            <div className="w-full h-px bg-border relative">
-              <div
-                className="absolute top-0 left-0 h-px bg-brand-secondary transition-all duration-500"
-                style={{ width: "60%" }}
-              />
-            </div>
-            {/* Step indicators */}
-            <div className="flex items-center gap-0 mt-6">
-              {INTAKE_STEPS.map((step, index) => {
-                const StepIcon = step.icon;
-                const isActive = index === currentStep;
-                const isCompleted = index < currentStep;
-                return (
-                  <div
-                    key={step.label}
-                    className="flex items-center flex-1 last:flex-0"
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <div
-                        className={`w-9 h-9 rounded-sm border flex items-center justify-center transition-colors ${
-                          isActive
-                            ? "border-brand-secondary bg-brand-secondary-muted"
-                            : isCompleted
-                              ? "border-brand-secondary bg-brand-secondary text-white"
-                              : "border-border bg-card"
-                        }`}
-                      >
-                        <StepIcon
-                          size={14}
-                          className={
-                            isActive
-                              ? "text-brand-secondary"
-                              : isCompleted
-                                ? "text-white"
-                                : "text-muted-foreground"
-                          }
-                          aria-hidden="true"
-                        />
-                      </div>
-                      <span
-                        className={`text-[10px] tracking-[0.1em] uppercase font-light hidden sm:block ${
-                          isActive
-                            ? "text-brand-secondary"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {step.label}
-                      </span>
-                    </div>
-                    {index < INTAKE_STEPS.length - 1 && (
-                      <div className="flex-1 h-px bg-border mx-3 mb-5 sm:mb-0" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Main Layout Grid */}
+          <div className="lg:grid lg:grid-cols-12 lg:gap-16">
 
-          {/* Page header */}
-          <div className="max-w-2xl mb-10">
-            <h1
-              className="text-3xl lg:text-4xl font-light text-foreground mb-3"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              Identity Verification
-            </h1>
-            <p className="text-muted-foreground font-light">
-              Federal and state regulations require identity verification for telehealth prescriptions.
-              {isDevMode
-                ? " In dev mode, verification is simulated automatically."
-                : " We use Stripe Identity for secure, HIPAA-compliant verification."}
-            </p>
-            {isDevMode && (
-              <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] text-xs font-medium">
-                DEV MODE
-              </div>
-            )}
-          </div>
+            {/* Left Column - Sticky Navigation & Context */}
+            <div className="lg:col-span-4 lg:col-start-2 xl:col-span-3 xl:col-start-2">
+              <div className="sticky top-28 mb-12 lg:mb-0 space-y-12">
 
-          {/* Content */}
-          <div className="max-w-2xl space-y-10">
-            {/* Verification status display */}
-            {verificationStatus === "verified" && (
-              <div className="border border-green-500 rounded-md p-6 bg-green-50">
-                <div className="flex items-start gap-4">
-                  <CheckCircle2 size={24} className="text-green-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h2
-                      className="text-lg font-light text-green-900 mb-2"
-                      style={{ fontFamily: "var(--font-heading)" }}
-                    >
-                      Identity Verified
-                    </h2>
-                    <p className="text-sm text-green-800 font-light">
-                      Your identity has been successfully verified. You can now proceed to review your intake.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {verificationStatus === "failed" && (
-              <div className="border border-destructive rounded-md p-6 bg-destructive/5">
-                <div className="flex items-start gap-4">
-                  <XCircle size={24} className="text-destructive flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h2
-                      className="text-lg font-light text-destructive mb-2"
-                      style={{ fontFamily: "var(--font-heading)" }}
-                    >
-                      Verification Failed
-                    </h2>
-                    <p className="text-sm text-destructive font-light">
-                      {errorMessage || "Verification could not be completed. Please try again."}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Verification explanation */}
-            {verificationStatus === "idle" && (
-              <section className="space-y-6">
-                <div>
-                  <h2
-                    className="text-lg font-light text-foreground mb-1"
+                {/* Page Header */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <h1
+                    className="text-3xl lg:text-4xl font-light text-foreground mb-4"
                     style={{ fontFamily: "var(--font-heading)" }}
                   >
-                    What to Expect
-                  </h2>
-                  <div className="h-px bg-border mb-4" />
-                  <ul className="space-y-3 text-sm text-muted-foreground font-light">
-                    <li className="flex gap-3">
-                      <span className="text-brand-secondary">1.</span>
-                      <span>Click "Verify Identity" to open the Stripe Identity modal</span>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="text-brand-secondary">2.</span>
-                      <span>Upload a photo of your government-issued ID (driver's license, passport, or state ID)</span>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="text-brand-secondary">3.</span>
-                      <span>Take a selfie to match your ID photo</span>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="text-brand-secondary">4.</span>
-                      <span>Verification typically completes in seconds</span>
-                    </li>
-                  </ul>
-                </div>
-              </section>
-            )}
+                    Identity Verification
+                  </h1>
+                  <p className="text-muted-foreground font-light leading-relaxed">
+                    Federal and state regulations require identity verification for telehealth prescriptions.
+                  </p>
 
-            {/* Security notice */}
-            <div className="flex items-start gap-4 p-5 bg-card border border-border rounded-md">
-              <ShieldCheck
-                size={18}
-                className="text-brand-secondary mt-0.5 flex-shrink-0"
-                aria-hidden="true"
-              />
-              <div>
-                <p className="text-sm font-light text-foreground">
-                  Your identity data is encrypted and HIPAA-compliant
-                </p>
-                <p className="text-xs text-muted-foreground font-light mt-1">
-                  Stripe Identity handles verification using bank-level encryption. Your ID images are stored securely and never shared with third parties. ScriptsXO only receives a verification status.
-                </p>
+                  {isDevMode && (
+                    <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#7C3AED]/10 border border-[#7C3AED]/20 text-[#7C3AED] text-xs font-medium">
+                      <ScanLine size={14} />
+                      DEV MODE: SIMULATED APP
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* Vertical Progress Component */}
+                <div className="hidden lg:block">
+                  <h3 className="text-xs tracking-[0.2em] text-brand-secondary uppercase font-light mb-6">
+                    Intake Progress
+                  </h3>
+                  <div className="space-y-6 relative before:absolute before:inset-0 before:ml-[15px] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
+                    {INTAKE_STEPS.map((step, index) => {
+                      const StepIcon = step.icon;
+                      const isActive = index === currentStep;
+                      const isCompleted = index < currentStep;
+
+                      return (
+                        <div key={step.label} className="relative flex items-center gap-4">
+                          <div
+                            className={`flex items-center justify-center w-8 h-8 rounded-full border bg-background z-10 transition-colors ${isActive
+                                ? "border-brand-secondary shadow-[0_0_15px_rgba(124,58,237,0.2)]"
+                                : isCompleted
+                                  ? "border-brand-secondary bg-brand-secondary/5"
+                                  : "border-border"
+                              }`}
+                          >
+                            <StepIcon
+                              size={14}
+                              className={
+                                isActive
+                                  ? "text-brand-secondary"
+                                  : isCompleted
+                                    ? "text-brand-secondary/70"
+                                    : "text-muted-foreground/50"
+                              }
+                            />
+                          </div>
+                          <span
+                            className={`text-sm font-light transition-colors ${isActive
+                                ? "text-foreground"
+                                : isCompleted
+                                  ? "text-foreground/70"
+                                  : "text-muted-foreground/50"
+                              }`}
+                          >
+                            {step.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Mobile/Tablet Horizontal Progress */}
+                <div className="lg:hidden">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
+                      Step {currentStep + 1} of {INTAKE_STEPS.length}
+                    </span>
+                  </div>
+                  <div className="w-full h-px bg-border flex">
+                    {INTAKE_STEPS.map((step, index) => {
+                      const isActive = index === currentStep;
+                      const isCompleted = index < currentStep;
+                      return (
+                        <div
+                          key={step.label}
+                          className={`h-full flex-1 transition-colors ${isActive || isCompleted ? "bg-brand-secondary" : ""
+                            }`}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Consent */}
-            {verificationStatus === "idle" && (
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="id-consent"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded-sm border-border text-primary focus:ring-primary accent-brand-secondary"
-                />
-                <label
-                  htmlFor="id-consent"
-                  className="text-sm text-muted-foreground font-light leading-relaxed cursor-pointer"
+            {/* Right Column - Main Content */}
+            <div className="lg:col-span-6 xl:col-span-6">
+              <div className="space-y-10">
+
+                {/* Status Panels */}
+                <AnimatePresence mode="wait">
+                  {verificationStatus === "verified" && (
+                    <motion.div
+                      key="verified-status"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="border border-green-500/20 bg-green-500/5 rounded-2xl p-8 backdrop-blur-sm"
+                    >
+                      <div className="flex flex-col items-center text-center gap-4">
+                        <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
+                          <CheckCircle2 size={32} className="text-green-500" />
+                        </div>
+                        <div>
+                          <h2
+                            className="text-2xl font-light text-foreground mb-3"
+                            style={{ fontFamily: "var(--font-heading)" }}
+                          >
+                            Identity Verified
+                          </h2>
+                          <p className="text-muted-foreground font-light leading-relaxed max-w-sm mx-auto">
+                            Your identity has been successfully verified. You can now proceed to review your intake information.
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {verificationStatus === "failed" && (
+                    <motion.div
+                      key="failed-status"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="border border-destructive/20 bg-destructive/5 rounded-2xl p-6 backdrop-blur-sm"
+                    >
+                      <div className="flex flex-col items-center text-center gap-4">
+                        <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                          <XCircle size={32} className="text-destructive" />
+                        </div>
+                        <div>
+                          <h2
+                            className="text-2xl font-light text-foreground mb-3"
+                            style={{ fontFamily: "var(--font-heading)" }}
+                          >
+                            Verification Failed
+                          </h2>
+                          <p className="text-muted-foreground font-light text-sm max-w-sm mx-auto">
+                            {errorMessage || "Verification could not be completed. Please try again."}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {verificationStatus === "idle" && (
+                    <motion.div
+                      key="idle-instructions"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-8"
+                    >
+                      <div className="bg-card border border-border/50 rounded-2xl p-8 shadow-sm">
+                        <h2
+                          className="text-xl font-light text-foreground mb-6"
+                          style={{ fontFamily: "var(--font-heading)" }}
+                        >
+                          What to Expect
+                        </h2>
+
+                        <div className="space-y-6">
+                          <div className="flex gap-4">
+                            <div className="w-8 h-8 rounded-full bg-brand-secondary/10 flex items-center justify-center flex-shrink-0 text-brand-secondary text-sm">1</div>
+                            <div>
+                              <p className="text-foreground font-light mb-1">Stripe Identity Process</p>
+                              <p className="text-sm text-muted-foreground font-light leading-relaxed">Click "Verify Identity" to securely open the Stripe Identity verification portal.</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-4">
+                            <div className="w-8 h-8 rounded-full bg-brand-secondary/10 flex items-center justify-center flex-shrink-0 text-brand-secondary text-sm">2</div>
+                            <div>
+                              <p className="text-foreground font-light mb-1">ID Scan</p>
+                              <p className="text-sm text-muted-foreground font-light leading-relaxed">Upload a front and back photo of your government-issued ID (driver's license, passport, or state ID).</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-4">
+                            <div className="w-8 h-8 rounded-full bg-brand-secondary/10 flex items-center justify-center flex-shrink-0 text-brand-secondary text-sm">3</div>
+                            <div>
+                              <p className="text-foreground font-light mb-1">Selfie Match</p>
+                              <p className="text-sm text-muted-foreground font-light leading-relaxed">Take a quick selfie using your device's camera to match your ID photo.</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Security Notice */}
+                      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-6 bg-[#7C3AED]/[0.02] border border-[#7C3AED]/20 rounded-2xl text-center sm:text-left">
+                        <div className="w-10 h-10 rounded-full bg-[#7C3AED]/10 flex items-center justify-center text-[#7C3AED] flex-shrink-0">
+                          <Lock size={20} />
+                        </div>
+                        <div>
+                          <p className="text-foreground font-medium text-sm mb-1">Bank-level Security</p>
+                          <p className="text-xs text-muted-foreground font-light leading-relaxed">
+                            Verification is processed securely by Stripe. Your data is encrypted and HIPAA-compliant. ScriptsXO only receives a verification success status and does not store your ID images.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Consent Checkbox */}
+                      <div
+                        className="group relative flex items-start gap-4 p-6 border border-border hover:border-brand-secondary/40 bg-card hover:bg-muted/50 transition-colors rounded-2xl cursor-pointer"
+                        onClick={() => setConsent(!consent)}
+                      >
+                        <div className="mt-0.5 flex-shrink-0">
+                          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${consent ? "border-brand-secondary bg-brand-secondary" : "border-muted-foreground/30 bg-background"}`}>
+                            <CheckCircle2 size={14} className={`text-white transition-opacity ${consent ? "opacity-100" : "opacity-0"}`} />
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground font-light leading-relaxed select-none">
+                          I confirm that the identity documents I provide are authentic and belong to me. I consent to ScriptsXO verifying my identity through Stripe Identity for the purpose of telehealth consultation and prescription services.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Navigation Actions */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="flex flex-col-reverse sm:flex-row justify-between items-center gap-4 pt-8"
                 >
-                  I confirm that the identity documents I provide are authentic and belong to me. I consent to ScriptsXO verifying my identity through Stripe Identity for the purpose of telehealth consultation and prescription services.
-                </label>
+                  <button
+                    onClick={() => router.push("/intake/medical-history")}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 border border-border text-foreground text-xs tracking-wider uppercase font-light hover:bg-muted transition-colors rounded-xl"
+                  >
+                    <ArrowLeft size={16} aria-hidden="true" />
+                    Back
+                  </button>
+
+                  <div className="w-full sm:w-auto">
+                    {verificationStatus === "verified" ? (
+                      <button
+                        onClick={handleContinue}
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-brand-secondary text-white text-xs tracking-wider uppercase font-light hover:bg-brand-secondary/90 transition-all shadow-[0_4px_14px_0_rgba(124,58,237,0.3)] hover:shadow-[0_6px_20px_rgba(124,58,237,0.23)] rounded-xl"
+                      >
+                        Continue to Payment
+                        <ArrowRight size={16} aria-hidden="true" />
+                      </button>
+                    ) : verificationStatus === "verifying" ? (
+                      <div className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 bg-muted text-muted-foreground text-xs tracking-wider uppercase font-light rounded-xl border border-border">
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        Verifying...
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleVerifyIdentity();
+                        }}
+                        disabled={!consent}
+                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-xs tracking-wider uppercase font-light rounded-xl transition-all duration-300 ${consent
+                            ? "bg-foreground text-background hover:bg-foreground/90 shadow-xl shadow-foreground/10"
+                            : "bg-muted text-muted-foreground cursor-not-allowed border border-border"
+                          }`}
+                      >
+                        Verify Identity
+                        <ShieldCheck size={16} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+
               </div>
-            )}
-
-            {/* Navigation */}
-            <div className="flex justify-between pt-6 border-t border-border">
-              <button
-                onClick={() => router.push("/intake/medical-history")}
-                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
-              >
-                <ArrowLeft size={16} aria-hidden="true" />
-                Back
-              </button>
-
-              {verificationStatus === "verified" ? (
-                <button
-                  onClick={handleContinue}
-                  className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-md"
-                >
-                  Continue to Payment
-                  <ArrowRight size={16} aria-hidden="true" />
-                </button>
-              ) : verificationStatus === "verifying" ? (
-                <div className="inline-flex items-center gap-2 px-8 py-3 bg-muted text-muted-foreground text-[11px] tracking-[0.15em] uppercase font-light rounded-md">
-                  <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Verifying...
-                </div>
-              ) : (
-                <button
-                  onClick={handleVerifyIdentity}
-                  disabled={!consent}
-                  className={`inline-flex items-center gap-2 px-8 py-3 text-[11px] tracking-[0.15em] uppercase font-light rounded-md transition-all duration-300 ${
-                    consent
-                      ? "bg-foreground text-background hover:bg-foreground/90"
-                      : "bg-muted text-muted-foreground cursor-not-allowed"
-                  }`}
-                >
-                  Verify Identity
-                  <ShieldCheck size={16} aria-hidden="true" />
-                </button>
-              )}
             </div>
           </div>
         </div>

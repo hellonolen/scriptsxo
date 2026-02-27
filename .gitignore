@@ -60,6 +60,7 @@ playwright/.cache/
 .settings/
 *.sublime-workspace
 *.sublime-project
+.claude/
 
 # ==============================================================================
 # OS Generated

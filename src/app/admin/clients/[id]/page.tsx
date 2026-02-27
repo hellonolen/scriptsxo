@@ -105,7 +105,7 @@ function formatDate(timestamp: number | undefined): string {
 // -- Loading skeleton for the full page --
 function ClientDetailSkeleton() {
   return (
-    <div className="p-6 lg:p-10 max-w-[1200px]">
+    <div className="p-6 lg:p-10 max-w-[1400px]">
       {/* Header skeleton */}
       <div className="mb-8">
         <Skeleton className="h-4 w-24 mb-3" variant="text" />
@@ -180,7 +180,7 @@ export default function AdminClientDetailPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
         {/* Back + Header */}
         <header className="mb-8">
           <Link

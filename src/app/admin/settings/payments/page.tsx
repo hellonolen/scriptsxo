@@ -197,7 +197,7 @@ export default function PaymentSettingsPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[800px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
         {/* Header */}
         <div className="flex items-center gap-3 mb-2">
           <Link
@@ -246,7 +246,7 @@ export default function PaymentSettingsPage() {
           <button
             onClick={handleSave}
             className="inline-flex items-center gap-2 px-6 py-3 text-white text-xs tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity rounded-md"
-            style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+            style={{ background: "#5B21B6" }}
           >
             <Save size={14} aria-hidden="true" />
             Save Configuration

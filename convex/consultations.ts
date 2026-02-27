@@ -312,8 +312,8 @@ export const createFromIntake = mutation({
  * chief complaint, and computed wait time in minutes.
  */
 export const getWaitingQueue = query({
-  args: { sessionToken: v.string() },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     const waiting = await ctx.db
       .query("consultations")
       .withIndex("by_status", (q) => q.eq("status", "waiting"))
@@ -325,9 +325,9 @@ export const getWaitingQueue = query({
         const patient = await ctx.db.get(c.patientId);
         const patientMember = patient
           ? await ctx.db
-              .query("members")
-              .withIndex("by_email", (q) => q.eq("email", patient.email))
-              .first()
+            .query("members")
+            .withIndex("by_email", (q) => q.eq("email", patient.email))
+            .first()
           : null;
         const waitMs = Date.now() - c.createdAt;
         const waitMin = Math.max(0, Math.round(waitMs / 60000));
@@ -468,9 +468,9 @@ export const claim = mutation({
     const member = args.sessionToken ? await ctx.db.get(args.sessionToken) : null;
     const provider = member
       ? await ctx.db
-          .query("providers")
-          .withIndex("by_email", (q) => q.eq("email", member.email))
-          .first()
+        .query("providers")
+        .withIndex("by_email", (q) => q.eq("email", member.email))
+        .first()
       : null;
 
     if (!provider) {

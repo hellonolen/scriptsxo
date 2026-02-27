@@ -44,7 +44,7 @@ const AGENT_CONFIG = [
 export default function AgentsPage() {
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
         <PageHeader
           eyebrow="ADMINISTRATION"
           title="Platform Agents"

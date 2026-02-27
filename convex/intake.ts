@@ -53,23 +53,27 @@ export const updateStep = mutation({
       status: "in_progress",
     };
 
-    // Map step name to field
-    const stepFieldMap: Record<string, string> = {
-      medical_history: "medicalHistory",
-      symptoms: "currentSymptoms",
-      medications: "medications",
-      allergies: "allergies",
-      chief_complaint: "chiefComplaint",
-      symptom_duration: "symptomDuration",
-      severity: "severityLevel",
-      vitals: "vitalSigns",
-      id_verification: "idVerified",
-      consent: "consentGiven",
-    };
+    // If step is symptoms, specifically pull out the top level fields
+    if (args.stepName === "symptoms" && args.data) {
+      updates.chiefComplaint = args.data.chiefComplaint;
+      updates.symptomDuration = args.data.duration;
+      updates.severityLevel = args.data.severity;
+      updates.currentSymptoms = args.data.relatedSymptoms;
+    } else {
+      // Map other step names to fields
+      const stepFieldMap: Record<string, string> = {
+        medical_history: "medicalHistory",
+        medications: "medications",
+        allergies: "allergies",
+        vitals: "vitalSigns",
+        id_verification: "idVerified",
+        consent: "consentGiven",
+      };
 
-    const fieldName = stepFieldMap[args.stepName];
-    if (fieldName) {
-      updates[fieldName] = args.data;
+      const fieldName = stepFieldMap[args.stepName];
+      if (fieldName) {
+        updates[fieldName] = args.data;
+      }
     }
 
     // Track completed steps

@@ -1050,7 +1050,7 @@ export default function StartPage() {
                 <Button
                   onClick={handleNpiVerification}
                   disabled={!proxyInfo.npiNumber.trim() || !proxyInfo.firstName.trim() || !proxyInfo.lastName.trim() || isVerifyingNpi}
-                  className="w-full bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white h-11 text-xs font-medium tracking-wide"
+                  className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
                 >
                   {isVerifyingNpi ? (
                     <>
@@ -1126,7 +1126,7 @@ export default function StartPage() {
               <Button
                 onClick={handleCaregiverInfoSubmit}
                 disabled={!proxyInfo.firstName.trim() || !proxyInfo.relationship.trim()}
-                className="w-full bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white h-11 text-xs font-medium tracking-wide"
+                className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
               >
                 Continue
                 <ChevronRight className="w-4 h-4 ml-1" />
@@ -1261,7 +1261,7 @@ export default function StartPage() {
             <Button
               onClick={handlePaymentComplete}
               disabled={!noRefundAccepted}
-              className="w-full bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
             >
               <CreditCard className="w-4 h-4 mr-2" />
               Complete Payment
@@ -1339,7 +1339,7 @@ export default function StartPage() {
             <Button
               onClick={handleMedicalSubmit}
               disabled={!medicalData.conditions.trim() || isValidating}
-              className="w-full bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
             >
               {isValidating ? (
                 <>
@@ -1427,7 +1427,7 @@ export default function StartPage() {
             <Button
               onClick={handleSymptomsSubmit}
               disabled={!symptomData.complaint.trim() || !symptomData.duration.trim() || isValidating}
-              className="w-full bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
             >
               {isValidating ? (
                 <>
@@ -1574,7 +1574,7 @@ export default function StartPage() {
             <Button
               onClick={handleVerificationSubmit}
               disabled={!verificationData.govIdUploaded || isScanningId || isScanningRx}
-              className="w-full bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
             >
               Continue
               <ChevronRight className="w-4 h-4 ml-1" />
@@ -1595,7 +1595,7 @@ export default function StartPage() {
                   </p>
                   <Button
                     onClick={startVideo}
-                    className="bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white h-11 text-xs font-medium tracking-wide px-8"
+                    className="bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide px-8"
                   >
                     <Video className="w-4 h-4 mr-2" />
                     Start Recording
@@ -1647,7 +1647,7 @@ export default function StartPage() {
 
                 <Button
                   onClick={nextVideoQuestion}
-                  className="w-full bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white h-11 text-xs font-medium tracking-wide"
+                  className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
                 >
                   {currentQuestion < VIDEO_QUESTIONS.length - 1 ? (
                     <>
@@ -1698,7 +1698,7 @@ export default function StartPage() {
             <Button
               onClick={handlePharmacySubmit}
               disabled={!pharmacyLocation.trim() || isValidating}
-              className="w-full bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
             >
               {isValidating ? (
                 <>
@@ -1770,7 +1770,7 @@ export default function StartPage() {
             <div className="flex items-center gap-3">
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                style={{ background: "#5B21B6" }}
               >
                 {userRole === "provider" ? (
                   <Stethoscope className="w-4 h-4 text-white" />
@@ -2013,7 +2013,7 @@ export default function StartPage() {
                     onClick={handleWelcomeStart}
                     className="glass-card p-6 text-left group hover:border-[#7C3AED]/30 transition-all duration-200"
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 bg-gradient-to-br from-[#7C3AED] to-[#2DD4BF]">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 bg-[#5B21B6]">
                       <User className="w-5 h-5 text-white" />
                     </div>
                     <p className="text-sm font-medium text-foreground mb-1">New Client</p>
@@ -2030,7 +2030,7 @@ export default function StartPage() {
                     onClick={handleWelcomeStart}
                     className="glass-card p-6 text-left group hover:border-[#7C3AED]/30 transition-all duration-200"
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 bg-gradient-to-br from-[#7C3AED] to-[#2DD4BF]">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 bg-[#5B21B6]">
                       <FileText className="w-5 h-5 text-white" />
                     </div>
                     <p className="text-sm font-medium text-foreground mb-1">Returning Client</p>

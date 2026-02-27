@@ -64,7 +64,7 @@ export default function OnboardPage() {
             className="absolute inset-0"
             style={{
               backgroundImage:
-                "radial-gradient(ellipse at 20% 50%, rgba(124, 58, 237, 0.12) 0%, transparent 70%), radial-gradient(ellipse at 80% 80%, rgba(45, 212, 191, 0.06) 0%, transparent 70%)",
+                "radial-gradient(ellipse at 20% 50%, rgba(124, 58, 237, 0.12) 0%, transparent 70%), radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 70%)",
             }}
           />
         </div>
@@ -131,19 +131,17 @@ export default function OnboardPage() {
                 <button
                   key={role.id}
                   onClick={() => setSelected(role.id)}
-                  className={`w-full text-left p-5 rounded-xl border-2 transition-all duration-200 ${
-                    isSelected
+                  className={`w-full text-left p-5 rounded-xl border-2 transition-all duration-200 ${isSelected
                       ? "border-[#7C3AED] bg-[#7C3AED]/5"
                       : "border-border hover:border-border/80 hover:bg-muted/50"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start gap-4">
                     <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        isSelected
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isSelected
                           ? "bg-[#7C3AED]/10"
                           : "bg-muted"
-                      }`}
+                        }`}
                     >
                       <Icon
                         size={18}
@@ -154,9 +152,8 @@ export default function OnboardPage() {
                     </div>
                     <div className="flex-1">
                       <p
-                        className={`text-sm font-medium mb-1 ${
-                          isSelected ? "text-foreground" : "text-foreground"
-                        }`}
+                        className={`text-sm font-medium mb-1 ${isSelected ? "text-foreground" : "text-foreground"
+                          }`}
                       >
                         {role.label}
                       </p>
@@ -178,11 +175,10 @@ export default function OnboardPage() {
           <button
             onClick={handleContinue}
             disabled={!selected}
-            className={`w-full mt-8 inline-flex items-center justify-center gap-2 px-8 py-3.5 text-[11px] tracking-[0.15em] uppercase font-light rounded-lg transition-all duration-300 ${
-              selected
+            className={`w-full mt-8 inline-flex items-center justify-center gap-2 px-8 py-3.5 text-[11px] tracking-[0.15em] uppercase font-light rounded-lg transition-all duration-300 ${selected
                 ? "bg-foreground text-background hover:bg-foreground/90"
                 : "bg-muted text-muted-foreground cursor-not-allowed"
-            }`}
+              }`}
           >
             Continue
             <ArrowRight size={14} aria-hidden="true" />

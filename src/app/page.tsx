@@ -389,7 +389,7 @@ export default function HomePage() {
           <div
             className="absolute inset-0"
             style={{
-              backgroundImage: `radial-gradient(ellipse at 20% 50%, rgba(124, 58, 237, 0.12) 0%, transparent 70%), radial-gradient(ellipse at 80% 80%, rgba(45, 212, 191, 0.06) 0%, transparent 70%)`,
+              backgroundImage: `radial-gradient(ellipse at 20% 50%, rgba(124, 58, 237, 0.12) 0%, transparent 70%), radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 70%)`,
             }}
           />
         </div>
@@ -415,15 +415,15 @@ export default function HomePage() {
             </p>
             <div className="mt-10 space-y-3">
               <div className="flex items-center gap-3 text-white/50 text-sm font-light">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-[#A78BFA]" />
                 Same-day consultations with board-certified providers
               </div>
               <div className="flex items-center gap-3 text-white/50 text-sm font-light">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-[#A78BFA]" />
                 Prescriptions sent directly to your pharmacy
               </div>
               <div className="flex items-center gap-3 text-white/50 text-sm font-light">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-[#A78BFA]" />
                 Credential-verified providers and pharmacies
               </div>
             </div>

@@ -186,7 +186,7 @@ export default function OfficeHoursPage() {
                     type="submit"
                     disabled={!newQuestion.trim()}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs tracking-wider uppercase font-medium text-white transition-all disabled:opacity-40"
-                    style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                    style={{ background: "#5B21B6" }}
                   >
                     <Send size={12} />
                     Submit Question
@@ -299,11 +299,11 @@ export default function OfficeHoursPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">{session.host}</p>
                   </div>
                   <div className="flex items-center gap-6">
-                    <div className="text-center">
+                    <div className="text-left">
                       <p className="text-sm font-medium text-foreground">{session.participants}</p>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Joined</p>
                     </div>
-                    <div className="text-center">
+                    <div className="text-left">
                       <p className="text-sm font-medium text-foreground">{session.questionsAnswered}</p>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Answered</p>
                     </div>

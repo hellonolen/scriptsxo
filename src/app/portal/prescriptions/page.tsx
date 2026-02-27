@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Id } from "../../../../convex/_generated/dataModel";
 import { Pill, Plus, FileDown, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
@@ -20,7 +21,7 @@ const STATUS_STEPS = [
 ] as const;
 
 const COMPLETED_COLOR = "#7C3AED";
-const CURRENT_COLOR = "#2DD4BF";
+const CURRENT_COLOR = "#9F7AEA";
 const UPCOMING_COLOR = "#D4D4D8";
 
 function resolveStepIndex(dbStatus: string): number {
@@ -88,7 +89,7 @@ function StatusTracker({ status }: { status: string }) {
                     height: isCurrent ? 10 : 7,
                     backgroundColor: dotColor,
                     boxShadow: isCurrent
-                      ? `0 0 0 3px rgba(45, 212, 191, 0.18)`
+                      ? `0 0 0 3px rgba(124, 58, 237, 0.18)`
                       : "none",
                   }}
                   aria-hidden="true"
@@ -178,7 +179,7 @@ function getStatusBadge(status: string): { label: string; isActive: boolean } {
 export default function PrescriptionsPage() {
   const [email, setEmail] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<Id<"prescriptions"> | null>(null);
 
   useEffect(() => {
     const session = getSessionCookie();
@@ -200,10 +201,11 @@ export default function PrescriptionsPage() {
 
   const generatePdf = useAction(api.actions.generatePrescriptionPdf.generate);
 
-  const handleDownloadPdf = async (prescriptionId: string) => {
+  const handleDownloadPdf = async (prescriptionId: Id<"prescriptions">) => {
     setDownloading(prescriptionId);
     try {
-      await generatePdf({ prescriptionId });
+      const session = getSessionCookie();
+      await generatePdf({ prescriptionId, sessionToken: session?.sessionToken ?? "" });
     } catch {
       // Error handling — PDF generation failure is silent to avoid exposing details
     } finally {
@@ -212,13 +214,16 @@ export default function PrescriptionsPage() {
     }
   };
 
-  // Loading state
-  if (!sessionChecked || (email !== null && (patient === undefined || prescriptions === undefined))) {
+  // Loading state — only show spinner while Convex queries are in-flight (undefined).
+  // If patient is null, it means no patient record found — skip to render with empty state.
+  const patientLoading = email !== null && patient === undefined;
+  const dataLoading = patient != null && (prescriptions === undefined);
+  if (!sessionChecked || patientLoading || dataLoading) {
     return (
       <AppShell>
-        <div className="p-6 lg:p-10 max-w-[1200px]">
+        <div className="p-6 lg:p-10 max-w-[1400px]">
           <div className="flex items-center justify-center py-20">
-            <div className="text-center">
+            <div className="text-left">
               <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
               <p className="text-sm text-muted-foreground">Loading prescriptions...</p>
             </div>
@@ -232,7 +237,7 @@ export default function PrescriptionsPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
 
         {/* ---- HEADER ---- */}
         <header className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -248,7 +253,7 @@ export default function PrescriptionsPage() {
               Managed by ScriptsXO Telehealth
             </p>
           </div>
-          <button className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-[11px] tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity self-start sm:self-auto" style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}>
+          <button className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-[11px] tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity self-start sm:self-auto" style={{ background: "#5B21B6" }}>
             <Plus size={14} aria-hidden="true" />
             Request New Prescription
           </button>
@@ -268,11 +273,10 @@ export default function PrescriptionsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-4">
                         <span
-                          className={`text-[9px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 ${
-                            badge.isActive
-                              ? "text-[#16A34A] bg-[#16A34A]/8"
-                              : "text-[#CA8A04] bg-[#CA8A04]/8"
-                          }`}
+                          className={`text-[9px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 ${badge.isActive
+                            ? "text-[#16A34A] bg-[#16A34A]/8"
+                            : "text-[#CA8A04] bg-[#CA8A04]/8"
+                            }`}
                         >
                           {badge.label}
                         </span>
@@ -345,12 +349,12 @@ export default function PrescriptionsPage() {
             })}
           </div>
         ) : (
-          <div className="glass-card text-center py-20">
-            <Pill size={48} className="text-muted-foreground mx-auto mb-4" />
+          <div className="glass-card py-20 px-10">
+            <Pill size={48} className="text-muted-foreground mb-4" />
             <h3 className="text-xl font-light text-foreground mb-2" style={{ fontFamily: "var(--font-heading)" }}>
               No Prescriptions Yet
             </h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            <p className="text-sm text-muted-foreground max-w-md">
               Start a consultation with a provider to receive your first prescription.
             </p>
           </div>

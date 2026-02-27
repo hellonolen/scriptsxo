@@ -41,7 +41,7 @@ export default function ProviderPayoutsPage() {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1200px] flex items-center justify-center py-20">
-          <div className="text-center">
+          <div className="text-left">
             <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
             <p className="text-sm text-muted-foreground">Loading payout data...</p>
           </div>

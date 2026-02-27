@@ -44,7 +44,7 @@ export default function ConsultationCompletePage() {
         <div className="text-center space-y-4">
           <div
             className="w-16 h-16 rounded-full flex items-center justify-center mx-auto"
-            style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+            style={{ background: "#5B21B6" }}
           >
             <CheckCircle2 size={28} className="text-white" aria-hidden="true" />
           </div>
@@ -70,7 +70,7 @@ export default function ConsultationCompletePage() {
               { term: "Date", detail: VISIT_DATE },
               { term: "Provider", detail: "Dr. Sarah Mitchell, MD" },
               { term: "Duration", detail: "14 minutes" },
-              { term: "Chief Complaint", detail: "Persistent headache — 3 days duration" },
+              { term: "Chief Concern", detail: "Persistent headache — 3 days duration" },
               {
                 term: "Assessment",
                 detail:
@@ -134,7 +134,7 @@ export default function ConsultationCompletePage() {
           <button
             onClick={() => router.push("/dashboard")}
             className="px-6 py-2.5 text-sm font-light text-white rounded-lg transition-opacity hover:opacity-90"
-            style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+            style={{ background: "#5B21B6" }}
           >
             Back to Dashboard
           </button>

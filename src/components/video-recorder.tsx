@@ -235,7 +235,7 @@ export function VideoRecorder({
         {state === "idle" && !mediaStreamRef.current && (
           <Button
             onClick={startCamera}
-            className="bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white hover:opacity-90"
+            className="bg-[#5B21B6] hover:bg-[#4C1D95] text-white hover:opacity-90"
           >
             <Video className="w-4 h-4" />
             Enable Camera
@@ -245,7 +245,7 @@ export function VideoRecorder({
         {state === "idle" && mediaStreamRef.current && (
           <Button
             onClick={startRecording}
-            className="bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white hover:opacity-90"
+            className="bg-[#5B21B6] hover:bg-[#4C1D95] text-white hover:opacity-90"
           >
             <Play className="w-4 h-4" />
             Start Recording
@@ -275,7 +275,7 @@ export function VideoRecorder({
             </Button>
             <Button
               onClick={confirm}
-              className="bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white hover:opacity-90"
+              className="bg-[#5B21B6] hover:bg-[#4C1D95] text-white hover:opacity-90"
             >
               <Check className="w-4 h-4" />
               Confirm & Continue

@@ -83,7 +83,7 @@ export default function GlobalError({
               onClick={() => reset()}
               style={{
                 padding: "10px 22px",
-                background: "linear-gradient(135deg, #7C3AED, #2DD4BF)",
+                background: "#5B21B6",
                 color: "#FFFFFF",
                 border: "none",
                 borderRadius: 6,

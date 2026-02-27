@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   Heart,
   ArrowRight,
@@ -23,11 +24,11 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
 
 const INTAKE_STEPS = [
-  { label: "Symptoms", icon: Stethoscope },
-  { label: "Medical History", icon: Heart },
-  { label: "Verification", icon: ScanLine },
-  { label: "Payment", icon: CreditCard },
-  { label: "Review", icon: FileCheck },
+  { label: "Symptoms", icon: Stethoscope, desc: "Initial details" },
+  { label: "Medical History", icon: Heart, desc: "Health background" },
+  { label: "Verification", icon: ScanLine, desc: "Verify identity" },
+  { label: "Payment", icon: CreditCard, desc: "Security deposit" },
+  { label: "Review", icon: FileCheck, desc: "Final check" },
 ] as const;
 
 const MEDICAL_CONDITIONS = [
@@ -232,10 +233,8 @@ export default function MedicalHistoryPage() {
   if (loading) {
     return (
       <AppShell>
-        <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
-          <div className="max-w-[1400px] mx-auto">
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
+        <main className="min-h-screen pt-24 pb-32 px-6 sm:px-8 lg:px-16 w-full max-w-[1600px] mx-auto flex items-center justify-center">
+          <p className="text-muted-foreground">Loading...</p>
         </main>
       </AppShell>
     );
@@ -243,387 +242,446 @@ export default function MedicalHistoryPage() {
 
   return (
     <AppShell>
-      <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12">
-        <div className="max-w-[1400px] mx-auto">
-          {/* Progress bar */}
-          <div className="max-w-2xl mb-12">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                Step 2 of 5
-              </span>
-            </div>
-            <div className="w-full h-px bg-border relative">
-              <div
-                className="absolute top-0 left-0 h-px bg-brand-secondary transition-all duration-500"
-                style={{ width: "40%" }}
-              />
-            </div>
-            {/* Step indicators */}
-            <div className="flex items-center gap-0 mt-6">
-              {INTAKE_STEPS.map((step, index) => {
-                const StepIcon = step.icon;
-                const isActive = index === currentStep;
-                const isCompleted = index < currentStep;
-                return (
-                  <div
-                    key={step.label}
-                    className="flex items-center flex-1 last:flex-0"
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <div
-                        className={`w-9 h-9 rounded-sm border flex items-center justify-center transition-colors ${
-                          isActive
-                            ? "border-brand-secondary bg-brand-secondary-muted"
-                            : isCompleted
-                              ? "border-brand-secondary bg-brand-secondary text-white"
-                              : "border-border bg-card"
-                        }`}
-                      >
-                        <StepIcon
-                          size={14}
-                          className={
-                            isActive
-                              ? "text-brand-secondary"
-                              : isCompleted
-                                ? "text-white"
-                                : "text-muted-foreground"
-                          }
-                          aria-hidden="true"
-                        />
-                      </div>
-                      <span
-                        className={`text-[10px] tracking-[0.1em] uppercase font-light hidden sm:block ${
-                          isActive
-                            ? "text-brand-secondary"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {step.label}
-                      </span>
-                    </div>
-                    {index < INTAKE_STEPS.length - 1 && (
-                      <div className="flex-1 h-px bg-border mx-3 mb-5 sm:mb-0" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+      <main className="min-h-screen pt-24 pb-32 px-6 sm:px-8 lg:px-16 w-full max-w-[1600px] mx-auto">
 
-          {/* Page header */}
-          <div className="max-w-2xl mb-10">
-            <h1
-              className="text-3xl lg:text-4xl font-light text-foreground mb-3"
-              style={{ fontFamily: "var(--font-heading)" }}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-24">
+
+          {/* ==========================================
+              LEFT COLUMN - Sticky header & progress 
+          =========================================== */}
+          <div className="lg:col-span-4 lg:sticky lg:top-32 h-fit">
+
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
             >
-              Medical History
-            </h1>
-            <p className="text-muted-foreground font-light">
-              Help your provider understand your health background. All
-              information is kept strictly confidential.
-            </p>
+              {/* Page header */}
+              <div className="mb-12">
+                <span className="text-[11px] tracking-[0.2em] text-[#7C3AED] uppercase font-bold mb-4 block">
+                  Step 2 of 5
+                </span>
+                <h1
+                  className="text-3xl lg:text-[40px] font-light text-foreground leading-[1.1] tracking-tight mb-5"
+                  style={{ fontFamily: "var(--font-heading)" }}
+                >
+                  Medical History
+                </h1>
+                <p className="text-muted-foreground font-light text-[15px] leading-relaxed max-w-[340px]">
+                  Help your provider understand your health background. All
+                  information is kept strictly confidential.
+                </p>
+              </div>
+
+              {/* Progress (Vertical Version - Desktop) */}
+              <div className="hidden lg:block pb-8 border-b border-border/50">
+                <div className="space-y-6">
+                  {INTAKE_STEPS.map((step, index) => {
+                    const StepIcon = step.icon;
+                    const isActive = index === currentStep;
+                    const isPast = index < currentStep;
+
+                    return (
+                      <div key={step.label} className="flex items-start gap-5">
+                        <div className="relative flex flex-col items-center">
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all duration-300 ${isActive
+                              ? "border-[#7C3AED] bg-[#7C3AED]/10 text-[#7C3AED] shadow-[0_0_15px_rgba(124,58,237,0.15)]"
+                              : isPast
+                                ? "border-[#7C3AED] bg-[#7C3AED] text-white"
+                                : "border-border/60 bg-transparent text-muted-foreground/60"
+                            }`}>
+                            <StepIcon size={15} />
+                          </div>
+                          {index < INTAKE_STEPS.length - 1 && (
+                            <div className={`w-px h-8 mt-2 -mb-4 ${isPast ? "bg-[#7C3AED]/40" : "bg-border/60"}`} />
+                          )}
+                        </div>
+                        <div className="pt-2 flex flex-col">
+                          <span className={`text-[14px] font-medium tracking-wide ${isActive ? "text-foreground" : isPast ? "text-foreground/80" : "text-muted-foreground/60"}`}>
+                            {step.label}
+                          </span>
+                          <span className={`text-[12px] font-light ${isActive ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
+                            {step.desc}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Mobile Horizontal Progress (fallback) */}
+            <div className="lg:hidden mb-10">
+              <div className="flex items-center gap-0 mt-6">
+                {INTAKE_STEPS.map((step, index) => {
+                  const StepIcon = step.icon;
+                  const isActive = index === currentStep;
+                  const isCompleted = index < currentStep;
+                  return (
+                    <div
+                      key={step.label}
+                      className="flex items-center flex-1 last:flex-0"
+                    >
+                      <div className={`w-8 h-8 rounded-full border flex items-center justify-center ${isActive
+                          ? "border-[#7C3AED] bg-[#7C3AED]/10 text-[#7C3AED]"
+                          : isCompleted
+                            ? "border-[#7C3AED] bg-[#7C3AED] text-white"
+                            : "border-border bg-transparent text-muted-foreground/50"
+                        }`}
+                      >
+                        <StepIcon size={13} />
+                      </div>
+                      {index < INTAKE_STEPS.length - 1 && (
+                        <div className={`flex-1 h-px mx-2 ${isCompleted ? "bg-[#7C3AED]/50" : "bg-border"}`} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
           </div>
 
-          {/* Form */}
-          <div className="max-w-2xl space-y-10">
-            {/* Personal Information */}
-            <section>
-              <h2
-                className="text-lg font-light text-foreground mb-1"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Personal Information
-              </h2>
-              <div className="h-px bg-border mb-6" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <Input
-                  label="First Name"
-                  required
-                  placeholder="Jane"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  className="rounded-md border border-border bg-white"
-                />
-                <Input
-                  label="Last Name"
-                  required
-                  placeholder="Doe"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className="rounded-md border border-border bg-white"
-                />
-                <Input
-                  label="Date of Birth"
-                  required
-                  type="date"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="rounded-md border border-border bg-white"
-                />
-                <div className="w-full">
-                  <label className="block text-xs font-medium tracking-wider text-muted-foreground mb-2 uppercase">
-                    Gender <span className="text-destructive ml-1">*</span>
-                  </label>
-                  <select
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
-                    required
+          {/* ==========================================
+              RIGHT COLUMN - Continuous Form flow 
+          =========================================== */}
+          <div className="lg:col-span-8 lg:pt-8 relative">
+            <motion.div
+              className="space-y-16 max-w-2xl"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
+            >
+
+              {/* Personal Information */}
+              <section>
+                <div className="mb-5">
+                  <h2
+                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
+                    style={{ fontFamily: "var(--font-heading)" }}
                   >
-                    <option value="">Select</option>
-                    {GENDER_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
+                    Personal Information
+                  </h2>
+                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
+                    Basic details for your medical record
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-[13px] font-medium tracking-wider text-muted-foreground mb-2 uppercase">
+                      First Name <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      required
+                      placeholder="Jane"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all text-[15px] font-light shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[13px] font-medium tracking-wider text-muted-foreground mb-2 uppercase">
+                      Last Name <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      required
+                      placeholder="Doe"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all text-[15px] font-light shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[13px] font-medium tracking-wider text-muted-foreground mb-2 uppercase">
+                      Date of Birth <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      required
+                      type="date"
+                      value={dateOfBirth}
+                      onChange={(e) => setDateOfBirth(e.target.value)}
+                      className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all text-[15px] font-light shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
+                    />
+                  </div>
+                  <div className="w-full">
+                    <label className="block text-[13px] font-medium tracking-wider text-muted-foreground mb-2 uppercase">
+                      Gender <span className="text-destructive">*</span>
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all text-[15px] font-light shadow-[0_2px_4px_rgba(0,0,0,0.02)] appearance-none cursor-pointer"
+                        required
+                      >
+                        <option value="" disabled>Select gender</option>
+                        {GENDER_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-5 text-slate-400">
+                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[13px] font-medium tracking-wider text-muted-foreground mb-2 uppercase">
+                      Phone Number <span className="text-destructive">*</span>
+                    </label>
+                    <input
+                      required
+                      type="tel"
+                      placeholder="(555) 123-4567"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all text-[15px] font-light shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* Medical Conditions */}
+              <section>
+                <div className="mb-5">
+                  <h2
+                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
+                    style={{ fontFamily: "var(--font-heading)" }}
+                  >
+                    Medical Conditions
+                  </h2>
+                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
+                    Select any that you currently have
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  {MEDICAL_CONDITIONS.map((condition) => {
+                    const isSelected = selectedConditions.includes(condition);
+                    return (
+                      <button
+                        key={condition}
+                        type="button"
+                        onClick={() => toggleCondition(condition)}
+                        className={`px-5 py-2.5 text-[14px] tracking-wide font-light rounded-full border transition-all duration-200 ${isSelected
+                            ? "border-[#7C3AED] bg-[#7C3AED]/5 text-[#7C3AED]"
+                            : "border-border/80 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
+                          }`}
+                        aria-pressed={isSelected}
+                      >
+                        {condition}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Current Medications */}
+              <section>
+                <div className="mb-5">
+                  <h2
+                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
+                    style={{ fontFamily: "var(--font-heading)" }}
+                  >
+                    Current Medications
+                  </h2>
+                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
+                    Include dosage if known
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="e.g., Metformin 500mg twice daily"
+                      value={medicationInput}
+                      onChange={(e) => setMedicationInput(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, addMedication)}
+                      className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all text-[15px] font-light shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addMedication}
+                    className="h-auto sm:h-[54px] rounded-[8px] shrink-0 border-border/80 bg-white hover:bg-slate-50 text-slate-700 shadow-[0_2px_4px_rgba(0,0,0,0.02)] px-6"
+                    aria-label="Add medication"
+                  >
+                    <Plus size={16} aria-hidden="true" className="mr-2" />
+                    Add
+                  </Button>
+                </div>
+                {medications.length > 0 && (
+                  <div className="space-y-2">
+                    {medications.map((med) => (
+                      <div
+                        key={med}
+                        className="flex items-center justify-between px-5 py-3.5 bg-white border border-border/80 shadow-[0_1px_2px_rgba(0,0,0,0.01)] rounded-[8px]"
+                      >
+                        <span className="text-[15px] font-light text-slate-800">
+                          {med}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeMedication(med)}
+                          className="text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors p-2 rounded-full"
+                          aria-label={`Remove ${med}`}
+                        >
+                          <X size={16} aria-hidden="true" />
+                        </button>
+                      </div>
                     ))}
-                  </select>
-                </div>
-                <div className="sm:col-span-2">
-                  <Input
-                    label="Phone Number"
-                    required
-                    type="tel"
-                    placeholder="(555) 123-4567"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="rounded-md border border-border bg-white"
-                  />
-                </div>
-              </div>
-            </section>
+                  </div>
+                )}
+                {medications.length === 0 && (
+                  <p className="text-[14px] text-slate-400 font-light italic">
+                    No medications added yet.
+                  </p>
+                )}
+              </section>
 
-            {/* Medical Conditions */}
-            <section>
-              <h2
-                className="text-lg font-light text-foreground mb-1"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Medical Conditions
-              </h2>
-              <div className="h-px bg-border mb-4" />
-              <p className="text-sm text-muted-foreground font-light mb-5">
-                Select any conditions you currently have or have been diagnosed
-                with.
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {MEDICAL_CONDITIONS.map((condition) => {
-                  const isSelected = selectedConditions.includes(condition);
-                  return (
-                    <button
-                      key={condition}
-                      type="button"
-                      onClick={() => toggleCondition(condition)}
-                      className={`px-4 py-3 text-sm font-light rounded-md border transition-all duration-200 text-left ${
-                        isSelected
-                          ? "border-brand-secondary bg-brand-secondary-muted text-foreground"
-                          : "border-border bg-card text-muted-foreground hover:border-border hover:bg-muted/50"
-                      }`}
-                      aria-pressed={isSelected}
-                    >
-                      {condition}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* Current Medications */}
-            <section>
-              <h2
-                className="text-lg font-light text-foreground mb-1"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Current Medications
-              </h2>
-              <div className="h-px bg-border mb-4" />
-              <p className="text-sm text-muted-foreground font-light mb-5">
-                List any medications you are currently taking, including dosage
-                if known.
-              </p>
-              <div className="flex gap-3 mb-4">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    placeholder="e.g., Metformin 500mg twice daily"
-                    value={medicationInput}
-                    onChange={(e) => setMedicationInput(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, addMedication)}
-                    className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
-                  />
+              {/* Allergies */}
+              <section>
+                <div className="mb-5">
+                  <h2
+                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
+                    style={{ fontFamily: "var(--font-heading)" }}
+                  >
+                    Allergies
+                  </h2>
+                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
+                    Any drug or food allergies?
+                  </p>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={addMedication}
-                  className="rounded-md shrink-0"
-                  aria-label="Add medication"
-                >
-                  <Plus size={16} aria-hidden="true" />
-                  Add
-                </Button>
-              </div>
-              {medications.length > 0 && (
-                <div className="space-y-2">
-                  {medications.map((med) => (
-                    <div
-                      key={med}
-                      className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-md"
-                    >
-                      <span className="text-sm font-light text-foreground">
-                        {med}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeMedication(med)}
-                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                        aria-label={`Remove ${med}`}
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="e.g., Penicillin - causes rash"
+                      value={allergyInput}
+                      onChange={(e) => setAllergyInput(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, addAllergy)}
+                      className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all text-[15px] font-light shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addAllergy}
+                    className="h-auto sm:h-[54px] rounded-[8px] shrink-0 border-border/80 bg-white hover:bg-slate-50 text-slate-700 shadow-[0_2px_4px_rgba(0,0,0,0.02)] px-6"
+                    aria-label="Add allergy"
+                  >
+                    <Plus size={16} aria-hidden="true" className="mr-2" />
+                    Add
+                  </Button>
+                </div>
+                {allergies.length > 0 && (
+                  <div className="space-y-2">
+                    {allergies.map((allergy) => (
+                      <div
+                        key={allergy}
+                        className="flex items-center justify-between px-5 py-3.5 bg-white border border-border/80 shadow-[0_1px_2px_rgba(0,0,0,0.01)] rounded-[8px]"
                       >
-                        <X size={14} aria-hidden="true" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {medications.length === 0 && (
-                <p className="text-sm text-muted-foreground/60 font-light italic">
-                  No medications added yet.
-                </p>
-              )}
-            </section>
+                        <span className="text-[15px] font-light text-slate-800">
+                          {allergy}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeAllergy(allergy)}
+                          className="text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors p-2 rounded-full"
+                          aria-label={`Remove ${allergy}`}
+                        >
+                          <X size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {allergies.length === 0 && (
+                  <p className="text-[14px] text-slate-400 font-light italic">
+                    No allergies added yet.
+                  </p>
+                )}
+              </section>
 
-            {/* Allergies */}
-            <section>
-              <h2
-                className="text-lg font-light text-foreground mb-1"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Allergies
-              </h2>
-              <div className="h-px bg-border mb-4" />
-              <p className="text-sm text-muted-foreground font-light mb-5">
-                List any known drug allergies or adverse reactions.
-              </p>
-              <div className="flex gap-3 mb-4">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    placeholder="e.g., Penicillin - causes rash"
-                    value={allergyInput}
-                    onChange={(e) => setAllergyInput(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, addAllergy)}
-                    className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors text-base"
-                  />
+              {/* Previous Surgeries */}
+              <section>
+                <div className="mb-5">
+                  <h2
+                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
+                    style={{ fontFamily: "var(--font-heading)" }}
+                  >
+                    Previous Surgeries
+                  </h2>
+                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
+                    Include dates if known
+                  </p>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={addAllergy}
-                  className="rounded-md shrink-0"
-                  aria-label="Add allergy"
-                >
-                  <Plus size={16} aria-hidden="true" />
-                  Add
-                </Button>
-              </div>
-              {allergies.length > 0 && (
-                <div className="space-y-2">
-                  {allergies.map((allergy) => (
-                    <div
-                      key={allergy}
-                      className="flex items-center justify-between px-4 py-3 bg-card border border-border rounded-md"
-                    >
-                      <span className="text-sm font-light text-foreground">
-                        {allergy}
-                      </span>
+                <textarea
+                  placeholder="Describe any previous surgeries or major procedures, including approximate dates..."
+                  value={surgeries}
+                  onChange={(e) => setSurgeries(e.target.value)}
+                  className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all min-h-[140px] resize-y text-[15px] font-light leading-relaxed shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
+                />
+              </section>
+
+              {/* Family History */}
+              <section>
+                <div className="mb-5">
+                  <h2
+                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
+                    style={{ fontFamily: "var(--font-heading)" }}
+                  >
+                    Family Medical History
+                  </h2>
+                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
+                    Conditions in your immediate family
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2.5">
+                  {FAMILY_CONDITIONS.map((condition) => {
+                    const isSelected =
+                      selectedFamilyHistory.includes(condition);
+                    return (
                       <button
+                        key={condition}
                         type="button"
-                        onClick={() => removeAllergy(allergy)}
-                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
-                        aria-label={`Remove ${allergy}`}
+                        onClick={() => toggleFamilyCondition(condition)}
+                        className={`px-5 py-2.5 text-[14px] tracking-wide font-light rounded-full border transition-all duration-200 ${isSelected
+                            ? "border-[#7C3AED] bg-[#7C3AED]/5 text-[#7C3AED]"
+                            : "border-border/80 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
+                          }`}
+                        aria-pressed={isSelected}
                       >
-                        <X size={14} aria-hidden="true" />
+                        {condition}
                       </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              )}
-              {allergies.length === 0 && (
-                <p className="text-sm text-muted-foreground/60 font-light italic">
-                  No allergies added yet.
-                </p>
-              )}
-            </section>
+              </section>
 
-            {/* Previous Surgeries */}
-            <section>
-              <h2
-                className="text-lg font-light text-foreground mb-1"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Previous Surgeries
-              </h2>
-              <div className="h-px bg-border mb-4" />
-              <textarea
-                placeholder="Describe any previous surgeries or major procedures, including approximate dates..."
-                value={surgeries}
-                onChange={(e) => setSurgeries(e.target.value)}
-                className="w-full px-4 py-3 bg-white border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors min-h-[120px] resize-y text-base font-light"
-              />
-            </section>
-
-            {/* Family History */}
-            <section>
-              <h2
-                className="text-lg font-light text-foreground mb-1"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Family Medical History
-              </h2>
-              <div className="h-px bg-border mb-4" />
-              <p className="text-sm text-muted-foreground font-light mb-5">
-                Select any conditions that run in your immediate family (parents,
-                siblings, grandparents).
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {FAMILY_CONDITIONS.map((condition) => {
-                  const isSelected =
-                    selectedFamilyHistory.includes(condition);
-                  return (
-                    <button
-                      key={condition}
-                      type="button"
-                      onClick={() => toggleFamilyCondition(condition)}
-                      className={`px-4 py-3 text-sm font-light rounded-md border transition-all duration-200 text-left ${
-                        isSelected
-                          ? "border-brand-secondary bg-brand-secondary-muted text-foreground"
-                          : "border-border bg-card text-muted-foreground hover:border-border hover:bg-muted/50"
-                      }`}
-                      aria-pressed={isSelected}
-                    >
-                      {condition}
-                    </button>
-                  );
-                })}
+              {/* Navigation */}
+              <div className="flex flex-col-reverse sm:flex-row gap-4 justify-between pt-10 mt-10 border-t border-border/50">
+                <button
+                  onClick={() => router.push("/intake/symptoms")}
+                  className="w-full sm:w-auto inline-flex justify-center items-center gap-2 px-8 py-4 border border-border/80 bg-white text-slate-700 text-[12px] tracking-[0.15em] font-medium uppercase hover:bg-slate-50 hover:text-slate-900 transition-colors rounded-[8px] shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
+                >
+                  <ArrowLeft size={16} aria-hidden="true" />
+                  Back
+                </button>
+                <button
+                  onClick={handleContinue}
+                  className="w-full sm:w-auto bg-[#7C3AED] inline-flex justify-center items-center gap-3 px-10 py-4 text-white text-[12px] tracking-[0.2em] font-medium uppercase hover:bg-[#6D28D9] transition-all duration-300 rounded-[8px] shadow-lg shadow-purple-500/20"
+                >
+                  Continue
+                  <ArrowRight size={16} aria-hidden="true" />
+                </button>
               </div>
-            </section>
 
-            {/* Navigation */}
-            <div className="flex justify-between pt-6 border-t border-border">
-              <button
-                onClick={() => router.push("/intake/symptoms")}
-                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
-              >
-                <ArrowLeft size={16} aria-hidden="true" />
-                Back
-              </button>
-              <button
-                onClick={handleContinue}
-                className="inline-flex items-center gap-2 px-8 py-3 bg-foreground text-background text-[11px] tracking-[0.15em] uppercase font-light hover:bg-foreground/90 transition-all duration-300 rounded-md"
-              >
-                Continue
-                <ArrowRight size={16} aria-hidden="true" />
-              </button>
-            </div>
+            </motion.div>
           </div>
         </div>
       </main>

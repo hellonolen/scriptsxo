@@ -189,7 +189,7 @@ export function GeminiChat() {
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105 active:scale-95"
           style={{
-            background: "linear-gradient(135deg, #7C3AED, #2DD4BF)",
+            background: "#5B21B6",
           }}
           aria-label="Open chat"
         >

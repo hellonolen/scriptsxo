@@ -241,7 +241,7 @@ export default function ProviderPrescriptionsPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="text-center py-10 text-sm text-muted-foreground font-light"
+                    className="text-left py-10 text-sm text-muted-foreground font-light"
                   >
                     <div className="flex items-center justify-center gap-2">
                       <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -253,7 +253,7 @@ export default function ProviderPrescriptionsPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="text-center py-10 text-sm text-muted-foreground font-light"
+                    className="text-left py-10 text-sm text-muted-foreground font-light"
                   >
                     No prescriptions yet
                   </td>

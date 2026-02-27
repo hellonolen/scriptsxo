@@ -18,8 +18,9 @@ import {
   X,
   ExternalLink,
   UserCog,
+  MapPin,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { SITECONFIG, term } from "@/lib/config";
 import {
   CAP,
@@ -158,6 +159,14 @@ const NAV_ITEMS: NavItem[] = [
     href: "/admin/analytics",
   },
   {
+    id: "tracking",
+    label: "Tracking",
+    icon: MapPin,
+    caps: [CAP.REPORT_VIEW],
+    href: "/admin/tracking",
+    matchPaths: ["/admin/tracking"],
+  },
+  {
     id: "audit-logs",
     label: "Audit Logs",
     icon: ShieldCheck,
@@ -205,11 +214,16 @@ interface AppShellProps {
 export function AppShell({ children, sidebarExtra }: AppShellProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  // Compute session synchronously so nav renders correctly on first paint —
-  // no useEffect flash. getSessionCookie() reads document.cookie which is
-  // available immediately on the client. On the server (SSR) it returns null.
-  const session = getSessionCookie();
+  // Use null on first render (matches SSR) then hydrate from cookie on client.
+  // This eliminates the React hydration mismatch error.
+  const [session, setSession] = useState<ReturnType<typeof getSessionCookie>>(null);
+
+  useEffect(() => {
+    setSession(getSessionCookie());
+    setMounted(true);
+  }, []);
 
   const userName: string = session?.name
     || session?.email?.split("@")[0]
@@ -218,7 +232,7 @@ export function AppShell({ children, sidebarExtra }: AppShellProps) {
   const userEmail: string | null = session?.email || null;
 
   const roles: Role[] = (() => {
-    if (!session) return ["unverified"];
+    if (!mounted || !session) return ["unverified"];
     if (checkIsAdmin()) return ["admin"];
     return parseRolesFromSession(session.role);
   })();

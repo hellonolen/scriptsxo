@@ -144,7 +144,7 @@ export default function AdminIntegrationsPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
         {/* Header */}
         <div className="flex items-center gap-3 mb-2">
           <Link

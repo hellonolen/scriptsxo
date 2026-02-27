@@ -41,14 +41,14 @@ function PatientTile({ name, initials }: { name: string; initials: string }) {
       {/* Avatar */}
       <div
         className="relative w-28 h-28 rounded-full flex items-center justify-center text-3xl font-light text-white shadow-2xl"
-        style={{ background: "linear-gradient(135deg, #7C3AED88, #2DD4BF88)", border: "2px solid rgba(255,255,255,0.15)" }}
+        style={{ background: "rgba(91,33,182,0.53)", border: "2px solid rgba(255,255,255,0.15)" }}
       >
         {initials}
       </div>
       <p className="mt-4 text-white/70 text-sm font-light tracking-wide">{name}</p>
       {/* Mic active indicator */}
       <div className="mt-2 flex items-center gap-1.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse" />
         <span className="text-white/40 text-[11px] tracking-wide">Audio connected</span>
       </div>
     </div>
@@ -135,7 +135,7 @@ function AiSidebar({ patient }: { patient: PatientData }) {
               ))
             )}
             <div className="flex items-center gap-2 pt-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse" />
               <span className="text-[11px] text-white/30 italic">Live transcribing...</span>
             </div>
           </div>
@@ -145,7 +145,7 @@ function AiSidebar({ patient }: { patient: PatientData }) {
             <p className="text-[10px] tracking-[0.15em] text-white/40 uppercase mb-2">Ask AI</p>
             <div className="space-y-2 mb-2 max-h-28 overflow-y-auto">
               {chat.map((m, i) => (
-                <div key={i} className={`text-xs leading-relaxed ${m.role === "ai" ? "text-violet-300/80" : "text-white/70"}`}>
+                <div key={i} className={`text-xs leading-relaxed ${m.role === "ai" ? "text-[#C4B5FD]/80" : "text-white/70"}`}>
                   <span className="text-[9px] uppercase tracking-widest text-white/30 mr-1">{m.role === "ai" ? "AI:" : "You:"}</span>
                   {m.text}
                 </div>
@@ -157,11 +157,11 @@ function AiSidebar({ patient }: { patient: PatientData }) {
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                 placeholder="Ask anything..."
-                className="flex-1 bg-white/5 border border-white/10 rounded px-2.5 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-violet-500/50"
+                className="flex-1 bg-white/5 border border-white/10 rounded px-2.5 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-[#7C3AED]/50"
               />
               <button
                 onClick={sendMessage}
-                className="p-1.5 rounded transition-colors hover:bg-violet-500/20"
+                className="p-1.5 rounded transition-colors hover:bg-[#7C3AED]/20"
                 style={{ color: "#A78BFA" }}
               >
                 <Send size={13} />
@@ -201,7 +201,7 @@ function AiSidebar({ patient }: { patient: PatientData }) {
               <div className="space-y-1.5">
                 {patient.currentMeds.map((m) => (
                   <div key={m} className="flex items-center gap-2 text-xs text-white/70">
-                    <Pill size={11} className="text-violet-400 shrink-0" />
+                    <Pill size={11} className="text-[#A78BFA] shrink-0" />
                     {m}
                   </div>
                 ))}
@@ -237,7 +237,7 @@ function AiSidebar({ patient }: { patient: PatientData }) {
               <p className="text-[11px] text-white/50 leading-relaxed">{rx.sig}</p>
               <button
                 className="mt-2 w-full py-1.5 text-[11px] tracking-wide text-white rounded transition-opacity hover:opacity-90"
-                style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                style={{ background: "#5B21B6" }}
               >
                 Send to Pharmacy
               </button>
@@ -324,8 +324,8 @@ function ConsultationRoomInner() {
           <span className="w-px h-4 bg-white/20" />
           <span className="text-xs font-light text-white/60">{patientName}</span>
           <span className="w-px h-4 bg-white/20" />
-          <span className="flex items-center gap-1.5 text-xs font-light text-green-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+          <span className="flex items-center gap-1.5 text-xs font-light text-[#A78BFA]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse" />
             LIVE
           </span>
         </div>
@@ -334,13 +334,8 @@ function ConsultationRoomInner() {
           {formatDuration(duration)}
         </span>
 
-        <button
-          onClick={() => router.push("/consultation/complete")}
-          className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-white rounded-lg bg-red-600 hover:bg-red-700 transition-colors"
-        >
-          <PhoneOff size={12} />
-          End Call
-        </button>
+        {/* Spacer to keep timer centered */}
+        <div className="w-24" />
       </header>
 
       {/* Main */}

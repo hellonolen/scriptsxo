@@ -46,12 +46,18 @@ export function PageContextTracker() {
 
     const session = getSessionCookie();
     if (!session?.email) return;
+    // sessionToken is required for Convex mutations — skip tracking if absent
+    if (!session?.sessionToken) return;
 
     // Fire and forget — don't block rendering
     (async () => {
       try {
-        const conversationId = await getOrCreate({ email: session.email });
+        const conversationId = await getOrCreate({
+          email: session.email,
+          sessionToken: session.sessionToken,
+        });
         await updatePageContext({
+          sessionToken: session.sessionToken,
           conversationId,
           page: pathname,
         });

@@ -79,7 +79,7 @@ export default function AdminPrescriptionsPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
         {/* Header */}
         <header className="mb-8">
           <div className="flex items-center gap-3 mb-4">
@@ -143,13 +143,13 @@ export default function AdminPrescriptionsPage() {
           </div>
 
           {!prescriptions && (
-            <div className="p-12 text-center text-muted-foreground font-light">
+            <div className="p-12 text-left text-muted-foreground font-light">
               Loading prescriptions...
             </div>
           )}
 
           {prescriptions && filtered.length === 0 && (
-            <div className="p-12 text-center text-muted-foreground font-light">
+            <div className="p-12 text-left text-muted-foreground font-light">
               No prescriptions found.
             </div>
           )}

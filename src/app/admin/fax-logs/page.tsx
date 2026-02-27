@@ -52,7 +52,7 @@ export default function AdminFaxLogsPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
         {/* Header */}
         <header className="mb-8">
           <div className="flex items-center gap-3 mb-4">
@@ -102,13 +102,13 @@ export default function AdminFaxLogsPage() {
           </div>
 
           {!faxLogs && (
-            <div className="p-12 text-center text-muted-foreground font-light">
+            <div className="p-12 text-left text-muted-foreground font-light">
               Loading fax logs...
             </div>
           )}
 
           {faxLogs && filtered.length === 0 && (
-            <div className="p-12 text-center">
+            <div className="p-12 text-left">
               <Phone size={32} className="mx-auto text-muted-foreground/30 mb-3" />
               <p className="text-muted-foreground font-light">No fax logs found.</p>
             </div>

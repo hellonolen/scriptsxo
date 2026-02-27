@@ -52,9 +52,9 @@ const DEMO_WORKFLOWS = [
 type Priority = "urgent" | "normal" | "low";
 
 const PRIORITY_VARIANT: Record<Priority, "warning" | "secondary" | "default"> = {
-  urgent:  "warning",
-  normal:  "secondary",
-  low:     "secondary",
+  urgent: "warning",
+  normal: "secondary",
+  low: "secondary",
 };
 
 export default function WorkflowsPage() {
@@ -75,10 +75,10 @@ export default function WorkflowsPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          <StatCard label="Active"          value="4"    icon={ClipboardList} />
-          <StatCard label="Completed Today" value="7"    icon={ClipboardList} />
-          <StatCard label="Avg. Time"       value="2.4h" icon={Clock} />
-          <StatCard label="On Track"        value="92%"  icon={ClipboardList} />
+          <StatCard label="Active" value="4" icon={ClipboardList} />
+          <StatCard label="Completed Today" value="7" icon={ClipboardList} />
+          <StatCard label="Avg. Time" value="2.4h" icon={Clock} />
+          <StatCard label="On Track" value="92%" icon={ClipboardList} />
         </div>
 
         {/* Workflow list — surface cards (not glass-card; these are list items) */}
@@ -88,11 +88,10 @@ export default function WorkflowsPage() {
             return (
               <div
                 key={wf.id}
-                className={`bg-card border rounded-lg flex flex-col sm:flex-row sm:items-center gap-4 ${
-                  wf.priority === "urgent"
+                className={`bg-card border rounded-lg flex flex-col sm:flex-row sm:items-center gap-4 ${wf.priority === "urgent"
                     ? "border-warning/40 ring-1 ring-warning/20"
                     : "border-border"
-                }`}
+                  }`}
                 style={{ padding: "20px 24px" }}
               >
                 {/* Icon */}
@@ -116,7 +115,7 @@ export default function WorkflowsPage() {
                     <div className="flex-1 h-1 rounded-full bg-border overflow-hidden">
                       <div
                         className="h-full rounded-full"
-                        style={{ width: `${pct}%`, background: "var(--brand-gradient)" }}
+                        style={{ width: `${pct}%`, background: "#5B21B6" }}
                       />
                     </div>
                     <span className="text-[11px] text-muted-foreground shrink-0">
@@ -132,8 +131,7 @@ export default function WorkflowsPage() {
                     <span>{wf.due}</span>
                   </div>
                   <button
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] tracking-[0.1em] uppercase font-medium text-white hover:opacity-90 transition-opacity rounded-md"
-                    style={{ background: "var(--brand-gradient)" }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] tracking-[0.1em] uppercase font-medium text-white hover:opacity-90 transition-opacity rounded-md bg-[#5B21B6] hover:bg-[#4C1D95]"
                   >
                     Continue
                     <ArrowRight size={11} aria-hidden="true" />

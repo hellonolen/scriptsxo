@@ -34,13 +34,16 @@ export default function AppointmentsPage() {
     patient ? { patientId: patient._id } : "skip"
   );
 
-  // Loading state
-  if (!sessionChecked || (email !== null && (patient === undefined || consultations === undefined))) {
+  // Loading state — only show spinner while queries are in-flight.
+  // patient === null means no record found — proceed to render.
+  const patientLoading = email !== null && patient === undefined;
+  const dataLoading = patient != null && consultations === undefined;
+  if (!sessionChecked || patientLoading || dataLoading) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1200px]">
           <div className="flex items-center justify-center py-20">
-            <div className="text-center">
+            <div className="text-left">
               <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
               <p className="text-sm text-muted-foreground">Loading appointments...</p>
             </div>
@@ -77,7 +80,7 @@ export default function AppointmentsPage() {
                 <div className="flex items-center gap-4">
                   <div
                     className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
-                    style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                    style={{ background: "#5B21B6" }}
                   >
                     <Phone size={24} className="text-white" aria-hidden="true" />
                   </div>
@@ -92,7 +95,7 @@ export default function AppointmentsPage() {
                 </div>
                 <Button
                   onClick={() => setShowBooking(true)}
-                  className="bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white text-xs tracking-wide px-6"
+                  className="bg-[#5B21B6] hover:bg-[#4C1D95] text-white text-xs tracking-wide px-6"
                 >
                   Book Call
                   <ChevronRight className="w-4 h-4 ml-1" />
@@ -152,7 +155,7 @@ export default function AppointmentsPage() {
                 </Button>
                 <Button
                   disabled={!callReason.trim() || !noRefundChecked}
-                  className="flex-1 bg-gradient-to-r from-[#7C3AED] to-[#2DD4BF] text-white text-xs tracking-wide"
+                  className="flex-1 bg-[#5B21B6] hover:bg-[#4C1D95] text-white text-xs tracking-wide"
                 >
                   Confirm &amp; Pay {formatPrice(SITECONFIG.billing.providerCallFee)}
                 </Button>
@@ -205,7 +208,7 @@ export default function AppointmentsPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-[11px] tracking-[0.15em] uppercase font-medium hover:opacity-90 transition-opacity"
-                        style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                        style={{ background: "#5B21B6" }}
                       >
                         <Video size={14} aria-hidden="true" />
                         Join Call
@@ -214,7 +217,7 @@ export default function AppointmentsPage() {
                       <button
                         disabled
                         className="inline-flex items-center gap-2 px-5 py-2.5 text-white text-[11px] tracking-[0.15em] uppercase font-medium opacity-50 cursor-not-allowed"
-                        style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                        style={{ background: "#5B21B6" }}
                       >
                         <Video size={14} aria-hidden="true" />
                         Room Pending
@@ -271,7 +274,7 @@ export default function AppointmentsPage() {
               ))}
             </div>
           ) : (
-            <div className="glass-card text-center py-12">
+            <div className="glass-card text-left py-12">
               <p className="text-sm text-muted-foreground">No past appointments</p>
             </div>
           )}

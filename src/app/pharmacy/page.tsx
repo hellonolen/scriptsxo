@@ -93,7 +93,7 @@ export default function PharmacyPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
         <PageHeader
           eyebrow="PHARMACY"
           title="Pharmacy Portal"
@@ -137,14 +137,14 @@ export default function PharmacyPage() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12">
+                    <td colSpan={6} className="text-left py-12">
                       <Loader2 size={20} className="animate-spin text-muted-foreground mx-auto mb-2" />
                       <p className="text-sm text-muted-foreground">Loading prescriptions...</p>
                     </td>
                   </tr>
                 ) : allQueueItems.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12">
+                    <td colSpan={6} className="text-left py-12">
                       <p className="text-sm text-muted-foreground">No prescriptions in queue.</p>
                     </td>
                   </tr>

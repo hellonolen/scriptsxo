@@ -102,7 +102,7 @@ export default function AdminPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
         <PageHeader
           eyebrow="ADMINISTRATION"
           title="Admin Dashboard"

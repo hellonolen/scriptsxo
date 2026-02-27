@@ -80,7 +80,7 @@ export default function AdminOfficeHoursPage() {
 
   return (
     <AppShell>
-      <div className="p-6 lg:p-10 max-w-[1200px]">
+      <div className="p-6 lg:p-10 max-w-[1400px]">
         {/* Header */}
         <div className="flex items-center gap-3 mb-1">
           <button
@@ -303,7 +303,7 @@ export default function AdminOfficeHoursPage() {
                       className="relative w-11 h-6 rounded-full transition-colors"
                       style={{
                         background: config[toggle.key]
-                          ? "linear-gradient(135deg, #7C3AED, #2DD4BF)"
+                          ? "#5B21B6"
                           : "#D1D5DB",
                       }}
                     >
@@ -342,7 +342,7 @@ export default function AdminOfficeHoursPage() {
               <button
                 onClick={handleSave}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl text-xs tracking-wider uppercase font-medium text-white transition-all"
-                style={{ background: "linear-gradient(135deg, #7C3AED, #2DD4BF)" }}
+                style={{ background: "#5B21B6" }}
               >
                 {saved ? (
                   <>
@@ -403,7 +403,7 @@ export default function AdminOfficeHoursPage() {
                           className="h-full rounded-full"
                           style={{
                             width: `${pct}%`,
-                            background: "linear-gradient(135deg, #7C3AED, #2DD4BF)",
+                            background: "#5B21B6",
                           }}
                         />
                       </div>
@@ -428,11 +428,11 @@ export default function AdminOfficeHoursPage() {
                   <p className="text-xs text-muted-foreground mt-0.5">{session.host}</p>
                 </div>
                 <div className="flex items-center gap-6">
-                  <div className="text-center">
+                  <div className="text-left">
                     <p className="text-sm font-medium text-foreground">{session.participants}</p>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Joined</p>
                   </div>
-                  <div className="text-center">
+                  <div className="text-left">
                     <p className="text-sm font-medium text-foreground">{session.questions}</p>
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Q&A</p>
                   </div>

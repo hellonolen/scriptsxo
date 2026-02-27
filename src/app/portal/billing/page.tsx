@@ -30,13 +30,16 @@ export default function BillingPage() {
     patient ? { patientId: patient._id } : "skip"
   );
 
-  // Loading state
-  if (!sessionChecked || (email !== null && (patient === undefined || billingRecords === undefined))) {
+  // Loading state — only show spinner while queries are in-flight.
+  // patient === null means no record found — proceed to render.
+  const patientLoading = email !== null && patient === undefined;
+  const dataLoading = patient != null && billingRecords === undefined;
+  if (!sessionChecked || patientLoading || dataLoading) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1200px]">
           <div className="flex items-center justify-center py-20">
-            <div className="text-center">
+            <div className="text-left">
               <Loader2 size={28} className="animate-spin text-muted-foreground mx-auto mb-4" />
               <p className="text-sm text-muted-foreground">Loading billing...</p>
             </div>
@@ -101,9 +104,8 @@ export default function BillingPage() {
                   className="flex items-center justify-between px-6 py-4"
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`w-9 h-9 flex items-center justify-center shrink-0 ${
-                      payment.status === "paid" ? "bg-[#16A34A]/8" : "bg-[#CA8A04]/8"
-                    }`}>
+                    <div className={`w-9 h-9 flex items-center justify-center shrink-0 ${payment.status === "paid" ? "bg-[#16A34A]/8" : "bg-[#CA8A04]/8"
+                      }`}>
                       <Receipt size={14} className={payment.status === "paid" ? "text-[#16A34A]" : "text-[#CA8A04]"} aria-hidden="true" />
                     </div>
                     <div>
@@ -123,13 +125,12 @@ export default function BillingPage() {
                     >
                       {formatPrice(payment.amount)}
                     </span>
-                    <span className={`text-[9px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 ${
-                      payment.status === "paid"
+                    <span className={`text-[9px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 ${payment.status === "paid"
                         ? "text-[#16A34A] bg-[#16A34A]/8"
                         : payment.status === "pending"
-                        ? "text-[#CA8A04] bg-[#CA8A04]/8"
-                        : "text-muted-foreground bg-muted"
-                    }`}>
+                          ? "text-[#CA8A04] bg-[#CA8A04]/8"
+                          : "text-muted-foreground bg-muted"
+                      }`}>
                       {payment.status}
                     </span>
                     {payment.status === "paid" && (
