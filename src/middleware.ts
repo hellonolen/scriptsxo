@@ -425,7 +425,7 @@ export function middleware(request: NextRequest) {
   if (matchesRoute(pathname, AUTH_ROUTES)) {
     if (hasValidSession) {
       const redirectTo =
-        request.nextUrl.searchParams.get("redirect") || "/portal";
+        request.nextUrl.searchParams.get("redirect") || "/dashboard";
       const response = NextResponse.redirect(new URL(redirectTo, request.url));
       applySecurityHeaders(response);
       return response;
@@ -441,9 +441,9 @@ export function middleware(request: NextRequest) {
   );
 
   if (matchedGuard) {
-    // Unauthenticated on a requireAuth route → send to /access
+    // Unauthenticated on a requireAuth route → send to /login
     if (matchedGuard.requireAuth && !hasValidSession) {
-      const loginUrl = new URL("/access", request.url);
+      const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       const response = NextResponse.redirect(loginUrl);
       applySecurityHeaders(response);
