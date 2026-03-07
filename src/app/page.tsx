@@ -5,19 +5,19 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionCookie } from "@/lib/auth";
 
-// Marketing palette — teal/navy, independent of the app's violet design system
+// Marketing palette — ScriptsXO violet/purple brand
 const mk = {
-  teal: "#0d9488",
-  tealDark: "#0f766e",
-  tealLight: "#ccfbf1",
-  navy: "#1a2744",
-  navyLight: "#243158",
+  teal: "#7C3AED",        // primary violet (CTA buttons, accents)
+  tealDark: "#6D28D9",    // hover state
+  tealLight: "#EDE9FE",   // light violet tint (icon backgrounds, badges)
+  navy: "#1E1037",        // deep purple (hero bg, footer)
+  navyLight: "#2D1A55",   // deep purple lighter (gradients)
   white: "#ffffff",
-  surface: "#f8fafc",
-  surfaceAlt: "#f1f5f9",
+  surface: "#F8F7FC",     // off-white with lavender tint
+  surfaceAlt: "#F3F0FA",  // slightly deeper lavender surface
   text: "#0f172a",
   textMuted: "#64748b",
-  border: "#e2e8f0",
+  border: "#E4DFEF",      // lavender-tinted border
 } as const;
 
 const styles = {
@@ -34,7 +34,7 @@ const styles = {
     position: "sticky" as const,
     top: 0,
     zIndex: 50,
-    background: "rgba(255, 255, 255, 0.96)",
+    background: "rgba(248, 247, 252, 0.97)",
     backdropFilter: "blur(12px)",
     borderBottom: `1px solid ${mk.border}`,
   },
@@ -93,9 +93,9 @@ const styles = {
   },
   heroBadge: {
     display: "inline-block",
-    background: "rgba(13, 148, 136, 0.2)",
-    border: "1px solid rgba(13, 148, 136, 0.4)",
-    color: "#5eead4",
+    background: "rgba(124, 58, 237, 0.25)",
+    border: "1px solid rgba(167, 139, 250, 0.5)",
+    color: "#C4B5FD",
     fontSize: "12px",
     fontWeight: "600",
     letterSpacing: "0.12em",
@@ -113,7 +113,8 @@ const styles = {
     color: mk.white,
   },
   heroAccent: {
-    color: "#5eead4",
+    color: "#C4B5FD",
+    fontStyle: "italic",
   },
   heroSub: {
     fontSize: "18px",
@@ -168,7 +169,7 @@ const styles = {
     width: "6px",
     height: "6px",
     borderRadius: "50%",
-    background: "#5eead4",
+    background: "#A78BFA",
     flexShrink: 0,
   },
   // Sections
@@ -660,7 +661,7 @@ export default function HomePage() {
                     height="24"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke={mk.teal}
+                    stroke="#7C3AED"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
