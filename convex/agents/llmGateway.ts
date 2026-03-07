@@ -216,7 +216,7 @@ export const callMultimodal = action({
   },
   handler: async (ctx, args): Promise<LLMResponse> => {
     await requireCap(ctx, args.sessionToken, CAP.VIEW_DASHBOARD);
-    const apiKey = getApiKey();
+    const apiKey = getGeminiKey();
     const model = args.model || "gemini-2.0-flash";
     const maxTokens = args.maxTokens || 2048;
     const temperature = args.temperature ?? 0.2;
