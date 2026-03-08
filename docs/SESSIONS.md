@@ -488,3 +488,62 @@ Three-screen consultation flow to build (front end first):
 - ADR-035: Migrate from Convex to Cloudflare D1/Workers -- full Cloudflare-native stack
 - ADR-036: Hono as Workers router -- lightweight, edge-optimized
 - ADR-037: Session cookie renamed scriptsxo_session for clarity
+
+---
+
+## Session: 2026-03-08 (Case Orchestration Engine + Compliance Audit Layer)
+
+### Work Completed
+
+#### D1 Schema Migrations (Remote, scriptsxo DB)
+- Added 15 new columns to `consultations` table: case_state, patient_email, identity_verified, identity_session_id, consent_captured, consent_at, payment_intent_id, intake_data, video_r2_key, video_transcript, provider_notes, denial_reason, rx_sent_at, pharmacy_ack_at, service_category
+- Dropped legacy 8-column `audit_log` table, replaced with 15-column compliance event model (event_type, actor_id, actor_email, patient_email, patient_state, payload, success, error_message + indexes)
+- Created new `intake_forms` table (14 columns: answers, contraindications, red_flags as JSON, FK to consultations, 2 indexes)
+
+#### Worker: New Files
+- `workers/api/src/lib/audit.ts` -- auditLog() fire-and-forget utility + AuditEventType union (20 typed events)
+- `workers/api/src/routes/cases.ts` -- case orchestration state machine router with 5 endpoints:
+  - GET /cases/:id (full case with joins, JSON field parsing)
+  - POST /cases/:id/advance (state machine with TRANSITIONS guard, writes audit event)
+  - GET /cases (admin list, filterable by case_state)
+  - POST /cases/:id/intake (intake form + rules engine: red flags + contraindications)
+  - GET /cases/:id/audit (chronological audit trail)
+  - Rules engine: 7 red flag types, GLP-1/testosterone/MAOI/anticoagulant contraindication sets
+
+#### Worker: Modified Files
+- `workers/api/src/index.ts` -- registered /cases route
+- `workers/api/src/routes/consultations.ts` -- added auditLog import + case.created audit event on POST /
+- `workers/db/schema.sql` -- updated consultations definition (15 new fields + case_state index), replaced audit_log schema, added intake_forms table with comments
+
+#### Frontend
+- `src/lib/api.ts` -- added `export const cases` object with: get(), list(), advance(), saveIntake(), getAudit()
+
+#### Deployment
+- Worker deployed: scriptsxo-api version 101f7cd3-2c21-4ca2-bbd5-0299570aefb6 (187.83 KiB)
+- Health check verified: https://scriptsxo-api.hellonolen.workers.dev/health
+
+### Case State Machine Transitions
+draft → identity_pending | payment_pending
+identity_pending → payment_pending | draft
+payment_pending → ready_for_clinical_review
+ready_for_clinical_review → provider_review
+provider_review → more_info_requested | synchronous_visit_required | approved | denied
+more_info_requested → provider_review | denied
+synchronous_visit_required → provider_review | denied | approved
+approved → rx_sent
+rx_sent → pharmacy_exception | completed
+pharmacy_exception → rx_sent | denied
+denied → (terminal)
+completed → (terminal)
+
+### Decisions Made
+- ADR-038: Case state machine encoded as explicit TRANSITIONS map -- invalid transitions return 400
+- ADR-039: Audit log is fire-and-forget -- failures log to console but never throw
+- ADR-040: Rules engine (red flags + contraindications) runs at intake submission, not at provider review
+
+### Open Items After This Session
+- Wire case state machine to frontend provider review UI
+- Build intake form wizard UI using POST /cases/:id/intake
+- Add `case_state` filter to provider queue page
+- Pharmacy exception handling UI (rx_sent → pharmacy_exception flow)
+- Denial reason capture UI (passes denial_reason to consultations table)

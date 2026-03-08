@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { newId } from '../lib/id';
 import { requireCap, requireAnyCap, err, ok, type Env } from '../lib/auth';
+import { auditLog } from '../lib/audit';
 import { CAP } from '../lib/caps';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -15,6 +16,15 @@ app.post('/', async (c) => {
     INSERT INTO consultations (id, patient_id, provider_id, intake_id, triage_id, type, status, scheduled_at, patient_state, cost, payment_status, follow_up_required, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, 'pending', 0, ?, ?)
   `).bind(id, body.patientId, body.providerId ?? null, body.intakeId ?? null, body.triageId ?? null, body.type, body.scheduledAt, body.patientState, body.cost, now, now).run();
+
+  await auditLog({
+    db: c.env.DB,
+    eventType: 'case.created',
+    entityType: 'consultation',
+    entityId: id,
+    patientEmail: body.patientEmail as string | undefined,
+    payload: { type: body.type, patientState: body.patientState },
+  });
 
   return ok({ id });
 });
@@ -87,6 +97,16 @@ app.post('/:id/enqueue', async (c) => {
   await requireCap(c, CAP.CONSULT_JOIN);
   await c.env.DB.prepare('UPDATE consultations SET status = ?, updated_at = ? WHERE id = ?')
     .bind('waiting', Date.now(), c.req.param('id')).run();
+  return ok({ success: true });
+});
+
+app.post('/:id/deny', async (c) => {
+  await requireCap(c, CAP.CONSULT_START);
+  const { reason } = await c.req.json<{ reason?: string }>();
+  const now = Date.now();
+  await c.env.DB.prepare(`
+    UPDATE consultations SET status = 'denied', ended_at = ?, notes = ?, updated_at = ? WHERE id = ?
+  `).bind(now, reason ?? null, now, c.req.param('id')).run();
   return ok({ success: true });
 });
 

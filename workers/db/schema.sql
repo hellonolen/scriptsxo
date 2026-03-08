@@ -194,6 +194,9 @@ CREATE TABLE IF NOT EXISTS pharmacies (
   capabilities TEXT NOT NULL DEFAULT '[]', -- JSON array
   tier INTEGER NOT NULL DEFAULT 3,
   status TEXT NOT NULL DEFAULT 'active',
+  sns_topic_arn TEXT,
+  notification_email TEXT,
+  notification_phone TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -226,6 +229,30 @@ CREATE TABLE IF NOT EXISTS intakes (
 CREATE INDEX IF NOT EXISTS idx_intakes_email ON intakes(email);
 CREATE INDEX IF NOT EXISTS idx_intakes_patient_id ON intakes(patient_id);
 CREATE INDEX IF NOT EXISTS idx_intakes_status ON intakes(status);
+
+-- ─── INTAKE FORMS ─────────────────────────────────────────────────────
+
+-- intake_forms: structured clinical intake questionnaire responses per consultation
+-- Supports service-category-specific forms with red flag and contraindication detection
+CREATE TABLE IF NOT EXISTS intake_forms (
+  id TEXT PRIMARY KEY,
+  consultation_id TEXT NOT NULL,
+  patient_email TEXT NOT NULL,
+  service_category TEXT NOT NULL,
+  patient_state TEXT,
+  dob TEXT,
+  answers TEXT NOT NULL DEFAULT '{}',        -- JSON
+  contraindications TEXT DEFAULT '[]',       -- JSON array
+  red_flags TEXT DEFAULT '[]',               -- JSON array
+  pharmacy_preference TEXT,
+  attachments TEXT DEFAULT '[]',             -- JSON array
+  completed_at INTEGER,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (consultation_id) REFERENCES consultations(id)
+);
+CREATE INDEX IF NOT EXISTS idx_intake_consultation ON intake_forms(consultation_id);
+CREATE INDEX IF NOT EXISTS idx_intake_patient ON intake_forms(patient_email);
 
 -- ─── TRIAGE ──────────────────────────────────────────────────────────
 
@@ -276,6 +303,22 @@ CREATE TABLE IF NOT EXISTS consultations (
   patient_state TEXT NOT NULL,
   cost INTEGER NOT NULL,
   payment_status TEXT NOT NULL DEFAULT 'pending',
+  -- case orchestration engine fields (migration 2026-03-08)
+  case_state TEXT NOT NULL DEFAULT 'draft',
+  patient_email TEXT,
+  identity_verified INTEGER DEFAULT 0,
+  identity_session_id TEXT,
+  consent_captured INTEGER DEFAULT 0,
+  consent_at INTEGER,
+  payment_intent_id TEXT,
+  intake_data TEXT,          -- JSON
+  video_r2_key TEXT,
+  video_transcript TEXT,
+  provider_notes TEXT,
+  denial_reason TEXT,
+  rx_sent_at INTEGER,
+  pharmacy_ack_at INTEGER,
+  service_category TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -283,6 +326,7 @@ CREATE INDEX IF NOT EXISTS idx_consultations_patient_id ON consultations(patient
 CREATE INDEX IF NOT EXISTS idx_consultations_provider_id ON consultations(provider_id);
 CREATE INDEX IF NOT EXISTS idx_consultations_status ON consultations(status);
 CREATE INDEX IF NOT EXISTS idx_consultations_scheduled_at ON consultations(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_consultations_case_state ON consultations(case_state);
 
 -- ─── PRESCRIPTIONS ───────────────────────────────────────────────────
 
@@ -614,20 +658,29 @@ CREATE INDEX IF NOT EXISTS idx_company_goals_owner ON company_goals(owner_agent)
 
 -- ─── AUDIT / SECURITY ────────────────────────────────────────────────
 
+-- audit_log: structured compliance event log for all case lifecycle events
+-- replaces old action/actor_email schema with richer event_type + payload model
 CREATE TABLE IF NOT EXISTS audit_log (
   id TEXT PRIMARY KEY,
-  action TEXT NOT NULL,
-  actor_email TEXT NOT NULL,
-  actor_role TEXT,
+  event_type TEXT NOT NULL,
   entity_type TEXT NOT NULL,
   entity_id TEXT NOT NULL,
-  changes TEXT, -- JSON
+  actor_id TEXT,
+  actor_email TEXT,
+  actor_role TEXT,
+  patient_email TEXT,
+  patient_state TEXT,
   ip_address TEXT,
+  user_agent TEXT,
+  payload TEXT,        -- JSON
+  success INTEGER NOT NULL DEFAULT 1,
+  error_message TEXT,
   created_at INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_audit_log_actor_email ON audit_log(actor_email);
-CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_patient ON audit_log(patient_email);
+CREATE INDEX IF NOT EXISTS idx_audit_type ON audit_log(event_type);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at);
 
 CREATE TABLE IF NOT EXISTS security_events (
   id TEXT PRIMARY KEY,
@@ -748,3 +801,25 @@ CREATE TABLE IF NOT EXISTS marketing_content (
 );
 CREATE INDEX IF NOT EXISTS idx_marketing_content_type ON marketing_content(type);
 CREATE INDEX IF NOT EXISTS idx_marketing_content_status ON marketing_content(status);
+
+-- ─── SNS PRESCRIPTION DELIVERIES ─────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS sns_deliveries (
+  id TEXT PRIMARY KEY,
+  prescription_id TEXT NOT NULL,
+  pharmacy_id TEXT,
+  channel TEXT DEFAULT 'email',
+  sns_message_id TEXT,
+  sns_topic_arn TEXT,
+  recipient TEXT,
+  status TEXT DEFAULT 'pending',
+  payload TEXT,
+  error_message TEXT,
+  delivered_at INTEGER,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (prescription_id) REFERENCES prescriptions(id)
+);
+CREATE INDEX IF NOT EXISTS idx_sns_deliveries_prescription_id ON sns_deliveries(prescription_id);
+CREATE INDEX IF NOT EXISTS idx_sns_deliveries_pharmacy_id ON sns_deliveries(pharmacy_id);
+CREATE INDEX IF NOT EXISTS idx_sns_deliveries_status ON sns_deliveries(status);
+CREATE INDEX IF NOT EXISTS idx_sns_deliveries_created_at ON sns_deliveries(created_at);

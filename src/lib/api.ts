@@ -178,11 +178,16 @@ export const consultations = {
 
   claim: (id: string, providerId: string) =>
     apiFetch<{ success: boolean }>(`/consultations/${id}/claim`, { method: 'POST', body: JSON.stringify({ providerId }) }),
+
+  deny: (id: string, reason?: string) =>
+    apiFetch<{ success: boolean }>(`/consultations/${id}/deny`, { method: 'POST', body: JSON.stringify({ reason }) }),
 };
 
 // ─── Prescriptions ───────────────────────────────────────────────────
 
 export const prescriptions = {
+  getAll: () => apiFetch<Record<string, unknown>[]>('/prescriptions/'),
+
   create: (data: Record<string, unknown>) =>
     apiFetch<{ id: string }>('/prescriptions/', { method: 'POST', body: JSON.stringify(data) }),
 
@@ -252,4 +257,63 @@ export const storage = {
   },
 
   getFileUrl: (fileId: string) => `${API_BASE}/storage/file/${fileId}`,
+};
+
+// ─── SNS / Delivery ──────────────────────────────────────────────────────────
+
+export const snsDelivery = {
+  sendPrescription: (prescriptionId: string, pharmacyId: string, channel: 'email' | 'sms' = 'email') =>
+    apiFetch<{ deliveryId: string; snsMessageId: string | null; status: string; channel: string; recipient: string | null }>('/sns/send-prescription', {
+      method: 'POST', body: JSON.stringify({ prescriptionId, pharmacyId, channel }),
+    }),
+
+  getDeliveries: (prescriptionId: string) =>
+    apiFetch<Record<string, unknown>[]>(`/sns/deliveries/${prescriptionId}`),
+
+  getAllDeliveries: () =>
+    apiFetch<Record<string, unknown>[]>('/sns/deliveries'),
+
+  subscribePharmacy: (pharmacyId: string, email: string) =>
+    apiFetch<{ success: boolean; message: string }>('/sns/subscribe-pharmacy', {
+      method: 'POST', body: JSON.stringify({ pharmacyId, email }),
+    }),
+};
+
+// ─── Cases ────────────────────────────────────────────────────────────
+
+export const cases = {
+  get: (id: string) => apiFetch<Record<string, unknown>>(`/cases/${id}`),
+
+  list: (state?: string) =>
+    apiFetch<Record<string, unknown>[]>(`/cases${state ? `?state=${state}` : ''}`),
+
+  advance: (id: string, toState: string, notes?: string) =>
+    apiFetch<{ success: boolean; state: string }>(`/cases/${id}/advance`, {
+      method: 'POST', body: JSON.stringify({ toState, notes }),
+    }),
+
+  saveIntake: (id: string, data: Record<string, unknown>) =>
+    apiFetch<{ success: boolean; intakeId: string; redFlags: string[]; contraindications: string[] }>(
+      `/cases/${id}/intake`, { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  getAudit: (id: string) =>
+    apiFetch<Record<string, unknown>[]>(`/cases/${id}/audit`),
+};
+
+// ─── eRx / Pharmacy Exceptions ───────────────────────────────────────
+
+export const erx = {
+  transmit: (prescriptionId: string, pharmacyNpi?: string) =>
+    apiFetch<{ success: boolean; transactionId: string; status: string }>('/erx/transmit', {
+      method: 'POST', body: JSON.stringify({ prescriptionId, pharmacyNpi }),
+    }),
+
+  getExceptions: () =>
+    apiFetch<Record<string, unknown>[]>('/erx/exceptions'),
+
+  statusUpdate: (transactionId: string, status: string, pharmacyNote?: string) =>
+    apiFetch<{ success: boolean }>('/erx/status-update', {
+      method: 'POST', body: JSON.stringify({ transactionId, status, pharmacyNote }),
+    }),
 };
