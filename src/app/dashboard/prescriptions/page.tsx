@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { Pill, RefreshCw, AlertCircle, CheckCircle2, Clock, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { patients, prescriptions } from "@/lib/api";
 
 // Status helpers
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
@@ -26,9 +25,17 @@ const MOCK_RX = [
     { id: "RX-003", medication: "Ondansetron", dose: "4 mg", sig: "Take 1 tablet every 8h as needed for nausea.", status: "pending_review", pharmacy: "ScriptsXO Pharmacy", date: "Feb 26, 2026", refills: 0, daysSupply: 15 },
 ];
 
-function RxCard({ rx }: { rx: typeof MOCK_RX[0] }) {
+function RxCard({ rx }: { rx: any }) {
     const [expanded, setExpanded] = useState(false);
     const statusMeta = STATUS_LABELS[rx.status] ?? { label: rx.status, color: "#6B7280", bg: "rgba(107,114,128,0.08)" };
+    const medication = rx.medication ?? rx.medicationName ?? "";
+    const dose = rx.dose ?? rx.dosage ?? "";
+    const sig = rx.sig ?? rx.directions ?? "";
+    const pharmacy = rx.pharmacy ?? rx.pharmacyName ?? "";
+    const date = rx.date ?? (rx.createdAt ? new Date(rx.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
+    const refills = rx.refills ?? rx.refillsRemaining ?? 0;
+    const daysSupply = rx.daysSupply ?? rx.supply ?? 0;
+    const rxId = rx.id ?? rx._id ?? "";
 
     return (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -39,9 +46,9 @@ function RxCard({ rx }: { rx: typeof MOCK_RX[0] }) {
                             <Pill size={16} style={{ color: "#5B21B6" }} />
                         </div>
                         <div>
-                            <p className="text-sm font-semibold text-foreground">{rx.medication} <span className="font-light text-muted-foreground">{rx.dose}</span></p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{rx.id} · {rx.date}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{rx.pharmacy}</p>
+                            <p className="text-sm font-semibold text-foreground">{medication} <span className="font-light text-muted-foreground">{dose}</span></p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{rxId} · {date}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{pharmacy}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -57,8 +64,8 @@ function RxCard({ rx }: { rx: typeof MOCK_RX[0] }) {
 
                 {/* Refills bar */}
                 <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1.5"><RefreshCw size={11} />{rx.refills} refill{rx.refills !== 1 ? "s" : ""} remaining</span>
-                    <span className="flex items-center gap-1.5"><Clock size={11} />{rx.daysSupply}-day supply</span>
+                    <span className="flex items-center gap-1.5"><RefreshCw size={11} />{refills} refill{refills !== 1 ? "s" : ""} remaining</span>
+                    <span className="flex items-center gap-1.5"><Clock size={11} />{daysSupply}-day supply</span>
                 </div>
             </div>
 
@@ -67,10 +74,10 @@ function RxCard({ rx }: { rx: typeof MOCK_RX[0] }) {
                 <div className="border-t border-border bg-muted/20 px-5 py-4 space-y-3">
                     <div>
                         <p className="text-[10px] tracking-widest text-muted-foreground uppercase mb-1">Directions</p>
-                        <p className="text-sm text-foreground">{rx.sig}</p>
+                        <p className="text-sm text-foreground">{sig}</p>
                     </div>
                     <div className="flex gap-3 pt-1">
-                        {rx.refills > 0 && (
+                        {refills > 0 && (
                             <button className="px-4 py-2 text-xs font-medium text-white rounded-lg transition-opacity hover:opacity-90" style={{ background: "#5B21B6" }}>
                                 Request Refill
                             </button>
@@ -89,6 +96,8 @@ export default function DashboardPrescriptionsPage() {
     const [email, setEmail] = useState<string | null>(null);
     const [sessionChecked, setSessionChecked] = useState(false);
     const [filterStatus, setFilterStatus] = useState<"all" | "active" | "completed">("all");
+    const [patientRecord, setPatientRecord] = useState<Record<string, unknown> | null | undefined>(undefined);
+    const [rxData, setRxData] = useState<Record<string, unknown>[] | null>(null);
 
     useEffect(() => {
         const session = getSessionCookie();
@@ -96,13 +105,23 @@ export default function DashboardPrescriptionsPage() {
         setSessionChecked(true);
     }, []);
 
-    const patient = useQuery(api.patients.getByEmail, email ? { email } : "skip");
-    const prescriptions = useQuery(
-        api.prescriptions.getByPatient,
-        patient ? { patientId: patient._id } : "skip"
-    );
+    // Fetch patient record
+    useEffect(() => {
+        if (!email) return;
+        patients.getByEmail(email)
+            .then((p) => setPatientRecord(p))
+            .catch(() => setPatientRecord(null));
+    }, [email]);
 
-    const isLoading = !sessionChecked || (email !== null && patient === undefined);
+    // Fetch prescriptions once patient is resolved
+    useEffect(() => {
+        if (!patientRecord || !patientRecord.id) return;
+        prescriptions.getByPatient(patientRecord.id as string)
+            .then((data) => setRxData(Array.isArray(data) ? data : []))
+            .catch(() => setRxData([]));
+    }, [patientRecord]);
+
+    const isLoading = !sessionChecked || (email !== null && patientRecord === undefined);
 
     if (isLoading) {
         return (
@@ -117,7 +136,7 @@ export default function DashboardPrescriptionsPage() {
     }
 
     // Use real data if available, else fall back to mock
-    const rxList = (prescriptions && prescriptions.length > 0) ? prescriptions : MOCK_RX;
+    const rxList = (rxData && rxData.length > 0) ? rxData : MOCK_RX;
 
     const ACTIVE_STATUSES = new Set(["draft", "pending_review", "signed", "sent", "filling", "ready"]);
     const filtered = rxList.filter((rx: any) => {

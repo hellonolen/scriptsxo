@@ -1,0 +1,16 @@
+name = "scriptsxo-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-18"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "scriptsxo"
+database_id = "aca066e4-23f5-4135-9036-92c9c6516e95"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "scriptsxo-assets"
+
+[vars]
+SITE_URL = "https://www.scriptsxo.com"

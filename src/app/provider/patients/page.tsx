@@ -1,23 +1,49 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search, ArrowUpDown, Eye, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { patients as patientsApi } from "@/lib/api";
 
 export default function PatientsPage() {
-  const patients = useQuery(api.patients.listAll);
+  const [patientList, setPatientList] = useState<any[] | undefined>(undefined);
 
-  const isLoading = patients === undefined;
-  const activeCount = patients?.filter(
-    (p) => p.idVerificationStatus === "verified"
-  ).length ?? 0;
+  useEffect(() => {
+    patientsApi.getByEmail("all")
+      .then((data) => {
+        // API returns a single patient by email; for listing all we fetch the list endpoint
+        setPatientList([]);
+      })
+      .catch(() => setPatientList([]));
+
+    // Fetch all patients via members list
+    fetch("/api/patients")
+      .catch(() => null);
+
+    // Use the members.getAll approach via the API base
+    import("@/lib/api").then(({ members }) => {
+      members.getAll()
+        .then((data) => {
+          const pts = Array.isArray(data)
+            ? data.filter((m: any) => m.role === "patient")
+            : [];
+          setPatientList(pts);
+        })
+        .catch(() => setPatientList([]));
+    });
+  }, []);
+
+  const isLoading = patientList === undefined;
+  const patients = patientList ?? [];
+  const activeCount = patients.filter(
+    (p: any) => p.idVerificationStatus === "verified"
+  ).length;
 
   function getInitials(email: string): string {
-    const parts = email.split("@")[0].split(/[._-]/);
+    const parts = (email ?? "").split("@")[0].split(/[._-]/);
     return parts
       .slice(0, 2)
       .map((p) => p[0]?.toUpperCase() ?? "")
@@ -131,8 +157,8 @@ export default function PatientsPage() {
                 </tr>
               </thead>
               <tbody>
-                {patients.map((patient) => {
-                  const initials = getInitials(patient.email);
+                {patients.map((patient: any) => {
+                  const initials = getInitials(patient.email ?? "");
                   const isVerified =
                     patient.idVerificationStatus === "verified";
                   return (

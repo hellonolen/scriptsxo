@@ -2,56 +2,36 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import {
-  Heart,
-  Stethoscope,
-  ScanLine,
-  FileCheck,
-  ArrowRight,
-  ArrowLeft,
-  CreditCard,
-} from "lucide-react";
-import { AppShell } from "@/components/app-shell";
-import { useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
 import { getSessionCookie } from "@/lib/auth";
-import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
+import { members } from "@/lib/api";
+import { ShieldCheck } from "lucide-react";
 
-const INTAKE_STEPS = [
-  { label: "Symptoms", icon: Stethoscope, desc: "Initial details" },
-  { label: "Medical History", icon: Heart, desc: "Health background" },
-  { label: "Verification", icon: ScanLine, desc: "Verify identity" },
-  { label: "Payment", icon: CreditCard, desc: "Security deposit" },
-  { label: "Review", icon: FileCheck, desc: "Final check" },
-] as const;
+/* ── Constants ──────────────────────────────────────────────── */
+
+const STEPS = [
+  { id: 1, label: "Symptoms" },
+  { id: 2, label: "History" },
+  { id: 3, label: "Verify" },
+  { id: 4, label: "Payment" },
+  { id: 5, label: "Review" },
+];
 
 const DURATION_OPTIONS = [
   "Less than 24 hours",
-  "1 - 3 days",
-  "3 - 7 days",
-  "1 - 2 weeks",
+  "1 – 3 days",
+  "3 – 7 days",
+  "1 – 2 weeks",
   "More than 2 weeks",
-] as const;
+];
 
 const RELATED_SYMPTOMS = [
-  "Fever",
-  "Headache",
-  "Nausea",
-  "Fatigue",
-  "Dizziness",
-  "Shortness of Breath",
-  "Chest Pain",
-  "Body Aches",
-  "Chills",
-  "Loss of Appetite",
-  "Sore Throat",
-  "Cough",
-  "Congestion",
-  "Insomnia",
-  "Vomiting",
-] as const;
+  "Fever", "Headache", "Nausea", "Fatigue", "Dizziness",
+  "Shortness of Breath", "Chest Pain", "Body Aches", "Chills",
+  "Loss of Appetite", "Sore Throat", "Cough", "Congestion",
+  "Insomnia", "Vomiting",
+];
+
+/* ── Page ───────────────────────────────────────────────────── */
 
 export default function SymptomsPage() {
   const router = useRouter();
@@ -60,401 +40,263 @@ export default function SymptomsPage() {
   const [severity, setSeverity] = useState(5);
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [previousTreatments, setPreviousTreatments] = useState("");
-  const [intakeId, setIntakeId] = useState<Id<"intakes"> | null>(null);
-
-  const updateIntakeStep = useMutation(api.intake.updateStep);
-  const createIntake = useMutation(api.intake.create);
-  const getOrCreateMember = useMutation(api.members.getOrCreate);
-
-  const currentStep = 0;
 
   useEffect(() => {
-    // Symptoms is now the first intake step — no redirect if no intake ID yet.
-    // The intake record is created on Continue if not already present.
-    const storedIntakeId = isDev()
-      ? DevIntakeStore.getId()
-      : localStorage.getItem("sxo_intake_id");
-    if (storedIntakeId) {
-      setIntakeId(storedIntakeId as Id<"intakes">);
+    // Restore previous step data if available
+    const stored = localStorage.getItem("sxo_symptoms");
+    if (stored) {
+      try {
+        const data = JSON.parse(stored);
+        if (data.chiefComplaint) setChiefComplaint(data.chiefComplaint);
+        if (data.duration) setDuration(data.duration);
+        if (data.severity) setSeverity(data.severity);
+        if (data.relatedSymptoms) setSelectedSymptoms(data.relatedSymptoms);
+        if (data.previousTreatments) setPreviousTreatments(data.previousTreatments);
+      } catch {
+        // Ignore malformed stored data
+      }
     }
   }, []);
 
-  function toggleSymptom(symptom: string) {
-    setSelectedSymptoms((prev) =>
-      prev.includes(symptom)
-        ? prev.filter((s) => s !== symptom)
-        : [...prev, symptom]
+  function toggleSymptom(s: string) {
+    setSelectedSymptoms(prev =>
+      prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
     );
   }
 
-  function getSeverityLabel(value: number): string {
-    if (value <= 2) return "Mild";
-    if (value <= 4) return "Moderate";
-    if (value <= 6) return "Noticeable";
-    if (value <= 8) return "Severe";
+  function getSeverityLabel(v: number) {
+    if (v <= 2) return "Mild";
+    if (v <= 4) return "Moderate";
+    if (v <= 6) return "Noticeable";
+    if (v <= 8) return "Severe";
     return "Very Severe";
   }
 
-  function getSeverityColor(value: number): string {
-    if (value <= 3) return "text-emerald-500";
-    if (value <= 6) return "text-[#2DD4BF]";
-    return "text-destructive";
-  }
-
   async function handleContinue() {
-    const symptomsData = {
-      chiefComplaint,
-      duration,
-      severity,
-      relatedSymptoms: selectedSymptoms,
-      previousTreatments,
-    };
+    const data = { chiefComplaint, duration, severity, relatedSymptoms: selectedSymptoms, previousTreatments };
 
-    if (isDev()) {
-      if (!DevIntakeStore.getId()) {
-        const session = getSessionCookie();
-        if (session?.email) DevIntakeStore.create(session.email);
-      }
-      DevIntakeStore.updateStep("symptoms", symptomsData);
-      router.push("/intake/medical-history");
-      return;
-    }
+    // Ensure member exists in the system
+    const session = getSessionCookie();
+    if (!session?.email) { router.push("/access"); return; }
 
     try {
-      let currentIntakeId = intakeId;
-
-      if (!currentIntakeId) {
-        // Create intake record on the first step
-        const session = getSessionCookie();
-        if (!session?.email) {
-          router.push("/access");
-          return;
-        }
-        await getOrCreateMember({ email: session.email });
-        const newId = await createIntake({ email: session.email });
-        currentIntakeId = newId;
-        localStorage.setItem("sxo_intake_id", newId);
-        setIntakeId(newId);
-      }
-
-      await updateIntakeStep({
-        intakeId: currentIntakeId,
-        stepName: "symptoms",
-        data: symptomsData,
-      });
-    } catch (err) {
-      console.error("Failed to save symptoms:", err);
-      // Fallback: save locally and proceed
-      const session = getSessionCookie();
-      if (!DevIntakeStore.getId() && session?.email) {
-        DevIntakeStore.create(session.email);
-      }
-      DevIntakeStore.updateStep("symptoms", symptomsData);
+      await members.getOrCreate(session.email);
+    } catch {
+      // Non-fatal — continue even if member sync fails
     }
+
+    // Persist step data locally for review page
+    localStorage.setItem("sxo_symptoms", JSON.stringify(data));
 
     router.push("/intake/medical-history");
   }
 
+  const currentStep = 1;
+  const pct = (currentStep / STEPS.length) * 100;
+  const canContinue = chiefComplaint.trim().length > 0 && duration.length > 0;
+
   return (
-    <AppShell>
-      <main className="min-h-screen pt-24 pb-32 px-6 sm:px-8 lg:px-16 w-full max-w-[1600px] mx-auto">
+    <div className="min-h-screen bg-background flex flex-col">
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-24">
+      {/* Header */}
+      <header className="bg-card border-b border-border px-6 h-14 flex items-center justify-between shrink-0">
+        <div>
+          <span className="text-[15px] font-bold tracking-tight text-foreground">ScriptsXO</span>
+          <div className="mt-1 w-6 h-[2px] rounded-full bg-brand-secondary" />
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          HIPAA Compliant
+        </div>
+      </header>
 
-          {/* ==========================================
-              LEFT COLUMN - Sticky header & progress 
-          =========================================== */}
-          <div className="lg:col-span-4 lg:sticky lg:top-32 h-fit">
+      {/* Progress bar */}
+      <div className="progress-bar h-[3px] rounded-none shrink-0">
+        <div
+          className="progress-bar-fill transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
 
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            >
-              {/* Page header */}
-              <div className="mb-12">
-                <span className="text-[11px] tracking-[0.2em] text-[#7C3AED] uppercase font-bold mb-4 block">
-                  Step 1 of 5
-                </span>
-                <h1
-                  className="text-3xl lg:text-[40px] font-light text-foreground leading-[1.1] tracking-tight mb-5"
-                  style={{ fontFamily: "var(--font-heading)" }}
-                >
-                  Current Symptoms
-                </h1>
-                <p className="text-muted-foreground font-light text-[15px] leading-relaxed max-w-[340px]">
-                  Describe what brings you in today. The more detail you provide, the
-                  better your provider can prepare for your consultation.
-                </p>
+      {/* Content */}
+      <main className="flex-1 flex justify-center px-4 py-8 pb-16">
+        <div className="w-full max-w-[560px]">
+
+          {/* Step dots */}
+          <div className="flex items-center mb-6 px-2">
+            {STEPS.map((st, i) => (
+              <div key={st.id} className="flex items-center" style={{ flex: i < STEPS.length - 1 ? 1 : undefined }}>
+                <div className={[
+                  "rounded-full shrink-0 flex items-center justify-center font-bold transition-all duration-300",
+                  st.id === currentStep
+                    ? "w-8 h-8 bg-brand-secondary text-white shadow-[0_0_0_4px_rgba(124,58,237,0.15)]"
+                    : st.id < currentStep
+                    ? "w-7 h-7 bg-brand-secondary text-white"
+                    : "w-7 h-7 bg-transparent border-2 border-border text-muted-foreground",
+                ].join(" ")}>
+                  {st.id < currentStep ? (
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <span className={st.id === currentStep ? "text-[13px]" : "text-[11px]"}>{st.id}</span>
+                  )}
+                </div>
+                {i < STEPS.length - 1 && (
+                  <div className={[
+                    "flex-1 h-0.5 mx-1 rounded-full transition-colors duration-300",
+                    st.id < currentStep ? "bg-brand-secondary" : "bg-border",
+                  ].join(" ")} />
+                )}
               </div>
+            ))}
+          </div>
 
-              {/* Progress (Vertical Version - Desktop) */}
-              <div className="hidden lg:block pb-8 border-b border-border/50">
-                <div className="space-y-6">
-                  {INTAKE_STEPS.map((step, index) => {
-                    const StepIcon = step.icon;
-                    const isActive = index === currentStep;
-                    const isPast = index < currentStep;
+          {/* Step labels */}
+          <div className="flex justify-between mb-8 px-1">
+            {STEPS.map(st => (
+              <div key={st.id} className={[
+                "flex-1 text-center eyebrow transition-colors duration-300",
+                st.id === currentStep || st.id < currentStep ? "text-brand-secondary" : "text-muted-foreground",
+              ].join(" ")}>
+                {st.label}
+              </div>
+            ))}
+          </div>
 
-                    return (
-                      <div key={step.label} className="flex items-start gap-5">
-                        <div className="relative flex flex-col items-center">
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all duration-300 ${isActive
-                            ? "border-[#7C3AED] bg-[#7C3AED]/10 text-[#7C3AED] shadow-[0_0_15px_rgba(124,58,237,0.15)]"
-                            : isPast
-                              ? "border-[#7C3AED] bg-[#7C3AED] text-white"
-                              : "border-border/60 bg-transparent text-muted-foreground/60"
-                            }`}>
-                            <StepIcon size={15} />
-                          </div>
-                          {index < INTAKE_STEPS.length - 1 && (
-                            <div className={`w-px h-8 mt-2 -mb-4 ${isPast ? "bg-[#7C3AED]/40" : "bg-border/60"}`} />
-                          )}
-                        </div>
-                        <div className="pt-2 flex flex-col">
-                          <span className={`text-[14px] font-medium tracking-wide ${isActive ? "text-foreground" : isPast ? "text-foreground/80" : "text-muted-foreground/60"}`}>
-                            {step.label}
-                          </span>
-                          <span className={`text-[12px] font-light ${isActive ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
-                            {step.desc}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+          {/* Card */}
+          <div className="glass-card mb-6">
+
+            <div className="mb-7">
+              <h1 className="text-xl font-medium text-foreground mb-1.5 tracking-tight" style={{ fontFamily: "var(--font-heading)" }}>
+                Current Symptoms
+              </h1>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Describe what brings you in today. A licensed provider will review your request before any prescription is issued.
+              </p>
+            </div>
+
+            {/* Chief Concern */}
+            <div className="form-group mb-5">
+              <label className="form-label form-label-required">Chief Concern</label>
+              <p className="form-description mb-1.5">Be as specific as possible — more detail helps the provider prepare.</p>
+              <textarea
+                value={chiefComplaint}
+                onChange={e => setChiefComplaint(e.target.value)}
+                placeholder="Describe your primary concern..."
+                rows={4}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-y min-h-[100px] focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-colors"
+              />
+            </div>
+
+            {/* Duration */}
+            <div className="form-group mb-5">
+              <label className="form-label form-label-required">Symptom Duration</label>
+              <div className="relative">
+                <select
+                  value={duration}
+                  onChange={e => setDuration(e.target.value)}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground appearance-none cursor-pointer focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-colors"
+                >
+                  <option value="" disabled>Select duration</option>
+                  {DURATION_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                  </svg>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
-            {/* Mobile Horizontal Progress (fallback) */}
-            <div className="lg:hidden mb-10">
-              <div className="flex items-center gap-0 mt-6">
-                {INTAKE_STEPS.map((step, index) => {
-                  const StepIcon = step.icon;
-                  const isActive = index === currentStep;
-                  const isCompleted = index < currentStep;
+            {/* Severity */}
+            <div className="form-group mb-5">
+              <label className="form-label">Severity</label>
+              <div className="rounded-xl border border-input bg-background px-4 py-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="eyebrow text-muted-foreground">Mild</span>
+                  <span className="text-2xl font-light text-foreground tracking-tight">
+                    {severity}<span className="text-xs text-muted-foreground ml-0.5">/10</span>
+                  </span>
+                  <span className="eyebrow text-muted-foreground">Severe</span>
+                </div>
+                <div className="progress-bar mb-3">
+                  <div
+                    className="progress-bar-fill transition-all duration-150"
+                    style={{ width: `${((severity - 1) / 9) * 100}%` }}
+                  />
+                </div>
+                <input
+                  type="range" min={1} max={10} value={severity}
+                  onChange={e => setSeverity(Number(e.target.value))}
+                  className="w-full opacity-0 absolute"
+                  style={{ marginTop: -8, height: 8, cursor: "pointer" }}
+                />
+                <p className="text-center text-xs font-medium text-brand-secondary mt-2">
+                  {getSeverityLabel(severity)}
+                </p>
+              </div>
+            </div>
+
+            {/* Related Symptoms */}
+            <div className="form-group mb-5">
+              <label className="form-label">Additional Symptoms</label>
+              <p className="form-description mb-2">Select any that apply.</p>
+              <div className="flex flex-wrap gap-2">
+                {RELATED_SYMPTOMS.map(symptom => {
+                  const selected = selectedSymptoms.includes(symptom);
                   return (
-                    <div
-                      key={step.label}
-                      className="flex items-center flex-1 last:flex-0"
+                    <button
+                      key={symptom}
+                      type="button"
+                      onClick={() => toggleSymptom(symptom)}
+                      className={[
+                        "px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150",
+                        selected
+                          ? "bg-brand-secondary/10 border-brand-secondary text-brand-secondary"
+                          : "bg-background border-input text-muted-foreground hover:border-brand-secondary/40",
+                      ].join(" ")}
                     >
-                      <div className={`w-8 h-8 rounded-full border flex items-center justify-center ${isActive
-                        ? "border-[#7C3AED] bg-[#7C3AED]/10 text-[#7C3AED]"
-                        : isCompleted
-                          ? "border-[#7C3AED] bg-[#7C3AED] text-white"
-                          : "border-border bg-transparent text-muted-foreground/50"
-                        }`}
-                      >
-                        <StepIcon size={13} />
-                      </div>
-                      {index < INTAKE_STEPS.length - 1 && (
-                        <div className={`flex-1 h-px mx-2 ${isCompleted ? "bg-[#7C3AED]/50" : "bg-border"}`} />
-                      )}
-                    </div>
+                      {symptom}
+                    </button>
                   );
                 })}
               </div>
             </div>
 
+            {/* Previous Treatments */}
+            <div className="form-group">
+              <label className="form-label">Previous Treatments</label>
+              <p className="form-description mb-1.5">OTC medications, home remedies, or prior prescriptions you&apos;ve tried.</p>
+              <textarea
+                value={previousTreatments}
+                onChange={e => setPreviousTreatments(e.target.value)}
+                placeholder="Describe any treatments you've attempted..."
+                rows={3}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-y focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-colors"
+              />
+            </div>
+
           </div>
 
-          {/* ==========================================
-              RIGHT COLUMN - Continuous Form flow 
-          =========================================== */}
-          <div className="lg:col-span-8 lg:pt-8 relative">
-            <motion.div
-              className="space-y-16 max-w-2xl"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
-            >
+          {/* Navigation */}
+          <button
+            onClick={handleContinue}
+            disabled={!canContinue}
+            className={[
+              "btn-gradient w-full py-3.5 text-sm font-medium relative z-10",
+              !canContinue && "opacity-40 cursor-not-allowed",
+            ].join(" ")}
+          >
+            Continue to Medical History
+          </button>
 
-              {/* Chief Concern */}
-              <section>
-                <div className="mb-5">
-                  <h2
-                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
-                    style={{ fontFamily: "var(--font-heading)" }}
-                  >
-                    Chief Concern
-                  </h2>
-                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
-                    What primary concern brings you in today? <span className="text-destructive">*</span>
-                  </p>
-                </div>
-                <textarea
-                  placeholder="Please describe your primary concern in as much detail as you feel comfortable sharing..."
-                  value={chiefComplaint}
-                  onChange={(e) => setChiefComplaint(e.target.value)}
-                  className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all min-h-[160px] resize-y text-[15px] font-light leading-relaxed shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
-                  required
-                />
-              </section>
+          <p className="text-center mt-5 text-[11px] text-muted-foreground leading-relaxed">
+            Your information is protected under HIPAA and encrypted in transit.
+          </p>
 
-              {/* Symptom Duration */}
-              <section>
-                <div className="mb-5">
-                  <h2
-                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
-                    style={{ fontFamily: "var(--font-heading)" }}
-                  >
-                    Symptom Duration
-                  </h2>
-                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
-                    How long have you experienced these symptoms? <span className="text-destructive">*</span>
-                  </p>
-                </div>
-                <div className="relative">
-                  <select
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all text-[15px] font-light shadow-[0_2px_4px_rgba(0,0,0,0.02)] appearance-none cursor-pointer"
-                    required
-                  >
-                    <option value="" disabled>Select duration</option>
-                    {DURATION_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-5 text-slate-400">
-                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                    </svg>
-                  </div>
-                </div>
-              </section>
-
-              {/* Severity Slider */}
-              <section>
-                <div className="mb-5">
-                  <h2
-                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
-                    style={{ fontFamily: "var(--font-heading)" }}
-                  >
-                    Severity
-                  </h2>
-                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
-                    Rate the current severity of your symptoms
-                  </p>
-                </div>
-
-                <div className="bg-white border border-border/80 rounded-[8px] p-6 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="text-[13px] font-light text-slate-500 uppercase tracking-wider">
-                      Mild
-                    </span>
-                    <span
-                      className={`text-[28px] font-light ${getSeverityColor(severity)} tracking-tighter tabular-nums`}
-                      style={{ fontFamily: "var(--font-heading)" }}
-                    >
-                      {severity} <span className="text-[14px] text-slate-400">/ 10</span>
-                    </span>
-                    <span className="text-[13px] font-light text-slate-500 uppercase tracking-wider">
-                      Severe
-                    </span>
-                  </div>
-                  <div className="relative pt-2 pb-5">
-                    <input
-                      type="range"
-                      min={1}
-                      max={10}
-                      value={severity}
-                      onChange={(e) => setSeverity(Number(e.target.value))}
-                      className="w-full h-[6px] bg-slate-100 rounded-full appearance-none flex cursor-pointer"
-                      style={{
-                        accentColor: "#7C3AED",
-                        background: `linear-gradient(to right, #7C3AED ${(severity - 1) * 11.1}%, #f1f5f9 ${(severity - 1) * 11.1}%, #f1f5f9 100%)`
-                      }}
-                      aria-label="Symptom severity"
-                    />
-                  </div>
-                  <p
-                    className={`text-[14px] font-medium text-center ${getSeverityColor(severity)} mt-2`}
-                  >
-                    {getSeverityLabel(severity)}
-                  </p>
-                </div>
-              </section>
-
-              {/* Related Symptoms */}
-              <section>
-                <div className="mb-5">
-                  <h2
-                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
-                    style={{ fontFamily: "var(--font-heading)" }}
-                  >
-                    Related Symptoms
-                  </h2>
-                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
-                    Select any additional symptoms you are experiencing
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2.5">
-                  {RELATED_SYMPTOMS.map((symptom) => {
-                    const isSelected = selectedSymptoms.includes(symptom);
-                    return (
-                      <button
-                        key={symptom}
-                        type="button"
-                        onClick={() => toggleSymptom(symptom)}
-                        className={`px-5 py-2.5 text-[14px] tracking-wide font-light rounded-full border transition-all duration-200 ${isSelected
-                          ? "border-[#7C3AED] bg-[#7C3AED]/5 text-[#7C3AED]"
-                          : "border-border/80 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
-                          }`}
-                        aria-pressed={isSelected}
-                      >
-                        {symptom}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-
-              {/* Previous Treatments */}
-              <section>
-                <div className="mb-5">
-                  <h2
-                    className="text-[22px] font-light text-foreground mb-1 tracking-tight"
-                    style={{ fontFamily: "var(--font-heading)" }}
-                  >
-                    Previous Treatments
-                  </h2>
-                  <p className="text-[13px] text-muted-foreground font-light uppercase tracking-widest">
-                    What have you already tried?
-                  </p>
-                </div>
-                <textarea
-                  placeholder="Describe any over-the-counter medications, home remedies, or prior treatments you have attempted..."
-                  value={previousTreatments}
-                  onChange={(e) => setPreviousTreatments(e.target.value)}
-                  className="w-full px-5 py-4 bg-white border border-border/80 rounded-[8px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] focus:border-[#7C3AED] transition-all min-h-[140px] resize-y text-[15px] font-light leading-relaxed shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
-                />
-              </section>
-
-              {/* Navigation */}
-              <div className="flex flex-col-reverse sm:flex-row gap-4 justify-between pt-10 mt-10 border-t border-border/50">
-                <button
-                  onClick={() => router.push("/dashboard/order")}
-                  className="w-full sm:w-auto inline-flex justify-center items-center gap-2 px-8 py-4 border border-border/80 bg-white text-slate-700 text-[12px] tracking-[0.15em] font-medium uppercase hover:bg-slate-50 hover:text-slate-900 transition-colors rounded-[8px] shadow-[0_2px_4px_rgba(0,0,0,0.02)]"
-                >
-                  <ArrowLeft size={16} aria-hidden="true" />
-                  Back
-                </button>
-                <button
-                  onClick={handleContinue}
-                  className="w-full sm:w-auto bg-[#7C3AED] inline-flex justify-center items-center gap-3 px-10 py-4 text-white text-[12px] tracking-[0.2em] font-medium uppercase hover:bg-[#6D28D9] transition-all duration-300 rounded-[8px] shadow-lg shadow-purple-500/20"
-                >
-                  Continue
-                  <ArrowRight size={16} aria-hidden="true" />
-                </button>
-              </div>
-
-            </motion.div>
-          </div>
         </div>
       </main>
-    </AppShell>
+    </div>
   );
 }

@@ -145,7 +145,7 @@ export default function LandingPage() {
                 icon: Smartphone,
               },
               {
-                pain: "Call the pharmacy, call the clinic, call back again",
+                pain: "Call the pharmacy, call the practice, call back again",
                 icon: Zap,
               },
               {
@@ -206,7 +206,7 @@ export default function LandingPage() {
                 detail: "Open the app. Answer a few questions. Our AI prepares everything so you're not wasting a single minute.",
               },
               {
-                old: "Playing phone tag between your clinic and pharmacy",
+                old: "Playing phone tag between your practice and pharmacy",
                 new: "Prescription sent directly, tracked in real time",
                 detail: "Your prescription goes straight to the pharmacy you choose. You get notified when it's ready. No calls, no wondering.",
               },
@@ -505,7 +505,7 @@ export default function LandingPage() {
               },
               {
                 q: "Is this a real prescription?",
-                a: "Yes. You're consulting with a licensed, board-certified physician who writes real prescriptions sent to real pharmacies.",
+                a: "Yes. You're consulting with a licensed, board-certified provider who writes real prescriptions sent to real pharmacies.",
               },
               {
                 q: "What states are you available in?",

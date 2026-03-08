@@ -22,21 +22,24 @@ Billing provider: Whop.com (not Stripe). All 5 Whop keys are set in Convex produ
 
 ## Tech Stack
 
-**Updated 2026-02-15 -- corrects earlier entries where outdated.**
+**Updated 2026-03-08 -- Convex migration completed. Full Cloudflare-native stack.**
 
 - Framework: Next.js 15.5.2 (App Router)
-- Backend: Convex 1.31+ (real-time serverless)
-- Auth: Passkeys (WebAuthn) -- cookie-based sessions
-- AI: Google Gemini (primary, via convex/agents/llmGateway.ts), Claude API (secondary, multi-model planned)
+- Database: Cloudflare D1 (SQLite, 36 tables) -- replaces Convex
+- API: Cloudflare Workers + Hono (scriptsxo-api) -- replaces Convex functions
+- Storage: Cloudflare R2 (scriptsxo-assets bucket, binding: R2) -- was also used with Convex
+- Auth: Passkeys (WebAuthn) -- cookie-based sessions (scriptsxo_session)
+- AI: Google Gemini (primary), Claude API (secondary, multi-model planned)
 - Styling: Tailwind CSS 4 (@tailwindcss/postcss)
-- Deployment: Cloudflare Pages via @cloudflare/next-on-pages (NOT Workers, NOT Vercel)
-- Storage: Cloudflare R2 (scriptsxo-assets bucket, binding: R2_ASSETS)
+- Deployment: Cloudflare Pages via @cloudflare/next-on-pages (frontend), Cloudflare Workers (API)
 - Billing: Whop.com (@whop/checkout, @whop/sdk)
 - Email: Emailit
 - Testing: Vitest + Playwright
 - Video: WebRTC (planned) + Gemini multimodal
 - EHR Integration: ModMed API (planned)
-- Faxing: FaxBot + BulkVS + Vultr VPS (planned, replacing Phaxio at scale)
+- Faxing: VPS 144.202.25.33 (Asterisk) via scriptsxo-api Worker
+
+NOTE: Convex migration completed 2026-03-08. Convex (prod:striped-caribou-797) is no longer the active backend. All backend logic has been moved to Cloudflare D1 + Workers.
 
 ### Key Dependencies (package.json)
 
@@ -56,26 +59,33 @@ Billing provider: Whop.com (not Stripe). All 5 Whop keys are set in Convex produ
 | tailwindcss | ^4 | Styling |
 | @cloudflare/next-on-pages | ^1.13.16 | Cloudflare build |
 
-## Convex Production
+## Cloudflare D1 + Workers (Active Backend)
 
-- Deployment: `prod:striped-caribou-797`
-- URL: `https://striped-caribou-797.convex.cloud`
-- Deploy command: `npx convex deploy`
+- D1 Database: `scriptsxo` (ID: aca066e4-23f5-4135-9036-92c9c6516e95) -- 36 tables
+- Worker: `scriptsxo-api` at https://scriptsxo-api.hellonolen.workers.dev
+- Worker config: `workers/api/wrangler.toml`
+- Deploy command: `cd workers/api && npx wrangler deploy`
 
-### Environment Variables (10 set in Convex prod)
+### Worker Secrets (set via wrangler secret put)
 
 | Variable | Status |
 |----------|--------|
 | ADMIN_EMAILS | [SET] |
-| GEMINI_API_KEY | [SET] |
-| SITE_URL | [SET] |
-| WEBAUTHN_ORIGIN | [SET] |
-| WEBAUTHN_RP_ID | [SET] |
-| WHOP_API_KEY | [SET] |
-| WHOP_COMPANY_ID | [SET] |
-| WHOP_PLAN_ID | [SET] |
-| WHOP_PRODUCT_ID | [SET] |
-| WHOP_WEBHOOK_SECRET | [SET] |
+| VPS_FAX_URL | [SET] |
+| VPS_FAX_SECRET | [SET] |
+
+### Worker Vars (in wrangler.toml)
+
+| Variable | Value |
+|----------|-------|
+| SITE_URL | https://www.scriptsxo.com |
+
+## Convex (RETIRED -- 2026-03-08)
+
+- Deployment was: `prod:striped-caribou-797`
+- URL was: `https://striped-caribou-797.convex.cloud`
+- Status: No longer active backend. All functionality migrated to D1/Workers.
+- Convex files remain in /convex/ directory for reference only.
 
 ## Architecture
 
@@ -120,72 +130,34 @@ Pages:
 - /admin/providers -- Provider management
 - /pay -- Payment placeholder (empty)
 
-### Backend (57 files in /convex/, excluding _generated)
+### Backend (Cloudflare Workers/Hono -- Active as of 2026-03-08)
 
-Core modules:
-- schema.ts -- Full database schema (25 tables)
-- settings.ts -- Platform settings (LLM prefs, feature flags) -- NEW
-- organizations.ts -- Org CRUD, member management, stats -- NEW
-- prescriptions.ts -- Rx CRUD, status state machine
-- consultations.ts -- Consultation lifecycle
-- intake.ts -- Patient intake workflow
-- triage.ts -- Triage assessment storage
-- pharmacies.ts -- Pharmacy management
-- refills.ts -- Refill request handling
-- billing.ts -- Payment processing
-- passkeys.ts -- WebAuthn auth
-- email.ts -- Emailit notifications
-- http.ts -- HTTP endpoints (Stripe, Whop, Phaxio, Identity webhooks, health check, e-prescribe callback)
-- notifications.ts -- Notification system
-- patients.ts -- Patient queries (includes getByEmail, getById)
+Worker entry: `workers/api/src/index.ts`
+
+API Routes (workers/api/src/routes/):
+- auth.ts -- Session management, passkey auth
+- members.ts -- Member CRUD, role management
+- patients.ts -- Patient records
 - providers.ts -- Provider management
-- members.ts -- Member management
-- faxLogs.ts -- Fax tracking
+- consultations.ts -- Consultation lifecycle
+- prescriptions.ts -- Rx CRUD, status state machine
+- pharmacies.ts -- Pharmacy directory
+- fax.ts -- Fax transmission via VPS 144.202.25.33
+- storage.ts -- File upload/download via R2
+- intakes.ts -- Intake workflow
+- billing.ts -- Payment processing
+- notifications.ts -- Notification system
 - messages.ts -- Patient-provider messaging
-- aiConversations.ts -- Persistent AI memory
-- compliance.ts -- Compliance records
-- stateLicensing.ts -- State licensing rules
-- followUps.ts -- Follow-up tracking
-- scheduling.ts -- Appointment scheduling
-- adminAudit.ts -- Admin audit log
-- rateLimits.ts -- Rate limiting
-- storage.ts -- File storage
-- cleanup.ts -- Data cleanup
-- crons.ts -- Scheduled jobs
+- video-reviews.ts -- Video consultation reviews
+- ai.ts -- AI concierge (Gemini)
 
-### Convex Actions (13 files in /convex/actions/)
-- aiChat.ts -- Patient-aware AI concierge (assembles patient context, runs drug screening, calls Gemini via llmGateway)
-- whopCheckout.ts -- Whop embedded checkout sessions, membership verification, webhook processing
-- generatePrescriptionPdf.ts -- Prescription PDF generation (pdf-lib)
-- sendFax.ts -- Fax transmission pipeline
-- lookupPharmacy.ts -- Pharmacy search
-- assignProvider.ts -- Provider assignment
-- medicalIntelligence.ts -- Drug interaction screening (OpenFDA + RxNorm)
-- scanDocument.ts -- AI document scanning (gov ID, Rx, face photo via Gemini Vision)
-- validateInput.ts -- AI field validation (Gemini-powered)
-- verifyLicense.ts -- NPI/license verification
-- stripeCheckout.ts -- Stripe checkout (legacy, being replaced by Whop)
-- stripeIdentity.ts -- Stripe Identity verification
-- webauthn.ts -- WebAuthn passkey actions
+Frontend API client: `src/lib/api.ts` -- replaces all Convex useQuery/useMutation calls
 
-### AI Agents (15 files in /convex/agents/)
-- conductor.ts -- Agent orchestrator/dispatcher
-- triageAgent.ts -- Symptom triage, urgency classification
-- prescriptionAgent.ts -- Rx validation, drug interactions
-- pharmacyAgent.ts -- Pharmacy routing, fulfillment tracking
-- consultationAgent.ts -- Consultation assistance
-- intakeAgent.ts -- Intake processing
-- billingAgent.ts -- Insurance/payment processing
-- complianceAgent.ts -- HIPAA, DEA, state licensing
-- qualityAgent.ts -- Clinical quality review
-- followUpAgent.ts -- Post-consultation check-ins
-- schedulingAgent.ts -- Appointment scheduling
-- llmGateway.ts -- Centralized AI model routing (Gemini primary, model param configurable)
-- agentLogger.ts -- Agent performance logging
-- index.ts -- Agent exports
-- types.ts -- Shared agent types
+### Former Convex Backend (RETIRED -- reference only, /convex/ directory)
 
-### Database Schema (25 tables)
+The /convex/ directory remains for reference. All functionality has been migrated to workers/api/. Do not add new Convex code.
+
+### Database Schema (36 tables -- Cloudflare D1)
 
 | Table | Purpose | Key Indexes |
 |-------|---------|-------------|

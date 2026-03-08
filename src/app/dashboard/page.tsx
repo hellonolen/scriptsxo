@@ -2,12 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Pill, Activity, Shield, TrendingUp, FileText, Headphones, CheckCircle2, Circle, CreditCard, IdCard, Clock, Video } from "lucide-react";
+import { ArrowRight, Pill, Activity, Shield, TrendingUp, FileText, Headphones, CheckCircle2, Clock, Video } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { getSessionCookie } from "@/lib/auth";
-import { useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { patients, prescriptions, consultations } from "@/lib/api";
 import { MEMBER_REQUIREMENTS, getNextOfficeHoursDate, formatOfficeHoursSchedule, DEFAULT_OFFICE_HOURS } from "@/lib/membership-config";
 
 
@@ -19,6 +18,10 @@ export default function DashboardPage() {
   const [firstName, setFirstName] = useState("there");
   const [email, setEmail] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
+
+  const [patientRecord, setPatientRecord] = useState<Record<string, unknown> | null | undefined>(undefined);
+  const [rxList, setRxList] = useState<Record<string, unknown>[]>([]);
+  const [consultationList, setConsultationList] = useState<Record<string, unknown>[]>([]);
 
   useEffect(() => {
     const session = getSessionCookie();
@@ -33,23 +36,27 @@ export default function DashboardPage() {
 
   const isDemo = sessionChecked && email === null;
 
-  // Fetch client data
-  const patient = useQuery(
-    api.patients.getByEmail,
-    email ? { email } : "skip"
-  );
+  // Fetch patient record by email
+  useEffect(() => {
+    if (!email) return;
+    patients.getByEmail(email)
+      .then((p) => setPatientRecord(p))
+      .catch(() => setPatientRecord(null));
+  }, [email]);
 
-  // Fetch prescriptions
-  const prescriptions = useQuery(
-    api.prescriptions.getByPatient,
-    patient ? { patientId: patient._id } : "skip"
-  );
+  // Fetch prescriptions and consultations once patient is resolved
+  useEffect(() => {
+    if (!patientRecord || !patientRecord.id) return;
+    const patientId = patientRecord.id as string;
 
-  // Fetch consultations
-  const consultations = useQuery(
-    api.consultations.getByPatient,
-    patient ? { patientId: patient._id } : "skip"
-  );
+    prescriptions.getByPatient(patientId)
+      .then((data) => setRxList(Array.isArray(data) ? data : []))
+      .catch(() => setRxList([]));
+
+    consultations.getByPatient(patientId)
+      .then((data) => setConsultationList(Array.isArray(data) ? data : []))
+      .catch(() => setConsultationList([]));
+  }, [patientRecord]);
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -58,22 +65,20 @@ export default function DashboardPage() {
     return "Good evening";
   })();
 
-  const rxList = prescriptions ?? [];
-
   // Calculate stats from real data
   const activeRxCount = rxList.filter(
-    (rx) => rx.status === "signed" || rx.status === "sent" || rx.status === "filling" || rx.status === "ready"
+    (rx: any) => rx.status === "signed" || rx.status === "sent" || rx.status === "filling" || rx.status === "ready"
   ).length;
 
   const sortedRefills = rxList
-    .filter((rx) => rx.nextRefillDate)
-    .sort((a, b) => (a.nextRefillDate || 0) - (b.nextRefillDate || 0));
+    .filter((rx: any) => rx.nextRefillDate)
+    .sort((a: any, b: any) => (a.nextRefillDate || 0) - (b.nextRefillDate || 0));
 
   const nextRefillDate = sortedRefills.length > 0
-    ? new Date(sortedRefills[0].nextRefillDate!).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    ? new Date((sortedRefills[0] as any).nextRefillDate!).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : "---";
 
-  const consultationCount = consultations?.length || 0;
+  const consultationCount = consultationList.length;
 
   const stats = [
     { value: String(activeRxCount), label: "Active Rx", icon: Pill },
@@ -82,7 +87,7 @@ export default function DashboardPage() {
   ];
 
   // Recent activity from consultations
-  const recentActivity = (consultations || []).slice(0, 4).map((c) => {
+  const recentActivity = consultationList.slice(0, 4).map((c: any) => {
     const timeAgo = (() => {
       const days = Math.floor((Date.now() - c.createdAt) / (1000 * 60 * 60 * 24));
       if (days === 0) return "Today";
@@ -102,8 +107,7 @@ export default function DashboardPage() {
   // If we have a confirmed real session and the DB says no patient record exists,
   // show the intake CTA. (patient===null means the query resolved with no result,
   // not still loading.) Skip this when session isn't checked yet.
-  // If no client record exists and not demo, show intake CTA
-  if (sessionChecked && !isDemo && patient === null) {
+  if (sessionChecked && !isDemo && patientRecord === null) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1400px]">
@@ -210,8 +214,8 @@ export default function DashboardPage() {
 
                 {rxList && rxList.length > 0 ? (
                   <div className="space-y-3">
-                    {rxList.slice(0, 3).map((rx) => (
-                      <div key={rx._id} className="glass-card group flex items-center gap-5" style={{ padding: "20px 24px" }}>
+                    {rxList.slice(0, 3).map((rx: any) => (
+                      <div key={rx._id ?? rx.id} className="glass-card group flex items-center gap-5" style={{ padding: "20px 24px" }}>
                         <div className="w-11 h-11 rounded-xl bg-brand-secondary-muted flex items-center justify-center shrink-0">
                           <Pill size={18} className="text-primary" aria-hidden="true" />
                         </div>
@@ -260,7 +264,7 @@ export default function DashboardPage() {
                     <ArrowRight size={14} className="ml-auto text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                    <span className="flex items-center gap-1"><Clock size={10} aria-hidden="true" /> Same-day available</span>
+                    <span className="flex items-center gap-1"><Clock size={10} aria-hidden="true" /> Available now</span>
                     <span className="w-px h-3 bg-border" />
                     <span className="flex items-center gap-1"><Shield size={10} aria-hidden="true" /> HIPAA encrypted</span>
                   </div>
@@ -349,4 +353,3 @@ export default function DashboardPage() {
     </AppShell>
   );
 }
-

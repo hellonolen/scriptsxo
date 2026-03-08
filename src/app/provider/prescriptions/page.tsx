@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 import { getSessionCookie } from "@/lib/auth";
+import { prescriptions as prescriptionsApi } from "@/lib/api";
 import {
   ArrowLeft,
   FileSignature,
@@ -85,18 +84,18 @@ export default function ProviderPrescriptionsPage() {
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [rxList, setRxList] = useState<any[] | undefined>(undefined);
 
-  // Query real prescriptions from Convex
-  const prescriptions = useQuery(
-    api.prescriptions.getByProviderEmail,
-    providerEmail ? { providerEmail } : "skip"
-  );
-
-  const signForProvider = useMutation(api.prescriptions.signForProvider);
+  useEffect(() => {
+    if (!providerEmail) return;
+    prescriptionsApi.getByProvider(providerEmail)
+      .then((data) => setRxList(Array.isArray(data) ? data : []))
+      .catch(() => setRxList([]));
+  }, [providerEmail]);
 
   // Filter prescriptions by tab
   const now = Date.now();
-  const filtered = (prescriptions ?? []).filter((rx) => {
+  const filtered = (rxList ?? []).filter((rx: any) => {
     if (activeTab === "All") return true;
     if (activeTab === "Pending Review") {
       return rx.status === "pending_review" || rx.status === "draft";
@@ -117,19 +116,19 @@ export default function ProviderPrescriptionsPage() {
 
   // Tab counts from real data
   const counts = {
-    All: (prescriptions ?? []).length,
-    "Pending Review": (prescriptions ?? []).filter(
-      (rx) => rx.status === "pending_review" || rx.status === "draft"
+    All: (rxList ?? []).length,
+    "Pending Review": (rxList ?? []).filter(
+      (rx: any) => rx.status === "pending_review" || rx.status === "draft"
     ).length,
-    Active: (prescriptions ?? []).filter(
-      (rx) =>
+    Active: (rxList ?? []).filter(
+      (rx: any) =>
         rx.status === "signed" ||
         rx.status === "sent" ||
         rx.status === "filling" ||
         rx.status === "ready"
     ).length,
-    Expired: (prescriptions ?? []).filter(
-      (rx) => rx.status === "cancelled" || (rx.expiresAt && rx.expiresAt < now)
+    Expired: (rxList ?? []).filter(
+      (rx: any) => rx.status === "cancelled" || (rx.expiresAt && rx.expiresAt < now)
     ).length,
   };
 
@@ -139,11 +138,11 @@ export default function ProviderPrescriptionsPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
-      await signForProvider({
-        prescriptionId: prescriptionId as any,
-        providerEmail,
-      });
+      await prescriptionsApi.sign(prescriptionId, providerEmail);
       setSuccessMsg("Prescription signed successfully.");
+      // Refresh list
+      const updated = await prescriptionsApi.getByProvider(providerEmail);
+      setRxList(Array.isArray(updated) ? updated : []);
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Failed to sign prescription.");
     } finally {
@@ -237,7 +236,7 @@ export default function ProviderPrescriptionsPage() {
               </tr>
             </thead>
             <tbody>
-              {prescriptions === undefined ? (
+              {rxList === undefined ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -259,7 +258,7 @@ export default function ProviderPrescriptionsPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((rx) => (
+                filtered.map((rx: any) => (
                   <tr key={rx._id}>
                     <td>
                       <div className="flex items-center gap-3">

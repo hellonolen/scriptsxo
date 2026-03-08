@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Send,
   Upload,
@@ -25,14 +26,13 @@ import {
   X,
   Home,
   ArrowRight,
+  ScanFace,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { SITECONFIG, formatPrice } from "@/lib/config";
 import { getSessionCookie, isAdmin as checkIsAdmin } from "@/lib/auth";
-import { useAction, useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
-import type { Id } from "../../../convex/_generated/dataModel";
+import { consultations, storage } from "@/lib/api";
 
 /* ---------------------------------------------------------------------------
    STEP DEFINITIONS
@@ -42,17 +42,18 @@ const STEPS = [
   { id: "welcome", label: "Get Started", icon: Home, number: 1 },
   { id: "intake", label: "New Intake", icon: User, number: 2 },
   { id: "payment", label: "Payment", icon: CreditCard, number: 3 },
-  { id: "medical", label: "Medical History", icon: FileText, number: 4 },
-  { id: "symptoms", label: "Symptoms", icon: Pill, number: 5 },
-  { id: "verification", label: "Verification", icon: Shield, number: 6 },
-  { id: "video", label: "Video Verification", icon: Video, number: 7 },
-  { id: "review", label: "Review", icon: ClipboardCheck, number: 8 },
-  { id: "approved", label: "Approved", icon: Check, number: 9 },
-  { id: "pharmacy", label: "Send to Pharmacy", icon: Truck, number: 10 },
-  { id: "fulfilled", label: "Fulfilled", icon: Package, number: 11 },
+  { id: "identity", label: "Identity Check", icon: ScanFace, number: 4 },
+  { id: "medical", label: "Medical History", icon: FileText, number: 5 },
+  { id: "symptoms", label: "Symptoms", icon: Pill, number: 6 },
+  { id: "verification", label: "Verification", icon: Shield, number: 7 },
+  { id: "video", label: "Video Verification", icon: Video, number: 8 },
+  { id: "review", label: "Review", icon: ClipboardCheck, number: 9 },
+  { id: "approved", label: "Approved", icon: Check, number: 10 },
+  { id: "pharmacy", label: "Send to Pharmacy", icon: Truck, number: 11 },
+  { id: "fulfilled", label: "Fulfilled", icon: Package, number: 12 },
 ] as const;
 
-/** Steps 9-11 are completion states — they only highlight when reached */
+/** Steps 10-12 are completion states — they only highlight when reached */
 const COMPLETION_STEPS: Set<StepId> = new Set(["approved", "pharmacy", "fulfilled"]);
 
 type StepId = (typeof STEPS)[number]["id"];
@@ -79,14 +80,14 @@ const VIDEO_QUESTIONS = [
   "What medication are you requesting, and why do you need it?",
   "Have you taken this medication before? If yes, how did it work for you and did you experience any side effects?",
   "Please list all medications you are currently taking and any known allergies.",
-  "Do you understand that a licensed physician will review this before any prescription is issued?",
+  "Do you understand that a provider will review this before any prescription is issued?",
 ];
 
 /* ---------------------------------------------------------------------------
    PROXY/CAREGIVER TYPES
    --------------------------------------------------------------------------- */
 
-type OrdererRole = "self" | "physician" | "nurse" | "caregiver" | "family";
+type OrdererRole = "self" | "provider" | "nurse" | "caregiver" | "family";
 
 interface ProxyInfo {
   role: OrdererRole;
@@ -116,7 +117,7 @@ interface FieldValidation {
 
 type UserRole = "client" | "provider" | "admin";
 
-export default function StartPage() {
+function StartPageInner() {
   const [currentStep, setCurrentStep] = useState<StepId>("welcome");
   const [completedSteps, setCompletedSteps] = useState<Set<StepId>>(new Set());
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -129,18 +130,92 @@ export default function StartPage() {
   const [userRole, setUserRole] = useState<UserRole>("client");
   const [roleReady, setRoleReady] = useState(false);
 
-  // Gemini chat integration
-  const aiChat = useAction(api.actions.aiChat.chat);
-  const validateFormStep = useAction(api.actions.validateInput.validateFormStep);
-  const scanGovId = useAction(api.actions.scanDocument.scanGovernmentId);
-  const scanRx = useAction(api.actions.scanDocument.scanPrescription);
-  const analyzeFace = useAction(api.actions.scanDocument.analyzeFacePhoto);
-  const verifyNpi = useAction(api.actions.verifyLicense.verifyNpi);
+  // API stubs — these endpoints will be wired to the Worker API once implemented
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function aiChat(args: { message: string; conversationHistory: { role: string; content: string }[]; patientEmail: string; userRole: string }): Promise<{ content: string }> {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+    const res = await fetch(`${API_BASE}/ai/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+    if (!res.ok) throw new Error("AI service unavailable");
+    const json = await res.json() as { success: boolean; data?: { content: string }; error?: string };
+    if (!json.success) throw new Error(json.error ?? "AI error");
+    return json.data!;
+  }
 
-  // Persistent memory — save every message to Convex
-  const getOrCreateConversation = useMutation(api.aiConversations.getOrCreate);
-  const addConversationMessage = useMutation(api.aiConversations.addMessage);
-  const [conversationId, setConversationId] = useState<Id<"aiConversations"> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function validateFormStep(args: { fields: { name: string; value: string; required: boolean }[]; stepContext: string }): Promise<{ allValid: boolean; results: Record<string, { valid: boolean; reason: string; suggestion: string | null }> }> {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+    const res = await fetch(`${API_BASE}/ai/validate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+    if (!res.ok) throw new Error("Validation service unavailable");
+    const json = await res.json() as { success: boolean; data?: { allValid: boolean; results: Record<string, { valid: boolean; reason: string; suggestion: string | null }> }; error?: string };
+    if (!json.success) throw new Error(json.error ?? "Validation error");
+    return json.data!;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function scanGovId(args: { imageBase64: string; mimeType: string }): Promise<Record<string, unknown>> {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+    const res = await fetch(`${API_BASE}/scan/gov-id`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+    if (!res.ok) throw new Error("Scan service unavailable");
+    const json = await res.json() as { success: boolean; data?: Record<string, unknown>; error?: string };
+    if (!json.success) throw new Error(json.error ?? "Scan error");
+    return json.data!;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function scanRx(args: { imageBase64: string; mimeType: string }): Promise<Record<string, unknown>> {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+    const res = await fetch(`${API_BASE}/scan/prescription`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+    if (!res.ok) throw new Error("Scan service unavailable");
+    const json = await res.json() as { success: boolean; data?: Record<string, unknown>; error?: string };
+    if (!json.success) throw new Error(json.error ?? "Scan error");
+    return json.data!;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function analyzeFace(args: { faceImageBase64: string; faceMimeType: string; idImageBase64?: string; idMimeType?: string }): Promise<Record<string, unknown>> {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+    const res = await fetch(`${API_BASE}/scan/face`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+    if (!res.ok) throw new Error("Face analysis service unavailable");
+    const json = await res.json() as { success: boolean; data?: Record<string, unknown>; error?: string };
+    if (!json.success) throw new Error(json.error ?? "Face analysis error");
+    return json.data!;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function verifyNpi(args: { npiNumber: string; expectedFirstName?: string; expectedLastName?: string }): Promise<Record<string, unknown>> {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+    const res = await fetch(`${API_BASE}/verify/npi`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+    if (!res.ok) throw new Error("NPI verification service unavailable");
+    const json = await res.json() as { success: boolean; data?: Record<string, unknown>; error?: string };
+    if (!json.success) throw new Error(json.error ?? "NPI verification error");
+    return json.data!;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function createIntakeVerification(args: { patientEmail: string; returnUrl: string }): Promise<{ url?: string; sessionId: string; error?: string }> {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+    const res = await fetch(`${API_BASE}/identity/create`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+    if (!res.ok) throw new Error("Identity verification service unavailable");
+    const json = await res.json() as { success: boolean; data?: { url?: string; sessionId: string; error?: string }; error?: string };
+    if (!json.success) throw new Error(json.error ?? "Identity verification error");
+    return json.data!;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function checkIntakeVerification(args: { sessionId: string; patientEmail: string }): Promise<{ verified: boolean; lastError?: unknown }> {
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+    const res = await fetch(`${API_BASE}/identity/check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+    if (!res.ok) throw new Error("Identity check service unavailable");
+    const json = await res.json() as { success: boolean; data?: { verified: boolean; lastError?: unknown }; error?: string };
+    if (!json.success) throw new Error(json.error ?? "Identity check error");
+    return json.data!;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function submitIntakeVideo(args: { patientEmail: string; patientName: string; transcript: string; medicalHistory: { conditions?: string; medications?: string; allergies?: string }; chiefComplaint: string; pharmacyLocation: string; videoStorageId: string }): Promise<{ consultationId: string }> {
+    const result = await consultations.create({ ...args, status: "pending_review" });
+    return { consultationId: result.id };
+  }
 
   const [conversationHistory, setConversationHistory] = useState<
     { role: string; content: string }[]
@@ -169,13 +244,7 @@ export default function StartPage() {
     setRoleReady(true);
   }, []);
 
-  // Initialize persistent conversation
-  useEffect(() => {
-    if (!userEmail) return;
-    getOrCreateConversation({ email: userEmail })
-      .then((id) => setConversationId(id))
-      .catch(() => {});
-  }, [userEmail, getOrCreateConversation]);
+  // Conversation persistence is handled server-side via the API calls
 
   // Form state
   const [patientType, setPatientType] = useState<"new" | "returning" | null>(null);
@@ -247,8 +316,71 @@ export default function StartPage() {
   // Pharmacy location state
   const [pharmacyLocation, setPharmacyLocation] = useState("");
 
+  // Submission tracking
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const [submissionStatus, setSubmissionStatus] = useState<
+    "idle" | "uploading" | "analyzing" | "pending_review" | "approved" | "rejected"
+  >("idle");
+
   // Payment consent
   const [noRefundAccepted, setNoRefundAccepted] = useState(false);
+
+  // Stripe Identity state
+  const searchParams = useSearchParams();
+  const [identityStatus, setIdentityStatus] = useState<"pending" | "verifying" | "verified" | "failed" | "skipped">("pending");
+  const [identitySessionId, setIdentitySessionId] = useState<string | null>(null);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+  const [isLaunchingIdentity, setIsLaunchingIdentity] = useState(false);
+
+  /* ---- Stripe Identity return URL detection ---- */
+  useEffect(() => {
+    const stripeVerified = searchParams.get("stripe_verified");
+    const sessionId = searchParams.get("session_id");
+    if (!stripeVerified || !sessionId || !roleReady) return;
+
+    // Restore state — user returned from Stripe redirect
+    setCurrentStep("identity");
+    setIdentitySessionId(sessionId);
+    setIdentityStatus("verifying");
+    addSystemMessage(
+      "Welcome back. Checking your identity verification status...",
+      "identity"
+    );
+
+    // Check the actual status from Stripe
+    checkIntakeVerification({
+      sessionId,
+      patientEmail: userEmail || "anonymous@scriptsxo.com",
+    })
+      .then((result) => {
+        if (result.verified) {
+          setIdentityStatus("verified");
+          completeStep("identity");
+          simulateTyping(() => {
+            advanceTo("medical");
+            addSystemMessage(
+              "Identity verified. Now let's get the medical history. Please fill out the following — this helps our providers understand the health background.",
+              "medical"
+            );
+          });
+        } else {
+          setIdentityStatus("failed");
+          setIdentityError(
+            result.lastError
+              ? `Verification could not be completed: ${(result.lastError as any)?.reason || "please try again"}.`
+              : "Verification could not be completed. Please try again."
+          );
+          addSystemMessage(
+            "We weren't able to complete your identity verification. Please try again below.",
+            "identity"
+          );
+        }
+      })
+      .catch(() => {
+        setIdentityStatus("failed");
+        setIdentityError("Unable to confirm verification status. Please try again or contact support.");
+      });
+  }, [searchParams, roleReady]);
 
   /* ---- Attach video stream when element renders ---- */
   useEffect(() => {
@@ -279,15 +411,6 @@ export default function StartPage() {
         step,
       },
     ]);
-    // Persist AI messages to Convex
-    if (conversationId) {
-      addConversationMessage({
-        conversationId,
-        role: "assistant",
-        content,
-        page: "/start",
-      }).catch(() => {});
-    }
   }
 
   function addUserMessage(content: string) {
@@ -300,15 +423,6 @@ export default function StartPage() {
         timestamp: new Date(),
       },
     ]);
-    // Persist user messages to Convex
-    if (conversationId) {
-      addConversationMessage({
-        conversationId,
-        role: "user",
-        content,
-        page: "/start",
-      }).catch(() => {});
-    }
   }
 
   function completeStep(stepId: StepId) {
@@ -412,14 +526,14 @@ export default function StartPage() {
       });
     } else {
       const labels: Record<string, string> = {
-        physician: "I'm a licensed physician ordering for a client",
+        provider: "I'm a provider ordering for a client",
         nurse: "I'm a licensed nurse ordering for a client",
         caregiver: "I'm a home caregiver ordering for someone",
         family: "I'm a family member ordering for someone",
       };
       addUserMessage(labels[role] || "Ordering for someone else");
       simulateTyping(() => {
-        if (role === "physician" || role === "nurse") {
+        if (role === "provider" || role === "nurse") {
           addSystemMessage(
             `Since you're a licensed ${role}, I'll need to verify your credentials. Please provide your NPI number and name so we can confirm your license through the national registry.`,
             "intake"
@@ -458,9 +572,10 @@ export default function StartPage() {
           "intake"
         );
       } else {
-        setNpiError(result.issues.join(". ") || "Could not verify this NPI number");
+        const issues = (result.issues as string[] | undefined) ?? [];
+        setNpiError(issues.join(". ") || "Could not verify this NPI number");
         addSystemMessage(
-          `I wasn't able to verify that NPI number. ${result.issues.join(". ")}. Please double-check and try again.`
+          `I wasn't able to verify that NPI number. ${issues.join(". ")}. Please double-check and try again.`
         );
       }
     } catch {
@@ -502,9 +617,53 @@ export default function StartPage() {
     completeStep("payment");
 
     simulateTyping(() => {
+      advanceTo("identity");
+      addSystemMessage(
+        "Payment confirmed. Before we continue, we need to verify your identity. You'll be directed to a secure Stripe verification — you'll need your government-issued ID ready. This is required by law before any prescription can be issued.",
+        "identity"
+      );
+    });
+  }
+
+  /* ---- Step: Identity Verification (Stripe) ---- */
+
+  async function handleIdentityVerify() {
+    setIsLaunchingIdentity(true);
+    setIdentityError(null);
+
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : "https://scriptsxo.com";
+      const returnUrl = `${origin}/start?stripe_verified=true&session_id={VERIFICATION_SESSION_ID}`;
+
+      const result = await createIntakeVerification({
+        patientEmail: userEmail || "anonymous@scriptsxo.com",
+        returnUrl,
+      });
+
+      if (result.error || !result.url) {
+        setIdentityError(result.error || "Identity verification service temporarily unavailable. Please contact support.");
+        setIsLaunchingIdentity(false);
+        return;
+      }
+
+      setIdentitySessionId(result.sessionId);
+      // Redirect to Stripe hosted verification page
+      window.location.href = result.url;
+    } catch {
+      setIdentityError("Unable to start identity verification. Please try again or contact support at support@scriptsxo.com.");
+      setIsLaunchingIdentity(false);
+    }
+  }
+
+  function handleIdentitySkip() {
+    // Admin/support use only — records that verification was skipped
+    addUserMessage("Identity verification skipped (support override)");
+    setIdentityStatus("skipped");
+    completeStep("identity");
+    simulateTyping(() => {
       advanceTo("medical");
       addSystemMessage(
-        "All set. Now let's get the medical history. Please fill out the following — this helps our providers understand the health background.",
+        "Continuing without identity verification. Note: a manual review will be required. Now let's get the medical history.",
         "medical"
       );
     });
@@ -641,7 +800,7 @@ export default function StartPage() {
 
       if (scanResult.isValidId) {
         addSystemMessage(
-          `ID scanned successfully — ${scanResult.documentType?.replace(/_/g, " ") || "document"} detected. Name: ${scanResult.fullName || "readable"}, DOB: ${scanResult.dateOfBirth || "readable"}${scanResult.isExpired ? " (Warning: this ID appears to be expired)" : ""}. Confidence: ${scanResult.confidence}%.`
+          `ID scanned successfully — ${(scanResult.documentType as string | undefined)?.replace(/_/g, " ") || "document"} detected. Name: ${scanResult.fullName || "readable"}, DOB: ${scanResult.dateOfBirth || "readable"}${scanResult.isExpired ? " (Warning: this ID appears to be expired)" : ""}. Confidence: ${scanResult.confidence}%.`
         );
       } else {
         addSystemMessage(
@@ -683,7 +842,7 @@ export default function StartPage() {
         const med = scanResult.medicationName || "medication";
         const prescriber = scanResult.prescriber || "a provider";
         addSystemMessage(
-          `Prescription scanned — ${med} prescribed by ${prescriber}${scanResult.dateWritten ? ` on ${scanResult.dateWritten}` : ""}.${scanResult.dosage ? ` Dosage: ${scanResult.dosage}.` : ""} This will be cross-referenced during physician review.`
+          `Prescription scanned — ${med} prescribed by ${prescriber}${scanResult.dateWritten ? ` on ${scanResult.dateWritten}` : ""}.${scanResult.dosage ? ` Dosage: ${scanResult.dosage}.` : ""} This will be cross-referenced during provider review.`
         );
         // Auto-fill prescriber if found
         if (scanResult.prescriber) {
@@ -714,7 +873,7 @@ export default function StartPage() {
     simulateTyping(() => {
       advanceTo("video");
       addSystemMessage(
-        "Everything looks good so far. Next step — we need a short video recording. You'll see yourself on camera and I'll ask you 5 quick questions. This video is recorded and will be reviewed by a licensed physician. A face photo will also be captured for identity verification. Ready when you are.",
+        "Everything looks good so far. Next step — we need a short video recording. You'll see yourself on camera and I'll ask you 5 quick questions. This video is recorded and will be reviewed by a provider. A face photo will also be captured for identity verification. Ready when you are.",
         "video"
       );
     });
@@ -879,7 +1038,7 @@ export default function StartPage() {
 
       setIsTyping(false);
       addSystemMessage(
-        reviewResponse || "Everything looks good. Before we submit for physician review, which pharmacy would you like to pick up the prescription from? Please provide the pharmacy name and location.",
+        reviewResponse || "Everything looks good. Before we submit for provider review, which pharmacy would you like to pick up the prescription from? Please provide the pharmacy name and location.",
         "review"
       );
     })();
@@ -906,38 +1065,84 @@ export default function StartPage() {
     setIsValidating(false);
     setValidationErrors({});
 
-    addUserMessage(`Pharmacy: ${pharmacyLocation}`);
+    const savedPharmacyLocation = pharmacyLocation;
+    addUserMessage(`Pharmacy: ${savedPharmacyLocation}`);
     setPharmacyLocation("");
     completeStep("review");
     advanceTo("approved");
 
     addSystemMessage(
-      "Your intake is now being reviewed by a licensed physician. This typically takes 3 to 8 minutes. You'll be notified here as soon as a decision is made. Please note: the physician may decline the request if it does not meet clinical criteria. Feel free to ask me anything while you wait.",
+      "Your intake is now being reviewed by a provider. This typically takes 3 to 8 minutes. You'll be notified here as soon as a decision is made. Please note: the provider may decline the request if it does not meet practiceal criteria. Feel free to ask me anything while you wait.",
       "approved"
     );
 
-    // Random wait between 3-8 seconds for demo (change to minutes in production)
-    const approvalWaitMs = Math.floor(Math.random() * 5000 + 3000);
+    // Real async pipeline: upload video → AI analysis → provider queue
+    setSubmissionStatus("uploading");
+    addSystemMessage(
+      "Uploading your video recording for provider review...",
+      "approved"
+    );
 
-    setTimeout(() => {
-      completeStep("approved");
-      advanceTo("pharmacy");
+    try {
+      // 1. Upload video blob to R2 via the storage API
+      let videoStorageId = "";
+      const videoBlob =
+        chunksRef.current.length > 0
+          ? new Blob(chunksRef.current, { type: "video/webm" })
+          : null;
+
+      if (videoBlob && videoBlob.size > 0) {
+        try {
+          const videoFile = new File([videoBlob], "intake-video.webm", { type: "video/webm" });
+          const uploadResult = await storage.upload(videoFile, "intake_video");
+          videoStorageId = uploadResult.r2Key;
+        } catch {
+          // Video upload failure is non-fatal — proceed without it
+        }
+      }
+
+      setSubmissionStatus("analyzing");
       addSystemMessage(
-        "The request has been approved by a licensed physician. We're now sending the prescription to the pharmacy. This usually takes a few minutes.",
-        "pharmacy"
+        "Video uploaded. Our AI is preparing your case for provider review...",
+        "approved"
       );
 
-      const pharmacyWaitMs = Math.floor(Math.random() * 5000 + 3000);
+      // 2. Submit to async review pipeline
+      const transcript = transcripts.join(" | ") || "Transcription unavailable";
+      const patientName =
+        (verificationData.govIdScanResult?.fullName as string | undefined) ||
+        userEmail ||
+        "Unknown";
 
-      setTimeout(() => {
-        completeStep("pharmacy");
-        advanceTo("fulfilled");
-        addSystemMessage(
-          `The prescription has been sent to ${pharmacyLocation}. It can be picked up there once the pharmacy has it ready — they'll notify directly. Thank you for using ScriptsXO.`,
-          "fulfilled"
-        );
-      }, pharmacyWaitMs);
-    }, approvalWaitMs);
+      const result = await submitIntakeVideo({
+        patientEmail: userEmail || "anonymous@scriptsxo.com",
+        patientName,
+        transcript,
+        medicalHistory: {
+          conditions: medicalData.conditions || undefined,
+          medications: medicalData.medications || undefined,
+          allergies: medicalData.allergies || undefined,
+        },
+        chiefComplaint: symptomData.complaint || "General prescription request",
+        pharmacyLocation: savedPharmacyLocation,
+        videoStorageId,
+      });
+
+      setSubmissionId(result.consultationId);
+      setSubmissionStatus("pending_review");
+
+      addSystemMessage(
+        "Your consultation has been submitted for provider review. A licensed provider will review your video and medical history — you'll receive an email notification as soon as a decision is made. This typically takes a few hours during business hours. You can close this window safely.",
+        "approved"
+      );
+    } catch (err) {
+      console.error("Submission error:", err);
+      setSubmissionStatus("idle");
+      addSystemMessage(
+        "There was an issue submitting your consultation. Please try again or contact support at support@scriptsxo.com.",
+        "approved"
+      );
+    }
   }
 
   /* ---- Free-text chat (Gemini-powered) ---- */
@@ -951,7 +1156,7 @@ export default function StartPage() {
 
     let contextHint: string;
     if (userRole === "provider") {
-      contextHint = `This is a provider using the AI assistant. They may ask about their client queue, clinical questions, prescriptions, or practice management. Answer helpfully and concisely.`;
+      contextHint = `This is a provider using the AI assistant. They may ask about their client queue, practiceal questions, prescriptions, or practice management. Answer helpfully and concisely.`;
     } else if (userRole === "admin") {
       contextHint = `This is a platform admin using the AI assistant. They may ask about platform stats, client records, revenue, prescriptions, or compliance. Answer with real data when available.`;
     } else {
@@ -992,14 +1197,14 @@ export default function StartPage() {
           return null; // Will show after orderer role is set
         }
 
-        if (!patientType && ordererRole !== "self" && !proxyInfo.npiVerified && (ordererRole === "physician" || ordererRole === "nurse") && proxyInfo.role !== "self") {
+        if (!patientType && ordererRole !== "self" && !proxyInfo.npiVerified && (ordererRole === "provider" || ordererRole === "nurse") && proxyInfo.role !== "self") {
           // Licensed provider needs NPI verification
-          if (ordererRole === "physician" || ordererRole === "nurse") {
+          if (ordererRole === "provider" || ordererRole === "nurse") {
             return (
               <div className="mt-4 space-y-4">
                 <div className="glass-card p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Stethoscope className="w-4 h-4 text-[#7C3AED]" />
+                    <Stethoscope className="w-4 h-4 text-brand-secondary" />
                     <span className="text-sm font-medium text-foreground">License Verification</span>
                   </div>
                   <div className="space-y-3">
@@ -1011,7 +1216,7 @@ export default function StartPage() {
                           value={proxyInfo.firstName}
                           onChange={(e) => setProxyInfo((p) => ({ ...p, firstName: e.target.value }))}
                           placeholder="First name"
-                          className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                          className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                         />
                       </div>
                       <div>
@@ -1021,7 +1226,7 @@ export default function StartPage() {
                           value={proxyInfo.lastName}
                           onChange={(e) => setProxyInfo((p) => ({ ...p, lastName: e.target.value }))}
                           placeholder="Last name"
-                          className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                          className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                         />
                       </div>
                     </div>
@@ -1036,7 +1241,7 @@ export default function StartPage() {
                         }}
                         placeholder="10-digit NPI number"
                         maxLength={10}
-                        className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                        className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                       />
                       {npiError && (
                         <div className="flex items-center gap-1.5 mt-1.5 text-xs text-red-600">
@@ -1050,7 +1255,7 @@ export default function StartPage() {
                 <Button
                   onClick={handleNpiVerification}
                   disabled={!proxyInfo.npiNumber.trim() || !proxyInfo.firstName.trim() || !proxyInfo.lastName.trim() || isVerifyingNpi}
-                  className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
+                  className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
                 >
                   {isVerifyingNpi ? (
                     <>
@@ -1075,7 +1280,7 @@ export default function StartPage() {
             <div className="mt-4 space-y-4">
               <div className="glass-card p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Users className="w-4 h-4 text-[#7C3AED]" />
+                  <Users className="w-4 h-4 text-brand-secondary" />
                   <span className="text-sm font-medium text-foreground">Your Information</span>
                 </div>
                 <div className="space-y-3">
@@ -1087,7 +1292,7 @@ export default function StartPage() {
                         value={proxyInfo.firstName}
                         onChange={(e) => setProxyInfo((p) => ({ ...p, firstName: e.target.value }))}
                         placeholder="First name"
-                        className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                        className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                       />
                     </div>
                     <div>
@@ -1097,7 +1302,7 @@ export default function StartPage() {
                         value={proxyInfo.lastName}
                         onChange={(e) => setProxyInfo((p) => ({ ...p, lastName: e.target.value }))}
                         placeholder="Last name"
-                        className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                        className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                       />
                     </div>
                   </div>
@@ -1108,7 +1313,7 @@ export default function StartPage() {
                       value={proxyInfo.relationship}
                       onChange={(e) => setProxyInfo((p) => ({ ...p, relationship: e.target.value }))}
                       placeholder="e.g., Home caregiver, Son, Daughter, Spouse"
-                      className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                      className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                     />
                   </div>
                   <div>
@@ -1118,7 +1323,7 @@ export default function StartPage() {
                       value={proxyInfo.phone}
                       onChange={(e) => setProxyInfo((p) => ({ ...p, phone: e.target.value }))}
                       placeholder="(555) 555-5555"
-                      className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                      className="w-full px-3 py-2.5 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                     />
                   </div>
                 </div>
@@ -1126,7 +1331,7 @@ export default function StartPage() {
               <Button
                 onClick={handleCaregiverInfoSubmit}
                 disabled={!proxyInfo.firstName.trim() || !proxyInfo.relationship.trim()}
-                className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
+                className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
               >
                 Continue
                 <ChevronRight className="w-4 h-4 ml-1" />
@@ -1147,23 +1352,23 @@ export default function StartPage() {
                 <Button
                   onClick={() => handleOrdererRole("self")}
                   variant="outline"
-                  className="w-full h-12 text-sm border-2 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors justify-start px-4"
+                  className="w-full h-12 text-sm border-2 hover:border-ring hover:text-brand-secondary transition-colors justify-start px-4"
                 >
                   <User className="w-4 h-4 mr-3" />
                   I'm ordering for myself
                 </Button>
                 <Button
-                  onClick={() => handleOrdererRole("physician")}
+                  onClick={() => handleOrdererRole("provider")}
                   variant="outline"
-                  className="w-full h-12 text-sm border-2 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors justify-start px-4"
+                  className="w-full h-12 text-sm border-2 hover:border-ring hover:text-brand-secondary transition-colors justify-start px-4"
                 >
                   <Stethoscope className="w-4 h-4 mr-3" />
-                  I'm a physician ordering for a client
+                  I'm a provider ordering for a client
                 </Button>
                 <Button
                   onClick={() => handleOrdererRole("nurse")}
                   variant="outline"
-                  className="w-full h-12 text-sm border-2 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors justify-start px-4"
+                  className="w-full h-12 text-sm border-2 hover:border-ring hover:text-brand-secondary transition-colors justify-start px-4"
                 >
                   <BadgeCheck className="w-4 h-4 mr-3" />
                   I'm a nurse ordering for a client
@@ -1171,7 +1376,7 @@ export default function StartPage() {
                 <Button
                   onClick={() => handleOrdererRole("caregiver")}
                   variant="outline"
-                  className="w-full h-12 text-sm border-2 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors justify-start px-4"
+                  className="w-full h-12 text-sm border-2 hover:border-ring hover:text-brand-secondary transition-colors justify-start px-4"
                 >
                   <Users className="w-4 h-4 mr-3" />
                   I'm a caregiver or family member
@@ -1186,7 +1391,7 @@ export default function StartPage() {
               <Button
                 onClick={() => handlePatientType("new")}
                 variant="outline"
-                className="flex-1 h-12 text-sm border-2 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors"
+                className="flex-1 h-12 text-sm border-2 hover:border-ring hover:text-brand-secondary transition-colors"
               >
                 <User className="w-4 h-4 mr-2" />
                 New Client
@@ -1194,7 +1399,7 @@ export default function StartPage() {
               <Button
                 onClick={() => handlePatientType("returning")}
                 variant="outline"
-                className="flex-1 h-12 text-sm border-2 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors"
+                className="flex-1 h-12 text-sm border-2 hover:border-ring hover:text-brand-secondary transition-colors"
               >
                 <FileText className="w-4 h-4 mr-2" />
                 Returning Client
@@ -1212,7 +1417,7 @@ export default function StartPage() {
                 <Button
                   onClick={() => handlePatientType("new")}
                   variant="outline"
-                  className="flex-1 h-12 text-sm border-2 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors"
+                  className="flex-1 h-12 text-sm border-2 hover:border-ring hover:text-brand-secondary transition-colors"
                 >
                   <User className="w-4 h-4 mr-2" />
                   New Client
@@ -1220,7 +1425,7 @@ export default function StartPage() {
                 <Button
                   onClick={() => handlePatientType("returning")}
                   variant="outline"
-                  className="flex-1 h-12 text-sm border-2 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-colors"
+                  className="flex-1 h-12 text-sm border-2 hover:border-ring hover:text-brand-secondary transition-colors"
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   Returning Client
@@ -1231,6 +1436,135 @@ export default function StartPage() {
         }
 
         return null;
+
+      case "identity":
+        // Already verified (returned from Stripe with success)
+        if (identityStatus === "verified") {
+          return (
+            <div className="mt-4 glass-card p-6 text-center">
+              <BadgeCheck className="w-8 h-8 text-emerald-600 mx-auto mb-3" />
+              <p className="text-sm font-medium text-foreground">Identity Verified</p>
+              <p className="text-xs text-muted-foreground mt-1">Continuing to next step...</p>
+            </div>
+          );
+        }
+
+        // Checking status after Stripe redirect
+        if (identityStatus === "verifying") {
+          return (
+            <div className="mt-4 glass-card p-6 text-center">
+              <Loader2 className="w-8 h-8 text-brand-secondary animate-spin mx-auto mb-3" />
+              <p className="text-sm font-medium text-foreground">Checking verification status...</p>
+              <p className="text-xs text-muted-foreground mt-1">This only takes a moment.</p>
+            </div>
+          );
+        }
+
+        // Verification failed — show error and retry
+        if (identityStatus === "failed") {
+          return (
+            <div className="mt-4 space-y-4">
+              <div className="glass-card p-5">
+                <div className="flex items-start gap-3 mb-4">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-1">Verification incomplete</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {identityError || "We were unable to verify your identity. Please try again."}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleIdentityVerify}
+                  disabled={isLaunchingIdentity}
+                  className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
+                >
+                  {isLaunchingIdentity ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Launching...
+                    </>
+                  ) : (
+                    <>
+                      <ScanFace className="w-4 h-4 mr-2" />
+                      Try Again
+                    </>
+                  )}
+                </Button>
+              </div>
+              {userRole === "admin" && (
+                <button
+                  onClick={handleIdentitySkip}
+                  className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                >
+                  Skip (admin override)
+                </button>
+              )}
+            </div>
+          );
+        }
+
+        // Default: pending — show the verify button
+        return (
+          <div className="mt-4 space-y-4">
+            <div className="glass-card p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-brand-secondary/10 flex items-center justify-center flex-shrink-0">
+                  <ScanFace className="w-5 h-5 text-brand-secondary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">Stripe Identity Verification</p>
+                  <p className="text-xs text-muted-foreground">Secure • Takes about 1 minute</p>
+                </div>
+              </div>
+              <div className="space-y-2 mb-5">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  Government-issued photo ID (driver's license, passport, or national ID)
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  Live selfie to confirm you match your ID
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  Required before any prescription can be issued
+                </div>
+              </div>
+              {identityError && (
+                <div className="flex items-start gap-2 mb-4 p-3 rounded-md bg-red-50 border border-red-200">
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700">{identityError}</p>
+                </div>
+              )}
+              <Button
+                onClick={handleIdentityVerify}
+                disabled={isLaunchingIdentity}
+                className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
+              >
+                {isLaunchingIdentity ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Launching verification...
+                  </>
+                ) : (
+                  <>
+                    <ScanFace className="w-4 h-4 mr-2" />
+                    Verify My Identity
+                  </>
+                )}
+              </Button>
+            </div>
+            {userRole === "admin" && (
+              <button
+                onClick={handleIdentitySkip}
+                className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+              >
+                Skip (admin override)
+              </button>
+            )}
+          </div>
+        );
 
       case "payment":
         return (
@@ -1244,7 +1578,7 @@ export default function StartPage() {
             <p className="text-xs text-muted-foreground mb-3">Cancel anytime. Unlimited access.</p>
             <div className="bg-amber-50 border border-amber-200 rounded-md px-4 py-3 mb-4">
               <p className="text-xs text-amber-800 leading-relaxed">
-                Payment is non-refundable. A licensed physician will review your request within 3-8 minutes. There is no guarantee your prescription will be approved — the physician may decline if clinical criteria are not met.
+                Payment is non-refundable. A provider will review your request within 3-8 minutes. There is no guarantee your prescription will be approved — the provider may decline if practiceal criteria are not met.
               </p>
             </div>
             <label className="flex items-start gap-3 mb-4 cursor-pointer">
@@ -1252,7 +1586,7 @@ export default function StartPage() {
                 type="checkbox"
                 checked={noRefundAccepted}
                 onChange={(e) => setNoRefundAccepted(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-border accent-[#7C3AED]"
+                className="mt-0.5 w-4 h-4 rounded border-border accent-brand-secondary"
               />
               <span className="text-xs text-foreground leading-relaxed">
                 I understand there is no refund and no guarantee that my prescription will be approved.
@@ -1261,7 +1595,7 @@ export default function StartPage() {
             <Button
               onClick={handlePaymentComplete}
               disabled={!noRefundAccepted}
-              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
             >
               <CreditCard className="w-4 h-4 mr-2" />
               Complete Payment
@@ -1284,7 +1618,7 @@ export default function StartPage() {
                   setValidationErrors((prev) => ({ ...prev, conditions: undefined as any }));
                 }}
                 placeholder="e.g., High blood pressure, Diabetes"
-                className={`w-full px-4 py-3 rounded-md border ${validationErrors.conditions ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]`}
+                className={`w-full px-4 py-3 rounded-md border ${validationErrors.conditions ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring`}
               />
               {renderFieldError("conditions")}
             </div>
@@ -1300,7 +1634,7 @@ export default function StartPage() {
                   setValidationErrors((prev) => ({ ...prev, medications: undefined as any }));
                 }}
                 placeholder="e.g., Lisinopril 10mg, Metformin 500mg"
-                className={`w-full px-4 py-3 rounded-md border ${validationErrors.medications ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]`}
+                className={`w-full px-4 py-3 rounded-md border ${validationErrors.medications ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring`}
               />
               {renderFieldError("medications")}
             </div>
@@ -1316,7 +1650,7 @@ export default function StartPage() {
                   setValidationErrors((prev) => ({ ...prev, allergies: undefined as any }));
                 }}
                 placeholder="e.g., Penicillin, Sulfa drugs"
-                className={`w-full px-4 py-3 rounded-md border ${validationErrors.allergies ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]`}
+                className={`w-full px-4 py-3 rounded-md border ${validationErrors.allergies ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring`}
               />
               {renderFieldError("allergies")}
             </div>
@@ -1332,14 +1666,14 @@ export default function StartPage() {
                   setValidationErrors((prev) => ({ ...prev, familyHistory: undefined as any }));
                 }}
                 placeholder="e.g., Father — heart disease, Mother — diabetes"
-                className={`w-full px-4 py-3 rounded-md border ${validationErrors.familyHistory ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]`}
+                className={`w-full px-4 py-3 rounded-md border ${validationErrors.familyHistory ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring`}
               />
               {renderFieldError("familyHistory")}
             </div>
             <Button
               onClick={handleMedicalSubmit}
               disabled={!medicalData.conditions.trim() || isValidating}
-              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
             >
               {isValidating ? (
                 <>
@@ -1371,7 +1705,7 @@ export default function StartPage() {
                   setValidationErrors((prev) => ({ ...prev, complaint: undefined as any }));
                 }}
                 placeholder="Medication name and what it's for"
-                className={`w-full px-4 py-3 rounded-md border ${validationErrors.complaint ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]`}
+                className={`w-full px-4 py-3 rounded-md border ${validationErrors.complaint ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring`}
               />
               {renderFieldError("complaint")}
             </div>
@@ -1387,7 +1721,7 @@ export default function StartPage() {
                   setValidationErrors((prev) => ({ ...prev, duration: undefined as any }));
                 }}
                 placeholder="e.g., 2 weeks, 3 months, ongoing"
-                className={`w-full px-4 py-3 rounded-md border ${validationErrors.duration ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]`}
+                className={`w-full px-4 py-3 rounded-md border ${validationErrors.duration ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring`}
               />
               {renderFieldError("duration")}
             </div>
@@ -1401,7 +1735,7 @@ export default function StartPage() {
                 max={10}
                 value={symptomData.severity}
                 onChange={(e) => setSymptomData((p) => ({ ...p, severity: parseInt(e.target.value) }))}
-                className="w-full accent-[#7C3AED]"
+                className="w-full accent-brand-secondary"
               />
               <div className="flex justify-between text-[10px] text-muted-foreground">
                 <span>Mild</span>
@@ -1420,14 +1754,14 @@ export default function StartPage() {
                   setValidationErrors((prev) => ({ ...prev, previousTreatments: undefined as any }));
                 }}
                 placeholder="What have you tried before?"
-                className={`w-full px-4 py-3 rounded-md border ${validationErrors.previousTreatments ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]`}
+                className={`w-full px-4 py-3 rounded-md border ${validationErrors.previousTreatments ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring`}
               />
               {renderFieldError("previousTreatments")}
             </div>
             <Button
               onClick={handleSymptomsSubmit}
               disabled={!symptomData.complaint.trim() || !symptomData.duration.trim() || isValidating}
-              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
             >
               {isValidating ? (
                 <>
@@ -1455,10 +1789,10 @@ export default function StartPage() {
                   <Check className="w-4 h-4 text-emerald-600" />
                 )}
                 {isScanningId && (
-                  <Loader2 className="w-4 h-4 text-[#7C3AED] animate-spin" />
+                  <Loader2 className="w-4 h-4 text-brand-secondary animate-spin" />
                 )}
               </div>
-              <label className="flex items-center justify-center gap-2 w-full h-20 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-[#7C3AED] transition-colors">
+              <label className="flex items-center justify-center gap-2 w-full h-20 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-ring transition-colors">
                 <input
                   type="file"
                   accept="image/*"
@@ -1466,7 +1800,7 @@ export default function StartPage() {
                   onChange={handleGovIdUpload}
                 />
                 {isScanningId ? (
-                  <span className="text-sm text-[#7C3AED] font-medium">Scanning ID...</span>
+                  <span className="text-sm text-brand-secondary font-medium">Scanning ID...</span>
                 ) : verificationData.govIdUploaded ? (
                   <span className="text-sm text-emerald-600 font-medium">
                     ID {verificationData.govIdScanResult?.isValidId ? "Verified" : "Uploaded"} — tap to replace
@@ -1501,7 +1835,7 @@ export default function StartPage() {
                   <Check className="w-4 h-4 text-emerald-600" />
                 )}
                 {isScanningRx && (
-                  <Loader2 className="w-4 h-4 text-[#7C3AED] animate-spin" />
+                  <Loader2 className="w-4 h-4 text-brand-secondary animate-spin" />
                 )}
               </div>
 
@@ -1510,7 +1844,7 @@ export default function StartPage() {
                   onClick={() => setVerificationData((p) => ({ ...p, isNewPrescription: false }))}
                   className={`flex-1 px-3 py-2 text-xs rounded-md border transition-colors ${
                     !verificationData.isNewPrescription
-                      ? "border-[#7C3AED] text-[#7C3AED] bg-[#7C3AED]/5"
+                      ? "border-ring text-brand-secondary bg-brand-secondary/5"
                       : "border-border text-muted-foreground"
                   }`}
                 >
@@ -1520,7 +1854,7 @@ export default function StartPage() {
                   onClick={() => setVerificationData((p) => ({ ...p, isNewPrescription: true }))}
                   className={`flex-1 px-3 py-2 text-xs rounded-md border transition-colors ${
                     verificationData.isNewPrescription
-                      ? "border-[#7C3AED] text-[#7C3AED] bg-[#7C3AED]/5"
+                      ? "border-ring text-brand-secondary bg-brand-secondary/5"
                       : "border-border text-muted-foreground"
                   }`}
                 >
@@ -1530,7 +1864,7 @@ export default function StartPage() {
 
               {!verificationData.isNewPrescription && (
                 <>
-                  <label className="flex items-center justify-center gap-2 w-full h-20 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-[#7C3AED] transition-colors mb-3">
+                  <label className="flex items-center justify-center gap-2 w-full h-20 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-ring transition-colors mb-3">
                     <input
                       type="file"
                       accept="image/*"
@@ -1538,7 +1872,7 @@ export default function StartPage() {
                       onChange={handleRxUpload}
                     />
                     {isScanningRx ? (
-                      <span className="text-sm text-[#7C3AED] font-medium">Scanning prescription...</span>
+                      <span className="text-sm text-brand-secondary font-medium">Scanning prescription...</span>
                     ) : verificationData.previousRxUploaded ? (
                       <span className="text-sm text-emerald-600 font-medium">Prescription Scanned — tap to replace</span>
                     ) : (
@@ -1563,8 +1897,8 @@ export default function StartPage() {
                       onChange={(e) =>
                         setVerificationData((p) => ({ ...p, previousPrescriber: e.target.value }))
                       }
-                      placeholder="Provider name, practice, or clinic"
-                      className="w-full px-4 py-3 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                      placeholder="Provider name, practice, or practice"
+                      className="w-full px-4 py-3 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                     />
                   </div>
                 </>
@@ -1574,7 +1908,7 @@ export default function StartPage() {
             <Button
               onClick={handleVerificationSubmit}
               disabled={!verificationData.govIdUploaded || isScanningId || isScanningRx}
-              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
             >
               Continue
               <ChevronRight className="w-4 h-4 ml-1" />
@@ -1588,14 +1922,14 @@ export default function StartPage() {
             {videoState === "idle" && (
               <div className="text-center">
                 <div className="glass-card p-6 mb-4">
-                  <Video className="w-8 h-8 text-[#7C3AED] mx-auto mb-3" />
+                  <Video className="w-8 h-8 text-brand-secondary mx-auto mb-3" />
                   <p className="text-sm text-foreground mb-1 font-medium">Video Verification</p>
                   <p className="text-xs text-muted-foreground mb-4">
                     You'll answer 5 questions on camera as part of the verification process. A face photo will be captured for identity confirmation.
                   </p>
                   <Button
                     onClick={startVideo}
-                    className="bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide px-8"
+                    className="bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)] px-8"
                   >
                     <Video className="w-4 h-4 mr-2" />
                     Start Recording
@@ -1639,7 +1973,7 @@ export default function StartPage() {
                     {VIDEO_QUESTIONS[currentQuestion]}
                   </p>
                   {liveTranscript && (
-                    <p className="text-xs text-[#7C3AED]/70 mt-3 italic">
+                    <p className="text-xs text-brand-secondary/70 mt-3 italic">
                       {liveTranscript}...
                     </p>
                   )}
@@ -1647,7 +1981,7 @@ export default function StartPage() {
 
                 <Button
                   onClick={nextVideoQuestion}
-                  className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
+                  className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
                 >
                   {currentQuestion < VIDEO_QUESTIONS.length - 1 ? (
                     <>
@@ -1691,14 +2025,14 @@ export default function StartPage() {
                   setValidationErrors((prev) => ({ ...prev, pharmacy: undefined as any }));
                 }}
                 placeholder="e.g., CVS Pharmacy, 123 Main St, Miami FL"
-                className={`w-full px-4 py-3 rounded-md border ${validationErrors.pharmacy ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]`}
+                className={`w-full px-4 py-3 rounded-md border ${validationErrors.pharmacy ? "border-red-400" : "border-border"} bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring`}
               />
               {renderFieldError("pharmacy")}
             </div>
             <Button
               onClick={handlePharmacySubmit}
               disabled={!pharmacyLocation.trim() || isValidating}
-              className="w-full bg-[#5B21B6] hover:bg-[#4C1D95] text-white h-11 text-xs font-medium tracking-wide"
+              className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
             >
               {isValidating ? (
                 <>
@@ -1707,7 +2041,7 @@ export default function StartPage() {
                 </>
               ) : (
                 <>
-                  Submit for Physician Review
+                  Submit for Provider Review
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </>
               )}
@@ -1718,16 +2052,16 @@ export default function StartPage() {
       case "approved":
         return (
           <div className="mt-4 glass-card p-5 text-center">
-            <Loader2 className="w-6 h-6 text-[#7C3AED] animate-spin mx-auto mb-3" />
-            <p className="text-sm text-foreground font-medium">Physician review in progress</p>
-            <p className="text-xs text-muted-foreground mt-1">This typically takes 3 to 8 minutes. The physician may decline if criteria are not met.</p>
+            <Loader2 className="w-6 h-6 text-brand-secondary animate-spin mx-auto mb-3" />
+            <p className="text-sm text-foreground font-medium">Provider review in progress</p>
+            <p className="text-xs text-muted-foreground mt-1">This typically takes 3 to 8 minutes. The provider may decline if criteria are not met.</p>
           </div>
         );
 
       case "pharmacy":
         return (
           <div className="mt-4 glass-card p-5 text-center">
-            <Loader2 className="w-6 h-6 text-[#2DD4BF] animate-spin mx-auto mb-3" />
+            <Loader2 className="w-6 h-6 text-brand-secondary animate-spin mx-auto mb-3" />
             <p className="text-sm text-foreground font-medium">Sending to pharmacy</p>
             <p className="text-xs text-muted-foreground mt-1">Almost there...</p>
           </div>
@@ -1749,7 +2083,7 @@ export default function StartPage() {
       hasGreeted.current = true;
       const greeting =
         userRole === "provider"
-          ? "Welcome back. I'm your clinical assistant — I can help you review patient cases, check your queue, look up prescriptions, and manage your practice. What would you like to do?"
+          ? "Welcome back. I'm your practiceal assistant — I can help you review patient cases, check your queue, look up prescriptions, and manage your practice. What would you like to do?"
           : "Welcome to the admin console. I can help you with platform stats, client lookups, prescription volumes, revenue data, and compliance. What would you like to know?";
       addSystemMessage(greeting);
     }
@@ -1766,12 +2100,9 @@ export default function StartPage() {
       <AppShell>
         <div className="flex flex-col h-[calc(100vh-56px)] lg:h-screen">
           {/* Header */}
-          <div className="px-6 lg:px-8 py-4 border-b border-border bg-background">
+          <div className="px-6 lg:px-8 py-4 border-b border-border bg-background/80 backdrop-blur-sm">
             <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: "#5B21B6" }}
-              >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-brand shadow-[0_4px_14px_rgba(91,33,182,0.3)]">
                 {userRole === "provider" ? (
                   <Stethoscope className="w-4 h-4 text-white" />
                 ) : (
@@ -1780,10 +2111,10 @@ export default function StartPage() {
               </div>
               <div>
                 <p className="text-sm font-medium text-foreground">
-                  {userRole === "provider" ? "Clinical Assistant" : "Platform Intelligence"}
+                  {userRole === "provider" ? "Practiceal Assistant" : "Platform Intelligence"}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Powered by AI
+                <p className="text-[11px] text-muted-foreground tracking-wide">
+                  ScriptsXO
                 </p>
               </div>
             </div>
@@ -1799,12 +2130,12 @@ export default function StartPage() {
                   <div
                     className={`max-w-[85%] lg:max-w-[70%] rounded-2xl px-5 py-3.5 ${
                       msg.role === "user"
-                        ? "bg-[#7C3AED] text-white rounded-br-md"
-                        : "bg-muted/50 text-foreground rounded-bl-md"
+                        ? "bg-brand-secondary text-white rounded-br-md shadow-[0_4px_14px_rgba(124,58,237,0.25)]"
+                        : "bg-muted/60 text-foreground rounded-bl-md border border-border/50"
                     }`}
                   >
                     {msg.role === "system" && (
-                      <p className="text-[10px] tracking-[0.15em] uppercase text-[#7C3AED] font-medium mb-1.5">
+                      <p className="text-[10px] tracking-[0.15em] uppercase text-brand-secondary font-medium mb-1.5">
                         ScriptsXO
                       </p>
                     )}
@@ -1816,11 +2147,11 @@ export default function StartPage() {
 
             {isTyping && (
               <div className="flex justify-start">
-                <div className="bg-muted/50 rounded-2xl rounded-bl-md px-5 py-3.5">
+                <div className="bg-muted/60 rounded-2xl rounded-bl-md px-5 py-3.5 border border-border/50">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-[#7C3AED]/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <div className="w-2 h-2 rounded-full bg-[#7C3AED]/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <div className="w-2 h-2 rounded-full bg-[#7C3AED]/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    <div className="w-2 h-2 rounded-full bg-brand-secondary/50 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <div className="w-2 h-2 rounded-full bg-brand-secondary/50 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <div className="w-2 h-2 rounded-full bg-brand-secondary/50 animate-bounce" style={{ animationDelay: "300ms" }} />
                   </div>
                 </div>
               </div>
@@ -1830,7 +2161,7 @@ export default function StartPage() {
           </div>
 
           {/* Input bar */}
-          <div className="border-t border-border bg-background px-4 lg:px-8 py-4">
+          <div className="border-t border-border bg-background/80 backdrop-blur-sm px-4 lg:px-8 py-4">
             <div className="flex items-center gap-3 max-w-[800px]">
               <input
                 ref={inputRef}
@@ -1843,13 +2174,13 @@ export default function StartPage() {
                     ? "Ask about patients, prescriptions, or your queue..."
                     : "Ask about platform stats, clients, or prescriptions..."
                 }
-                className="flex-1 px-4 py-3 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                className="flex-1 px-4 py-3 rounded-xl border border-border bg-card/80 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring transition-colors"
               />
               <Button
                 onClick={handleSend}
                 disabled={!inputValue.trim()}
                 size="icon"
-                className="h-11 w-11 rounded-xl bg-[#7C3AED] text-white hover:bg-[#6D28D9] disabled:opacity-30"
+                className="h-11 w-11 rounded-xl bg-brand-secondary text-white hover:bg-brand-secondary-hover disabled:opacity-30 shadow-[0_4px_14px_rgba(124,58,237,0.3)]"
               >
                 <Send size={16} />
               </Button>
@@ -1865,39 +2196,42 @@ export default function StartPage() {
     <AppShell>
       <div className="flex h-[calc(100vh-56px)] lg:h-screen">
         {/* ===== Left: Step Tracker ===== */}
-        <div className="hidden lg:flex flex-col w-[220px] border-r border-border p-5" style={{ background: "rgba(124,58,237,0.02)" }}>
-          <p className="text-[10px] tracking-[0.2em] uppercase font-medium text-[#7C3AED] mb-4">
+        <div className="hidden lg:flex flex-col w-[220px] border-r border-border p-5 bg-gradient-to-b from-brand-muted/30 to-transparent">
+          <p className="text-[10px] tracking-[0.2em] uppercase font-medium text-brand-secondary mb-5">
             Progress
           </p>
-          <div className="space-y-1">
+          <div className="relative space-y-0">
+            {/* Connecting line */}
+            <div className="absolute left-[11px] top-3 bottom-3 w-px bg-gradient-to-b from-brand/20 via-border to-transparent pointer-events-none" />
+
             {STEPS.map((step) => {
               const isCompleted = completedSteps.has(step.id);
               const isCurrent = currentStep === step.id;
               const isCompletionStep = COMPLETION_STEPS.has(step.id);
-              // Completion steps (Approved, Send to Pharmacy, Fulfilled) stay dimmed until reached
               const isDimmed = isCompletionStep && !isCompleted && !isCurrent;
 
               return (
                 <div
                   key={step.id}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] transition-all ${
+                  className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[12px] transition-all duration-200 ${
                     isCurrent
-                      ? "bg-[#7C3AED]/5 text-[#7C3AED] font-medium"
+                      ? "bg-brand/8 text-brand-secondary font-medium border-l-2 border-brand-secondary"
                       : isCompleted
                         ? "text-emerald-600"
                         : isDimmed
-                          ? "text-muted-foreground/40"
-                          : "text-muted-foreground"
+                          ? "text-muted-foreground/35"
+                          : "text-muted-foreground hover:text-foreground"
                   }`}
+                  style={isCurrent ? { background: "rgba(91,33,182,0.06)" } : undefined}
                 >
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
                       isCompleted
-                        ? "bg-emerald-600 text-white"
+                        ? "bg-emerald-600 text-white shadow-[0_2px_8px_rgba(5,150,105,0.3)]"
                         : isCurrent
-                          ? "bg-[#7C3AED] text-white"
+                          ? "bg-brand-secondary text-white shadow-[0_2px_10px_rgba(124,58,237,0.4)]"
                           : isDimmed
-                            ? "bg-muted/50 text-muted-foreground/30"
+                            ? "bg-muted/40 text-muted-foreground/30"
                             : "bg-muted text-muted-foreground"
                     }`}
                   >
@@ -1918,10 +2252,10 @@ export default function StartPage() {
             <div className="mt-6 pt-4 border-t border-border">
               <p className="text-[10px] tracking-[0.15em] uppercase text-muted-foreground mb-2">Ordering by</p>
               <div className="flex items-center gap-2 text-xs text-foreground">
-                {(ordererRole === "physician" || ordererRole === "nurse") ? (
-                  <Stethoscope className="w-3.5 h-3.5 text-[#7C3AED]" />
+                {(ordererRole === "provider" || ordererRole === "nurse") ? (
+                  <Stethoscope className="w-3.5 h-3.5 text-brand-secondary" />
                 ) : (
-                  <Users className="w-3.5 h-3.5 text-[#7C3AED]" />
+                  <Users className="w-3.5 h-3.5 text-brand-secondary" />
                 )}
                 <span>
                   {proxyInfo.firstName} {proxyInfo.lastName}
@@ -1938,7 +2272,7 @@ export default function StartPage() {
         {/* ===== Right: Chat Area ===== */}
         <div className="flex-1 flex flex-col">
           {/* Mobile step indicator */}
-          <div className="lg:hidden flex items-center gap-2 px-4 py-3 border-b border-border bg-background overflow-x-auto">
+          <div className="lg:hidden flex items-center gap-2 px-4 py-3 border-b border-border bg-background/90 backdrop-blur-sm overflow-x-auto">
             {STEPS.map((step) => {
               const isCompleted = completedSteps.has(step.id);
               const isCurrent = currentStep === step.id;
@@ -1947,13 +2281,13 @@ export default function StartPage() {
               return (
                 <div
                   key={step.id}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
                     isCompleted
-                      ? "bg-emerald-600 text-white"
+                      ? "bg-emerald-600 text-white shadow-[0_2px_6px_rgba(5,150,105,0.3)]"
                       : isCurrent
-                        ? "bg-[#7C3AED] text-white"
+                        ? "bg-brand-secondary text-white shadow-[0_2px_8px_rgba(124,58,237,0.4)]"
                         : isDimmed
-                          ? "bg-muted/50 text-muted-foreground/30"
+                          ? "bg-muted/40 text-muted-foreground/30"
                           : "bg-muted text-muted-foreground"
                   }`}
                 >
@@ -1969,23 +2303,25 @@ export default function StartPage() {
 
           {/* Welcome landing OR Chat messages */}
           {currentStep === "welcome" ? (
-            <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-              <div className="max-w-[680px]">
-                {/* Eyebrow */}
-                <p className="eyebrow text-[10px] tracking-[0.2em] uppercase font-medium text-[#7C3AED] mb-2">
-                  New Intake
-                </p>
+            <div className="flex-1 overflow-y-auto">
+              {/* Welcome header */}
+              <div className="px-6 lg:px-10 pt-10 pb-8 border-b border-[var(--border)]">
+                <div className="max-w-[680px]">
+                  <p className="text-[10px] tracking-[0.25em] uppercase font-medium text-brand-secondary mb-3">
+                    ScriptsXO &mdash; New Intake
+                  </p>
+                  <h1 className="text-3xl lg:text-4xl font-medium text-foreground mb-3 leading-tight" style={{ fontFamily: "var(--font-playfair)" }}>
+                    Let&apos;s get started
+                  </h1>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    This process takes about 5 minutes. A licensed provider will review your request before any prescription is issued.
+                  </p>
+                </div>
+              </div>
 
-                {/* Heading */}
-                <h1 className="text-3xl lg:text-4xl font-medium text-foreground mb-2" style={{ fontFamily: "var(--font-playfair)" }}>
-                  Let&apos;s get started
-                </h1>
-                <p className="text-sm text-muted-foreground mb-5">
-                  This process takes about 5 minutes. A licensed provider will review your request.
-                </p>
-
+              <div className="p-6 lg:p-8 max-w-[680px]">
                 {/* 4-step overview */}
-                <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="grid grid-cols-2 gap-3 mb-8">
                   {[
                     { num: "01", title: "Medical History", desc: "Share your health background" },
                     { num: "02", title: "Symptoms", desc: "Describe what you need" },
@@ -1993,7 +2329,7 @@ export default function StartPage() {
                     { num: "04", title: "Review", desc: "Provider reviews your request" },
                   ].map((item) => (
                     <div key={item.num} className="glass-card p-4">
-                      <p className="text-[10px] tracking-[0.15em] uppercase font-medium text-[#7C3AED] mb-1.5">
+                      <p className="text-[10px] tracking-[0.15em] uppercase font-medium text-brand-secondary mb-1.5">
                         {item.num}
                       </p>
                       <p className="text-sm font-medium text-foreground mb-0.5">{item.title}</p>
@@ -2003,7 +2339,7 @@ export default function StartPage() {
                 </div>
 
                 {/* Choose Your Path */}
-                <p className="eyebrow text-[10px] tracking-[0.2em] uppercase font-medium text-[#7C3AED] mb-3">
+                <p className="eyebrow text-brand-secondary mb-4">
                   Choose Your Path
                 </p>
 
@@ -2011,16 +2347,16 @@ export default function StartPage() {
                   {/* New Client card */}
                   <button
                     onClick={handleWelcomeStart}
-                    className="glass-card p-6 text-left group hover:border-[#7C3AED]/30 transition-all duration-200"
+                    className="glass-card p-6 text-left group hover:border-brand-secondary/30 hover:shadow-[0_8px_30px_rgba(124,58,237,0.12)] transition-all duration-300"
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 bg-[#5B21B6]">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 bg-brand shadow-[0_4px_14px_rgba(91,33,182,0.35)]">
                       <User className="w-5 h-5 text-white" />
                     </div>
                     <p className="text-sm font-medium text-foreground mb-1">New Client</p>
-                    <p className="text-xs text-muted-foreground mb-4">
+                    <p className="text-xs text-muted-foreground mb-5">
                       First time getting a prescription through ScriptsXO
                     </p>
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#7C3AED] group-hover:gap-2.5 transition-all">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-secondary group-hover:gap-3 transition-all duration-200">
                       Begin Intake <ArrowRight className="w-3.5 h-3.5" />
                     </span>
                   </button>
@@ -2028,16 +2364,16 @@ export default function StartPage() {
                   {/* Returning Client card */}
                   <button
                     onClick={handleWelcomeStart}
-                    className="glass-card p-6 text-left group hover:border-[#7C3AED]/30 transition-all duration-200"
+                    className="glass-card p-6 text-left group hover:border-brand-secondary/30 hover:shadow-[0_8px_30px_rgba(124,58,237,0.12)] transition-all duration-300"
                   >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 bg-[#5B21B6]">
+                    <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 bg-brand shadow-[0_4px_14px_rgba(91,33,182,0.35)]">
                       <FileText className="w-5 h-5 text-white" />
                     </div>
                     <p className="text-sm font-medium text-foreground mb-1">Returning Client</p>
-                    <p className="text-xs text-muted-foreground mb-4">
+                    <p className="text-xs text-muted-foreground mb-5">
                       You&apos;ve ordered through ScriptsXO before
                     </p>
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#7C3AED] group-hover:gap-2.5 transition-all">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-secondary group-hover:gap-3 transition-all duration-200">
                       Describe Symptoms <ArrowRight className="w-3.5 h-3.5" />
                     </span>
                   </button>
@@ -2056,12 +2392,12 @@ export default function StartPage() {
                       <div
                         className={`max-w-[85%] lg:max-w-[70%] rounded-2xl px-5 py-3.5 ${
                           msg.role === "user"
-                            ? "bg-[#7C3AED] text-white rounded-br-md"
-                            : "bg-muted/50 text-foreground rounded-bl-md"
+                            ? "bg-brand-secondary text-white rounded-br-md shadow-[0_4px_14px_rgba(124,58,237,0.25)]"
+                            : "bg-muted/60 text-foreground rounded-bl-md border border-border/50"
                         }`}
                       >
                         {msg.role === "system" && (
-                          <p className="text-[10px] tracking-[0.15em] uppercase text-[#7C3AED] font-medium mb-1.5">
+                          <p className="text-[10px] tracking-[0.15em] uppercase text-brand-secondary font-medium mb-1.5">
                             ScriptsXO
                           </p>
                         )}
@@ -2081,11 +2417,11 @@ export default function StartPage() {
 
                 {isTyping && (
                   <div className="flex justify-start">
-                    <div className="bg-muted/50 rounded-2xl rounded-bl-md px-5 py-3.5">
+                    <div className="bg-muted/60 rounded-2xl rounded-bl-md px-5 py-3.5 border border-border/50">
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-[#7C3AED]/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <div className="w-2 h-2 rounded-full bg-[#7C3AED]/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <div className="w-2 h-2 rounded-full bg-[#7C3AED]/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                        <div className="w-2 h-2 rounded-full bg-brand-secondary/50 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <div className="w-2 h-2 rounded-full bg-brand-secondary/50 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <div className="w-2 h-2 rounded-full bg-brand-secondary/50 animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
                     </div>
                   </div>
@@ -2095,7 +2431,7 @@ export default function StartPage() {
               </div>
 
               {/* Input bar */}
-              <div className="border-t border-border bg-background px-4 lg:px-8 py-4">
+              <div className="border-t border-border bg-background/80 backdrop-blur-sm px-4 lg:px-8 py-4">
                 <div className="flex items-center gap-3 max-w-[800px]">
                   <input
                     ref={inputRef}
@@ -2104,13 +2440,13 @@ export default function StartPage() {
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSend()}
                     placeholder="Ask a question at any time..."
-                    className="flex-1 px-4 py-3 rounded-xl border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 focus:border-[#7C3AED]"
+                    className="flex-1 px-4 py-3 rounded-xl border border-border bg-card/80 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring transition-colors"
                   />
                   <Button
                     onClick={handleSend}
                     disabled={!inputValue.trim()}
                     size="icon"
-                    className="h-11 w-11 rounded-xl bg-[#7C3AED] text-white hover:bg-[#6D28D9] disabled:opacity-30"
+                    className="h-11 w-11 rounded-xl bg-brand-secondary text-white hover:bg-brand-secondary-hover disabled:opacity-30 shadow-[0_4px_14px_rgba(124,58,237,0.3)]"
                   >
                     <Send size={16} />
                   </Button>
@@ -2121,5 +2457,13 @@ export default function StartPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+export default function StartPage() {
+  return (
+    <Suspense fallback={null}>
+      <StartPageInner />
+    </Suspense>
   );
 }

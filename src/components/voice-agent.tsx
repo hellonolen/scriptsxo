@@ -2,9 +2,10 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Mic, MicOff, Volume2, Loader2, X } from "lucide-react";
-import { useAction } from "convex/react";
-import { api } from "../../convex/_generated/api";
 import { getSessionCookie } from "@/lib/auth";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
 
 /* ─── Types ─── */
 
@@ -59,8 +60,6 @@ export function VoiceAgent() {
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
   const historyRef = useRef<ConversationEntry[]>([]);
 
-  const chatAction = useAction(api.actions.aiChat.chat);
-
   /* ─── Check browser support ─── */
 
   useEffect(() => {
@@ -114,7 +113,7 @@ export function VoiceAgent() {
     window.speechSynthesis.speak(utterance);
   }, []);
 
-  /* ─── Send to Gemini ─── */
+  /* ─── Send to AI ─── */
 
   const sendToAI = useCallback(
     async (text: string) => {
@@ -127,20 +126,32 @@ export function VoiceAgent() {
       historyRef.current.push({ role: "user", content: text });
 
       try {
-        const response = await chatAction({
-          message: text,
-          conversationHistory: historyRef.current.slice(0, -1),
-          patientEmail: email,
-          intakeId: undefined,
+        const token =
+          typeof document !== "undefined"
+            ? document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/)?.[1]
+            : null;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${decodeURIComponent(token)}`;
+
+        const res = await fetch(`${API_BASE}/ai/chat`, {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            message: text,
+            conversationHistory: historyRef.current.slice(0, -1),
+            patientEmail: email,
+            intakeId: undefined,
+          }),
         });
 
-        historyRef.current.push({
-          role: "assistant",
-          content: response.content,
-        });
+        const json = await res.json() as { success: boolean; data?: { content: string }; error?: string };
+        if (!json.success) throw new Error(json.error ?? "AI error");
 
-        setLastResponse(response.content);
-        speak(response.content);
+        const content = json.data?.content ?? "";
+        historyRef.current.push({ role: "assistant", content });
+        setLastResponse(content);
+        speak(content);
       } catch (err) {
         const msg =
           err instanceof Error ? err.message : "Something went wrong";
@@ -154,7 +165,7 @@ export function VoiceAgent() {
         }
       }
     },
-    [chatAction, speak]
+    [speak]
   );
 
   /* ─── Start listening ─── */

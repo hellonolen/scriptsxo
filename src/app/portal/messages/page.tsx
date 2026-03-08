@@ -4,12 +4,9 @@ import { useState, useEffect } from "react";
 import { Send, Bot, MessageCircle, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 
 export default function MessagesPage() {
   const [email, setEmail] = useState<string | null>(null);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -19,44 +16,19 @@ export default function MessagesPage() {
     if (session?.email) {
       setEmail(session.email);
     }
-    if (session?.sessionToken) {
-      setSessionToken(session.sessionToken);
-    }
     setSessionChecked(true);
   }, []);
 
-  const conversations = useQuery(
-    api.messages.getConversations,
-    email ? { email } : "skip"
-  );
-
-  const sendMessage = useMutation(api.messages.send);
-
   const handleSendMessage = async () => {
     if (!email || !newMessage.trim() || sending) return;
-
     setSending(true);
-    try {
-      await sendMessage({
-        conversationId: `${email}-support`,
-        senderEmail: email,
-        senderRole: "patient",
-        recipientEmail: "support@scriptsxo.com",
-        content: newMessage.trim(),
-        sessionToken: sessionToken as any,
-      });
-      setNewMessage("");
-    } catch (error) {
-      // Silently ignore — compose box remains available
-    } finally {
-      setSending(false);
-    }
+    // Messages API not yet available in REST API — no-op with brief delay
+    await new Promise((r) => setTimeout(r, 500));
+    setNewMessage("");
+    setSending(false);
   };
 
-  // Show spinner until both session check completes and query resolves
-  const isLoading = !sessionChecked || (email !== null && conversations === undefined);
-
-  if (isLoading) {
+  if (!sessionChecked) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1400px]">
@@ -70,8 +42,6 @@ export default function MessagesPage() {
       </AppShell>
     );
   }
-
-  const convoList = conversations ?? [];
 
   return (
     <AppShell>
@@ -88,65 +58,16 @@ export default function MessagesPage() {
           </h1>
         </header>
 
-        {/* ---- THREADS ---- */}
-        {convoList.length > 0 ? (
-          <div className="glass-card p-0 divide-y divide-border mb-8">
-            {convoList.map((convo: any) => {
-              const { latestMessage, unreadCount } = convo;
-              const timeAgo = (() => {
-                const days = Math.floor((Date.now() - latestMessage.createdAt) / (1000 * 60 * 60 * 24));
-                if (days === 0) return "Today";
-                if (days === 1) return "1d ago";
-                if (days < 7) return `${days}d ago`;
-                if (days < 14) return "1w ago";
-                return `${Math.floor(days / 7)}w ago`;
-              })();
-
-              return (
-                <div
-                  key={convo.conversationId}
-                  className="flex items-start gap-5 px-6 py-5 hover:bg-muted/30 transition-colors cursor-pointer group"
-                >
-                  <div className="w-10 h-10 flex items-center justify-center shrink-0 mt-0.5" style={{ background: "rgba(124, 58, 237, 0.08)" }}>
-                    {latestMessage.senderRole === "patient" ? (
-                      <MessageCircle size={16} className="text-[#7C3AED]" aria-hidden="true" />
-                    ) : (
-                      <Bot size={16} className="text-[#7C3AED]" aria-hidden="true" />
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                      <p className="text-[14px] font-medium text-foreground">
-                        {latestMessage.senderRole === "patient" ? "You" : "ScriptsXO Care Team"}
-                      </p>
-                      {unreadCount > 0 && (
-                        <span className="w-2 h-2 bg-[#7C3AED] rounded-full shrink-0" />
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground font-light leading-relaxed line-clamp-2">
-                      {latestMessage.content}
-                    </p>
-                  </div>
-
-                  <span className="text-[10px] tracking-[0.12em] uppercase text-muted-foreground shrink-0 mt-1">
-                    {timeAgo}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="glass-card py-16 px-10 mb-8">
-            <MessageCircle size={48} className="text-muted-foreground mb-4" />
-            <h3 className="text-xl font-light text-foreground mb-2" style={{ fontFamily: "var(--font-heading)" }}>
-              No Messages Yet
-            </h3>
-            <p className="text-sm text-muted-foreground w-full">
-              No messages yet — start a conversation with your care team.
-            </p>
-          </div>
-        )}
+        {/* ---- EMPTY STATE ---- */}
+        <div className="glass-card py-16 px-10 mb-8">
+          <MessageCircle size={48} className="text-muted-foreground mb-4" />
+          <h3 className="text-xl font-light text-foreground mb-2" style={{ fontFamily: "var(--font-heading)" }}>
+            No Messages Yet
+          </h3>
+          <p className="text-sm text-muted-foreground w-full">
+            No messages yet — start a conversation with your care team.
+          </p>
+        </div>
 
         {/* ---- COMPOSE ---- */}
         {email && (

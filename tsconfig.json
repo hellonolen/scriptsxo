@@ -37,5 +37,5 @@
     }
   },
   "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "convex", "scripts", "tests", "archive"]
+  "exclude": ["node_modules", "convex", "scripts", "tests", "archive", "src/app/_archived"]
 }

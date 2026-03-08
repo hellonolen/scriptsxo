@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { useState, useEffect } from "react";
+import { patients as patientsApi } from "@/lib/api";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,36 +40,33 @@ function initials(email: string) {
   return email[0]?.toUpperCase() ?? "?";
 }
 
-// ── Extended mock data for the side panel ───────────────────────────────────
-const MOCK_DETAILS: Record<string, {
-  firstName: string;
-  lastName: string;
-  phone: string;
-  dob: string;
-  rxCount: number;
-  consultCount: number;
-  lastVisit: string;
-  joinDate: string;
-  conditions: string[];
-  recentRx: { name: string; date: string; status: string }[];
-}> = {};
-
 export default function AdminClientsPage() {
-  const patientsResult = useQuery(api.patients.list, {
-    paginationOpts: { numItems: 100, cursor: null },
-  });
-
+  const [patientList, setPatientList] = useState<any[] | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const patients = patientsResult?.page ?? [];
+  useEffect(() => {
+    // Fetch all patients via members list and filter by role
+    import("@/lib/api").then(({ members }) => {
+      members.getAll()
+        .then((data) => {
+          const pts = Array.isArray(data)
+            ? data.filter((m: any) => m.role === "patient")
+            : [];
+          setPatientList(pts);
+        })
+        .catch(() => setPatientList([]));
+    });
+  }, []);
 
-  const filteredPatients = patients.filter((p) => {
+  const patients = patientList ?? [];
+
+  const filteredPatients = patients.filter((p: any) => {
     const q = search.toLowerCase();
     const matchSearch =
       !search ||
-      p.email.toLowerCase().includes(q) ||
+      (p.email ?? "").toLowerCase().includes(q) ||
       (p.state ?? "").toLowerCase().includes(q);
     const matchStatus =
       statusFilter === "all" || p.idVerificationStatus === statusFilter;
@@ -79,18 +75,18 @@ export default function AdminClientsPage() {
 
   const counts = {
     total: patients.length,
-    verified: patients.filter((p) => p.idVerificationStatus === "verified").length,
-    pending: patients.filter((p) => p.idVerificationStatus === "pending").length,
-    rejected: patients.filter((p) => p.idVerificationStatus === "rejected").length,
+    verified: patients.filter((p: any) => p.idVerificationStatus === "verified").length,
+    pending: patients.filter((p: any) => p.idVerificationStatus === "pending").length,
+    rejected: patients.filter((p: any) => p.idVerificationStatus === "rejected").length,
   };
 
-  const selectedPatient = patients.find((p) => p._id === selectedId) ?? null;
+  const selectedPatient = patients.find((p: any) => p._id === selectedId) ?? null;
 
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1600px]">
 
-        {/* ── Header ── */}
+        {/* Header */}
         <header className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
@@ -108,7 +104,7 @@ export default function AdminClientsPage() {
           </div>
         </header>
 
-        {/* ── Stats Row ── */}
+        {/* Stats Row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
           {[
             { label: "Total", value: counts.total, icon: Users, color: "#5B21B6", filter: "all" },
@@ -131,7 +127,7 @@ export default function AdminClientsPage() {
           ))}
         </div>
 
-        {/* ── Filter Bar ── */}
+        {/* Filter Bar */}
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -158,7 +154,7 @@ export default function AdminClientsPage() {
           </div>
         </div>
 
-        {/* ── Main Layout: Table + Detail Panel ── */}
+        {/* Main Layout: Table + Detail Panel */}
         <div className={`flex gap-5 ${selectedPatient ? "items-start" : ""}`}>
 
           {/* Table */}
@@ -173,7 +169,7 @@ export default function AdminClientsPage() {
             </div>
 
             {/* Loading */}
-            {!patientsResult && (
+            {patientList === undefined && (
               <div className="divide-y divide-border">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="grid md:grid-cols-[2fr_100px_150px_80px_120px] gap-4 items-center px-5 py-4">
@@ -194,7 +190,7 @@ export default function AdminClientsPage() {
             )}
 
             {/* Empty */}
-            {patientsResult && filteredPatients.length === 0 && (
+            {patientList !== undefined && filteredPatients.length === 0 && (
               <div className="p-16 text-center text-muted-foreground">
                 <Users size={32} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">No clients found.</p>
@@ -203,7 +199,7 @@ export default function AdminClientsPage() {
 
             {/* Rows */}
             <div className="divide-y divide-border">
-              {filteredPatients.map((patient) => (
+              {filteredPatients.map((patient: any) => (
                 <div
                   key={patient._id}
                   onClick={() => setSelectedId(selectedId === patient._id ? null : patient._id)}
@@ -218,11 +214,11 @@ export default function AdminClientsPage() {
                       className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold text-white shrink-0"
                       style={{ background: "#5B21B6" }}
                     >
-                      {initials(patient.email)}
+                      {initials(patient.email ?? "")}
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">
-                        {patient.email.split("@")[0]}
+                        {(patient.email ?? "").split("@")[0]}
                       </p>
                       <p className="text-[11px] text-muted-foreground truncate">{patient.email}</p>
                     </div>
@@ -235,9 +231,9 @@ export default function AdminClientsPage() {
                   </div>
 
                   {/* Verification */}
-                  <Badge variant={verificationVariant(patient.idVerificationStatus)}>
+                  <Badge variant={verificationVariant(patient.idVerificationStatus ?? "pending")}>
                     <Shield size={10} />
-                    {patient.idVerificationStatus}
+                    {patient.idVerificationStatus ?? "pending"}
                   </Badge>
 
                   {/* Rx count placeholder */}
@@ -265,7 +261,7 @@ export default function AdminClientsPage() {
             </div>
           </div>
 
-          {/* ── Detail Side Panel ── */}
+          {/* Detail Side Panel */}
           {selectedPatient && (
             <div className="w-80 shrink-0 bg-card border border-border rounded-xl overflow-hidden animate-in slide-in-from-right-4 duration-200">
               {/* Panel Header */}
@@ -275,10 +271,10 @@ export default function AdminClientsPage() {
                     className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold text-white"
                     style={{ background: "#5B21B6" }}
                   >
-                    {initials(selectedPatient.email)}
+                    {initials(selectedPatient.email ?? "")}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{selectedPatient.email.split("@")[0]}</p>
+                    <p className="text-sm font-medium text-foreground">{(selectedPatient.email ?? "").split("@")[0]}</p>
                     <p className="text-[10px] text-muted-foreground">{selectedPatient.email}</p>
                   </div>
                 </div>
@@ -308,9 +304,9 @@ export default function AdminClientsPage() {
               <div className="p-4 space-y-3">
                 <p className="text-[10px] font-medium tracking-widest uppercase text-muted-foreground">Account</p>
                 {[
-                  { icon: Shield, label: "ID Verification", value: selectedPatient.idVerificationStatus },
+                  { icon: Shield, label: "ID Verification", value: selectedPatient.idVerificationStatus ?? "pending" },
                   { icon: MapPin, label: "State", value: selectedPatient.state ?? "Unknown" },
-                  { icon: Mail, label: "Email", value: selectedPatient.email },
+                  { icon: Mail, label: "Email", value: selectedPatient.email ?? "" },
                 ].map(({ icon: Icon, label, value }) => (
                   <div key={label} className="flex items-center gap-2.5 text-sm">
                     <Icon size={13} className="text-muted-foreground shrink-0" />

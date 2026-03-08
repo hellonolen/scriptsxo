@@ -1,11 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Send, Bot, MessageCircle, Stethoscope, Loader2, CheckCheck } from "lucide-react";
+import { Send, Bot, MessageCircle, Loader2, CheckCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+
+function getToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function makeHeaders(): Record<string, string> {
+  const token = getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
 
 const MOCK_THREADS = [
     {
@@ -34,6 +48,22 @@ const MOCK_THREADS = [
     },
 ];
 
+interface ConversationThread {
+  id?: string;
+  conversationId?: string;
+  sender?: string;
+  role?: string;
+  preview?: string;
+  time?: string;
+  unread?: boolean;
+  unreadCount?: number;
+  latestMessage?: {
+    senderRole?: string;
+    content?: string;
+    createdAt?: number;
+  };
+}
+
 function ThreadIcon({ role }: { role: string }) {
     const base = "w-10 h-10 flex items-center justify-center shrink-0 mt-0.5 rounded-full";
     if (role === "provider" || role === "support") return (
@@ -55,37 +85,60 @@ function ThreadIcon({ role }: { role: string }) {
 
 export default function DashboardMessagesPage() {
     const [email, setEmail] = useState<string | null>(null);
-    const [sessionToken, setSessionToken] = useState<string | null>(null);
     const [sessionChecked, setSessionChecked] = useState(false);
     const [newMessage, setNewMessage] = useState("");
     const [sending, setSending] = useState(false);
     const [sent, setSent] = useState(false);
+    const [conversations, setConversations] = useState<ConversationThread[] | null>(null);
+    const [loadingConversations, setLoadingConversations] = useState(false);
 
     useEffect(() => {
         const session = getSessionCookie();
         if (session?.email) setEmail(session.email);
-        if (session?.sessionToken) setSessionToken(session.sessionToken);
         setSessionChecked(true);
     }, []);
 
-    const conversations = useQuery(api.messages.getConversations, email ? { email } : "skip");
-    const sendMessage = useMutation(api.messages.send);
+    useEffect(() => {
+        if (!email) return;
+        setLoadingConversations(true);
+        fetch(`${API_BASE}/messages/conversation?patientId=${encodeURIComponent(email)}`, {
+            headers: makeHeaders(),
+            credentials: "include",
+        })
+            .then((res) => res.json())
+            .then((json: { success: boolean; data?: ConversationThread[]; error?: string }) => {
+                if (json.success && Array.isArray(json.data)) {
+                    setConversations(json.data);
+                } else {
+                    setConversations([]);
+                }
+            })
+            .catch(() => setConversations([]))
+            .finally(() => setLoadingConversations(false));
+    }, [email]);
 
     const handleSend = async () => {
         if (!email || !newMessage.trim() || sending) return;
         setSending(true);
         try {
-            await sendMessage({
-                conversationId: `${email}-support`,
-                senderEmail: email,
-                senderRole: "patient",
-                recipientEmail: "support@scriptsxo.com",
-                content: newMessage.trim(),
-                sessionToken: sessionToken as any,
+            const res = await fetch(`${API_BASE}/messages/send`, {
+                method: "POST",
+                headers: makeHeaders(),
+                credentials: "include",
+                body: JSON.stringify({
+                    conversationId: `${email}-support`,
+                    senderEmail: email,
+                    senderRole: "patient",
+                    recipientEmail: "support@scriptsxo.com",
+                    content: newMessage.trim(),
+                }),
             });
-            setNewMessage("");
-            setSent(true);
-            setTimeout(() => setSent(false), 3000);
+            const json = await res.json() as { success: boolean; error?: string };
+            if (json.success) {
+                setNewMessage("");
+                setSent(true);
+                setTimeout(() => setSent(false), 3000);
+            }
         } catch {
             // Compose box stays open
         } finally {
@@ -93,7 +146,7 @@ export default function DashboardMessagesPage() {
         }
     };
 
-    const isLoading = !sessionChecked || (email !== null && conversations === undefined);
+    const isLoading = !sessionChecked || (email !== null && loadingConversations && conversations === null);
 
     if (isLoading) {
         return (
@@ -107,7 +160,7 @@ export default function DashboardMessagesPage() {
         );
     }
 
-    const threads = (conversations && conversations.length > 0) ? conversations : MOCK_THREADS;
+    const threads: ConversationThread[] = (conversations && conversations.length > 0) ? conversations : MOCK_THREADS;
 
     return (
         <AppShell>
@@ -124,7 +177,7 @@ export default function DashboardMessagesPage() {
 
                 {/* Thread list */}
                 <div className="glass-card p-0 divide-y divide-border mb-8">
-                    {(threads as any[]).map((thread: any, i: number) => {
+                    {threads.map((thread, i) => {
                         const sender = thread.sender ?? (thread.latestMessage?.senderRole === "patient" ? "You" : "ScriptsXO Care Team");
                         const preview = thread.preview ?? thread.latestMessage?.content ?? "";
                         const time = thread.time ?? (() => {
@@ -133,7 +186,7 @@ export default function DashboardMessagesPage() {
                             const days = Math.floor((Date.now() - d) / 86400000);
                             return days === 0 ? "Today" : days === 1 ? "1d ago" : `${days}d ago`;
                         })();
-                        const unread = thread.unread ?? (thread.unreadCount > 0);
+                        const unread = thread.unread ?? ((thread.unreadCount ?? 0) > 0);
 
                         return (
                             <div key={thread.id ?? thread.conversationId ?? i} className="flex items-start gap-5 px-6 py-5 hover:bg-muted/30 transition-colors cursor-pointer group">

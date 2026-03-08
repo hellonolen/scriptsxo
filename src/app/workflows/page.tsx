@@ -64,7 +64,7 @@ export default function WorkflowsPage() {
         <PageHeader
           eyebrow="CLINICAL"
           title="Workflows"
-          description="Active clinical tasks and care coordination."
+          description="Active practiceal tasks and care coordination."
           cta={
             <div className="flex items-center gap-2">
               <Badge variant="default">4 Active</Badge>

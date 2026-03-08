@@ -1,11 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Pill, Clock, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { prescriptions as prescriptionsApi } from "@/lib/api";
 
 function mapPriority(deaSchedule: string | undefined): "urgent" | "standard" | "routine" {
   if (!deaSchedule) return "routine";
@@ -24,9 +24,21 @@ function timeAgoLabel(ts: number): string {
 }
 
 export default function PharmacyQueuePage() {
-  // Fetch prescriptions with status "sent" — these are queued for filling
-  const sentRx = useQuery(api.prescriptions.listAll, { status: "sent" });
-  const signedRx = useQuery(api.prescriptions.listAll, { status: "signed" });
+  const [sentRx, setSentRx] = useState<any[] | undefined>(undefined);
+  const [signedRx, setSignedRx] = useState<any[] | undefined>(undefined);
+
+  useEffect(() => {
+    prescriptionsApi.getByProvider("all")
+      .then((data) => {
+        const all = Array.isArray(data) ? data as any[] : [];
+        setSentRx(all.filter((rx) => rx.status === "sent"));
+        setSignedRx(all.filter((rx) => rx.status === "signed"));
+      })
+      .catch(() => {
+        setSentRx([]);
+        setSignedRx([]);
+      });
+  }, []);
 
   const isLoading = sentRx === undefined && signedRx === undefined;
 

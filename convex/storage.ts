@@ -98,3 +98,15 @@ export const generateUploadUrl = mutation({
     return await ctx.storage.generateUploadUrl();
   },
 });
+
+/**
+ * Generate an upload URL for patient video submissions from the /start intake wizard.
+ * Does not require a session — the patient is mid-onboarding and has not yet
+ * completed account setup. Rate-limited at the application layer by the wizard flow.
+ */
+export const generatePatientUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});

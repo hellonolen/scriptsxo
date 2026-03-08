@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAction } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import {
   Shield,
   Stethoscope,
@@ -20,10 +18,12 @@ import { getSessionCookie, setSessionCookie } from "@/lib/auth";
    CONSTANTS
    --------------------------------------------------------------------------- */
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+
 const MEMBERSHIP_FEATURES = [
   {
     icon: Stethoscope,
-    label: "Licensed Physicians",
+    label: "Licensed Providers",
     description: "Connect with board-certified providers on demand",
   },
   {
@@ -75,9 +75,6 @@ function PayPageInner() {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createCheckout = useAction(api.actions.whopCheckout.createCheckoutSession);
-  const verifyMembership = useAction(api.actions.whopCheckout.verifyMembership);
-
   // Check session on mount
   useEffect(() => {
     const session = getSessionCookie();
@@ -88,29 +85,33 @@ function PayPageInner() {
     setEmail(session.email);
 
     // Already paid — go to dashboard
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ((session as any).paymentStatus === "active") {
       router.replace("/dashboard/messages");
     }
   }, [router]);
 
-  // Handle Whop checkout success callback
   const handlePostCheckoutVerification = useCallback(async () => {
     if (!email) return;
     setVerifying(true);
     setError(null);
 
     try {
-      const result = await verifyMembership({ patientEmail: email });
-      if (result.success) {
-        // Update the session cookie with paymentStatus
+      const res = await fetch(`${API_BASE}/whop/membership/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ patientEmail: email }),
+      });
+      const json = await res.json() as { success: boolean; data?: { success: boolean; error?: string }; error?: string };
+
+      if (json.success && json.data?.success) {
         const session = getSessionCookie();
         if (session) {
           setSessionCookie({ ...session, paymentStatus: "active" });
         }
         router.replace("/dashboard/messages");
       } else {
-        setError(result.error || "Membership verification failed. Please contact support.");
+        setError(json.data?.error || json.error || "Membership verification failed. Please contact support.");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Verification failed";
@@ -118,7 +119,7 @@ function PayPageInner() {
     } finally {
       setVerifying(false);
     }
-  }, [email, verifyMembership, router]);
+  }, [email, router]);
 
   // Detect checkout success from URL
   useEffect(() => {
@@ -133,11 +134,18 @@ function PayPageInner() {
     setError(null);
 
     try {
-      const result = await createCheckout({ patientEmail: email });
-      if (result.purchaseUrl) {
-        window.location.href = result.purchaseUrl;
+      const res = await fetch(`${API_BASE}/whop/checkout/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ patientEmail: email }),
+      });
+      const json = await res.json() as { success: boolean; data?: { purchaseUrl?: string }; error?: string };
+
+      if (json.success && json.data?.purchaseUrl) {
+        window.location.href = json.data.purchaseUrl;
       } else {
-        setError("Unable to create checkout session. Please try again.");
+        setError(json.error || "Unable to create checkout session. Please try again.");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Checkout failed";

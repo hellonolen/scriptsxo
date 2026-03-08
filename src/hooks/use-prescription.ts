@@ -1,16 +1,41 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { useState, useEffect } from "react";
+import { prescriptions } from "@/lib/api";
 
 export function usePrescriptions(email: string | undefined) {
-  const prescriptions = useQuery(
-    api.prescriptions.getByPatientEmail,
-    email ? { email } : "skip"
-  );
+  const [data, setData] = useState<Record<string, unknown>[]>([]);
+  const [isLoading, setIsLoading] = useState(!!email);
+
+  useEffect(() => {
+    if (!email) {
+      setData([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+
+    prescriptions
+      .getByPatient(email)
+      .then((results) => {
+        if (!cancelled) setData(results);
+      })
+      .catch(() => {
+        if (!cancelled) setData([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
 
   return {
-    prescriptions: prescriptions ?? [],
-    isLoading: prescriptions === undefined,
+    prescriptions: data,
+    isLoading,
   };
 }

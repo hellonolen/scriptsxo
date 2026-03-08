@@ -1,0 +1,36 @@
+name = "scriptsxo-api"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+[placement]
+mode = "smart"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "scriptsxo"
+database_id = "aca066e4-23f5-4135-9036-92c9c6516e95"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "scriptsxo-files"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "2860b301105c493093a71a8b383b6178"
+
+[vars]
+ENVIRONMENT = "production"
+WEBAUTHN_RP_ID = "scriptsxo.com"
+WEBAUTHN_ORIGIN = "https://scriptsxo.com"
+SESSION_TTL_MS = "5184000000"
+MAX_PASSKEYS_PER_USER = "2"
+
+[triggers]
+crons = [
+  "*/5 * * * *",
+  "*/2 * * * *",
+  "0 * * * *",
+  "0 9 * * *",
+  "0 0 1 * *"
+]

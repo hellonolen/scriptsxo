@@ -14,8 +14,6 @@ import {
   SEED_RECENT_PAYOUTS,
   SEED_PENDING_EARNINGS,
 } from "@/lib/seed-data";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 import { formatPrice } from "@/lib/config";
 
 const STAT_ICONS = [DollarSign, CreditCard, Calendar, TrendingUp] as const;
@@ -23,19 +21,32 @@ const STAT_ICONS = [DollarSign, CreditCard, Calendar, TrendingUp] as const;
 export default function ProviderPayoutsPage() {
   const [showDemo, setShowDemo] = useState(false);
   const [email, setEmail]       = useState<string | null>(null);
+  const [billingRecords, setBillingRecords] = useState<any[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    setShowDemo(shouldShowDemoData());
+    const demo = shouldShowDemoData();
+    setShowDemo(demo);
     const session = getSessionCookie();
     if (session?.email) setEmail(session.email);
+
+    if (!demo && session?.email) {
+      setIsLoading(true);
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+      const token = document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/)?.[1];
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${decodeURIComponent(token)}`;
+
+      fetch(`${API_BASE}/billing/by-provider?providerEmail=${encodeURIComponent(session.email)}`, {
+        headers, credentials: "include",
+      })
+        .then((r) => r.json())
+        .then((json: any) => setBillingRecords(Array.isArray(json.data) ? json.data : []))
+        .catch(() => setBillingRecords([]))
+        .finally(() => setIsLoading(false));
+    }
   }, []);
-
-  const billingRecords = useQuery(
-    api.billing.getByProviderEmail,
-    !showDemo && email ? { providerEmail: email } : "skip"
-  );
-
-  const isLoading = !showDemo && email !== null && billingRecords === undefined;
 
   if (isLoading) {
     return (

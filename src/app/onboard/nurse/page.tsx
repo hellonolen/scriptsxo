@@ -14,8 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getSessionCookie, setSessionCookie } from "@/lib/auth";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { members } from "@/lib/api";
 import { SITECONFIG } from "@/lib/config";
 
 type OnboardStep = "id" | "license" | "review" | "complete" | "rejected";
@@ -51,16 +50,21 @@ export default function NurseOnboardPage() {
       return;
     }
     setSession(sessionData);
+
+    if (sessionData.email) {
+      members.getByEmail(sessionData.email)
+        .then((member) => {
+          if (member && (member as Record<string, unknown>)._id) {
+            setMemberId((member as Record<string, unknown>)._id as string);
+          } else if (sessionData.memberId) {
+            setMemberId(sessionData.memberId);
+          }
+        })
+        .catch(() => {
+          if (sessionData.memberId) setMemberId(sessionData.memberId);
+        });
+    }
   }, [router]);
-
-  const member = useQuery(
-    api.members.getByEmail,
-    session?.email ? { email: session.email } : "skip"
-  );
-
-  useEffect(() => {
-    if (member?._id) setMemberId(member._id);
-  }, [member]);
 
   const currentStepIdx = STEPS.findIndex((s) => s.id === step);
 
@@ -97,7 +101,7 @@ export default function NurseOnboardPage() {
         </span>
         <span className="mx-4 text-border">|</span>
         <span className="text-[11px] tracking-[0.15em] text-muted-foreground uppercase font-light">
-          Nurse / Clinical Staff Verification
+          Nurse / Practiceal Staff Verification
         </span>
       </div>
 
@@ -164,7 +168,7 @@ export default function NurseOnboardPage() {
                 Government ID
               </h1>
               <p className="text-muted-foreground font-light text-sm">
-                All clinical staff must have a government-issued ID on file.
+                All practiceal staff must have a government-issued ID on file.
                 {isDev ? " In dev mode, this step is simulated." : ""}
               </p>
             </div>
@@ -176,7 +180,7 @@ export default function NurseOnboardPage() {
                   {isDev ? "Simulated in dev mode" : "Upload coming soon"}
                 </p>
                 <p className="text-xs text-muted-foreground font-light leading-relaxed">
-                  A government-issued photo ID (driver&apos;s license, passport, or state ID) is required for all clinical staff accounts.
+                  A government-issued photo ID (driver&apos;s license, passport, or state ID) is required for all practiceal staff accounts.
                   {isDev ? " Your ID will be recorded automatically in dev mode." : ""}
                 </p>
               </div>
@@ -224,7 +228,7 @@ export default function NurseOnboardPage() {
                   <option value="LPN">LPN — Licensed Practical Nurse</option>
                   <option value="APRN">APRN — Advanced Practice Registered Nurse</option>
                   <option value="CNA">CNA — Certified Nursing Assistant</option>
-                  <option value="other">Other Clinical Staff</option>
+                  <option value="other">Other Practiceal Staff</option>
                 </select>
               </div>
 

@@ -18,14 +18,14 @@ const ACCESS_PATHS = [
     id: "provider" as const,
     label: "Provider Access",
     description:
-      "Licensed physicians, NPs, PAs, and APRNs. Requires NPI number and active medical license verification.",
+      "Providers, NPs, PAs, and APRNs. Requires NPI number and active medical license verification.",
     icon: Stethoscope,
   },
   {
     id: "nurse" as const,
-    label: "Clinical Staff Access",
+    label: "Practiceal Staff Access",
     description:
-      "Licensed RNs, LPNs, and clinical staff. Requires nursing license and organization association.",
+      "Licensed RNs, LPNs, and practiceal staff. Requires nursing license and organization association.",
     icon: HeartPulse,
   },
   {

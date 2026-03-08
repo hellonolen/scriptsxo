@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import {
   Clock,
   Package,
@@ -17,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { term } from "@/lib/config";
+import { prescriptions as prescriptionsApi } from "@/lib/api";
 
 type RxPriority = "stat" | "high" | "normal";
 type FillStatus = "queued" | "filling" | "ready" | "verification";
@@ -63,20 +62,39 @@ function getInitials(id: string): string {
 }
 
 export default function PharmacyPage() {
-  const prescriptions = useQuery(api.prescriptions.listAll, { status: "sent" });
-  const fillingRx = useQuery(api.prescriptions.listAll, { status: "filling" });
-  const readyRx = useQuery(api.prescriptions.listAll, { status: "ready" });
-  const deliveredRx = useQuery(api.prescriptions.listAll, { status: "picked_up" });
-  const signedRx = useQuery(api.prescriptions.listAll, { status: "signed" });
+  const [sentRx, setSentRx] = useState<any[] | undefined>(undefined);
+  const [fillingRx, setFillingRx] = useState<any[] | undefined>(undefined);
+  const [readyRx, setReadyRx] = useState<any[] | undefined>(undefined);
+  const [deliveredRx, setDeliveredRx] = useState<any[] | undefined>(undefined);
+  const [signedRx, setSignedRx] = useState<any[] | undefined>(undefined);
 
-  const inQueue = prescriptions?.length ?? 0;
+  useEffect(() => {
+    prescriptionsApi.getByProvider("all")
+      .then((data) => {
+        const all = Array.isArray(data) ? data as any[] : [];
+        setSentRx(all.filter((rx) => rx.status === "sent"));
+        setFillingRx(all.filter((rx) => rx.status === "filling"));
+        setReadyRx(all.filter((rx) => rx.status === "ready"));
+        setDeliveredRx(all.filter((rx) => rx.status === "picked_up"));
+        setSignedRx(all.filter((rx) => rx.status === "signed"));
+      })
+      .catch(() => {
+        setSentRx([]);
+        setFillingRx([]);
+        setReadyRx([]);
+        setDeliveredRx([]);
+        setSignedRx([]);
+      });
+  }, []);
+
+  const inQueue = sentRx?.length ?? 0;
   const filling = fillingRx?.length ?? 0;
   const ready = readyRx?.length ?? 0;
   const delivered = deliveredRx?.length ?? 0;
 
   // Combine queued + filling + verification prescriptions for the main table
   const queueData = [
-    ...(prescriptions ?? []),
+    ...(sentRx ?? []),
     ...(fillingRx ?? []),
     ...(signedRx ?? []),
   ];
@@ -89,7 +107,7 @@ export default function PharmacyPage() {
     return true;
   });
 
-  const isLoading = prescriptions === undefined && fillingRx === undefined;
+  const isLoading = sentRx === undefined && fillingRx === undefined;
 
   return (
     <AppShell>
@@ -102,7 +120,7 @@ export default function PharmacyPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          <StatCard label="In Queue" value={prescriptions === undefined ? "—" : String(inQueue)} icon={Clock} />
+          <StatCard label="In Queue" value={sentRx === undefined ? "—" : String(inQueue)} icon={Clock} />
           <StatCard label="Filling" value={fillingRx === undefined ? "—" : String(filling)} icon={Package} />
           <StatCard label="Ready" value={readyRx === undefined ? "—" : String(ready)} icon={CheckCircle} />
           <StatCard label="Delivered Today" value={deliveredRx === undefined ? "—" : String(delivered)} icon={Truck} />

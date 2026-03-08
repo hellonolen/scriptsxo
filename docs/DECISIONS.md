@@ -182,3 +182,24 @@ Decisions are permanent. Never deleted, only marked as superseded.
 - Context: The original homepage showed an email form immediately. This missed the opportunity to differentiate client vs provider entry intent and lacked conversion-first marketing copy.
 - Decision: Homepage shows a marketing hero with "Prescriptions, done right." copy and two CTAs: "Start as a Client" and "Provider & Clinic Login". An `intent` state (`client` | `provider`) is captured when the user clicks a CTA, before the email auth step begins. Post-auth routing uses this intent to inform the experience.
 - Consequence: Better conversion UX. Client and provider entry paths are visually separated from the first interaction. The email form only appears after the user has self-identified their intent. ArrowRight CTAs set intent state then advance to the email step.
+
+## ADR-035: Migrate Backend from Convex to Cloudflare D1/Workers
+- Date: 2026-03-08
+- Status: Implemented
+- Context: Owner directive -- full Cloudflare-native stack (D1 + R2 + Workers)
+- Decision: Replace Convex with D1 (database), Workers/Hono (API), R2 (storage)
+- Consequence: All 36 tables migrated to SQL. All 57 Convex files replaced by Workers routes. Frontend uses fetch instead of Convex subscriptions.
+
+## ADR-036: Hono as Cloudflare Workers Router
+- Date: 2026-03-08
+- Status: Implemented
+- Context: Need lightweight router for Workers API
+- Decision: Hono -- edge-optimized, TypeScript-native, 14KB
+- Consequence: scriptsxo-api Worker handles all API routes via Hono
+
+## ADR-037: Session Cookie Rename
+- Date: 2026-03-08
+- Status: Implemented
+- Context: Cookie was named app_session (generic). Workers API uses scriptsxo_session.
+- Decision: Rename to scriptsxo_session across all code
+- Consequence: Existing sessions will be invalidated once (users need to log in again)

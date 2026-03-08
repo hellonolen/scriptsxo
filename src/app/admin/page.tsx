@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import {
   Users,
   ShieldCheck,
@@ -24,7 +22,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { NavCard } from "@/components/ui/nav-card";
 import { term } from "@/lib/config";
-import { getSessionToken } from "@/lib/auth";
+import { members, prescriptions as prescriptionsApi } from "@/lib/api";
 
 const ADMIN_CARDS = [
   {
@@ -83,22 +81,24 @@ const ADMIN_CARDS = [
 ] as const;
 
 export default function AdminPage() {
-  const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
+  const [memberCounts, setMemberCounts] = useState<Record<string, number> | null>(null);
+  const [recentRxList, setRecentRxList] = useState<any[] | undefined>(undefined);
 
   useEffect(() => {
-    const token = getSessionToken();
-    if (token) setSessionToken(token);
+    members.countByRole()
+      .then((data) => setMemberCounts(data as Record<string, number>))
+      .catch(() => setMemberCounts({}));
+
+    prescriptionsApi.getByProvider("all")
+      .then((data) => {
+        const all = Array.isArray(data) ? (data as any[]) : [];
+        setRecentRxList(all.slice(0, 5));
+      })
+      .catch(() => setRecentRxList([]));
   }, []);
 
-  const memberCounts = useQuery(
-    api.members.countByRole,
-    sessionToken ? { sessionToken } : "skip"
-  );
-
-  const recentRxList = useQuery(api.prescriptions.listRecent, { limit: 5 });
-
-  const providerCount = (memberCounts as any)?.provider ?? null;
-  const patientCount = (memberCounts as any)?.patient ?? null;
+  const providerCount = memberCounts?.provider ?? null;
+  const patientCount = memberCounts?.patient ?? null;
 
   return (
     <AppShell>

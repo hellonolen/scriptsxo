@@ -3,14 +3,12 @@
 /**
  * PAGE CONTEXT TRACKER
  * Silent component — no UI. Runs on every page via AppShell.
- * Records what the patient is viewing/doing to Convex so the
- * concierge LLM has full awareness when the patient chats.
+ * Records what the patient is viewing/doing to localStorage so the
+ * concierge LLM has context when the patient chats.
  */
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
 import { getSessionCookie } from "@/lib/auth";
 
 /** Map routes to descriptive context the LLM can understand */
@@ -35,8 +33,6 @@ function describeRoute(pathname: string): string {
 
 export function PageContextTracker() {
   const pathname = usePathname();
-  const updatePageContext = useMutation(api.aiConversations.updatePageContext);
-  const getOrCreate = useMutation(api.aiConversations.getOrCreate);
   const lastPath = useRef<string>("");
 
   useEffect(() => {
@@ -46,25 +42,19 @@ export function PageContextTracker() {
 
     const session = getSessionCookie();
     if (!session?.email) return;
-    // sessionToken is required for Convex mutations — skip tracking if absent
-    if (!session?.sessionToken) return;
 
-    // Fire and forget — don't block rendering
-    (async () => {
-      try {
-        const conversationId = await getOrCreate({
-          email: session.email,
-          sessionToken: session.sessionToken,
-        });
-        await updatePageContext({
-          sessionToken: session.sessionToken,
-          conversationId,
-          page: pathname,
-        });
-      } catch {
-        // Silent — tracking failure should never break the app
-      }
-    })();
+    // Store page context in localStorage for the concierge to read
+    try {
+      const context = {
+        page: pathname,
+        description: describeRoute(pathname),
+        timestamp: Date.now(),
+        email: session.email,
+      };
+      localStorage.setItem("scriptsxo_page_context", JSON.stringify(context));
+    } catch {
+      // Silent — tracking failure should never break the app
+    }
   }, [pathname]);
 
   // No UI — this is purely a background tracker

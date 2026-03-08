@@ -259,7 +259,7 @@ const AUTH_ROUTES = ["/access", "/login", "/register"];
 // Onboarding routes: the only paths unverified users may access
 const ONBOARD_ROUTES = ["/onboard"];
 
-const SESSION_COOKIE = "app_session";
+const SESSION_COOKIE = "scriptsxo_session";
 const ADMIN_COOKIE = "app_admin";
 
 // ---------------------------------------------------------------------------

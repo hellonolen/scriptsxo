@@ -14,8 +14,7 @@ import {
   createAdminSession,
   setAdminCookie,
 } from "@/lib/auth";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { auth, members, patients } from "@/lib/api";
 import {
   registerPasskey,
   authenticatePasskey,
@@ -32,7 +31,7 @@ const LOGIN_VIDEO_URL = "";
 
 const FEATURE_BULLETS = [
   "Board-Certified Telehealth",
-  "Same-Day Prescriptions",
+  "Prescriptions",
   "Secure Patient Intake",
   "Provider Portal",
   "Pharmacy Fulfillment",
@@ -81,34 +80,10 @@ export default function LoginPage() {
     setIsDev(dev);
   }, []);
 
-  // WebAuthn server actions (used in production)
-  const getRegOptions = useAction(
-    api.actions.webauthn.getRegistrationOptions
-  );
-  const verifyReg = useAction(
-    api.actions.webauthn.verifyAndStoreRegistration
-  );
-  const getAuthOptions = useAction(
-    api.actions.webauthn.getAuthenticationOptions
-  );
-  const verifyAuth = useAction(api.actions.webauthn.verifyAuthentication);
-
-  // Magic link actions (used in production)
-  const requestMagicCode = useAction(api.actions.emailAuth.requestCode);
-  const verifyMagicCode = useAction(api.actions.emailAuth.verifyCode);
-  const getOrCreateMember = useMutation(api.members.getOrCreate);
-
-  // Patient/membership queries for post-auth routing
+  // Patient/membership state for post-auth routing
   const [routingEmail, setRoutingEmail] = useState<string | null>(null);
-
-  const patient = useQuery(
-    api.patients.getByEmail,
-    routingEmail ? { email: routingEmail } : "skip"
-  );
-  const membership = useQuery(
-    api.passkeys.getMembershipStatus,
-    routingEmail ? { email: routingEmail } : "skip"
-  );
+  const [patient, setPatient] = useState<Record<string, unknown> | null | undefined>(undefined);
+  const [membership, setMembership] = useState<{ isPaid?: boolean } | null | undefined>(undefined);
 
   // Check WebAuthn support on mount (skip in dev)
   useEffect(() => {
@@ -136,63 +111,50 @@ export default function LoginPage() {
     }
   }, [step]);
 
-  // Route when patient/membership data loads (production flow)
+  // Fetch patient and membership data when routing email is set
   useEffect(() => {
-    if (step !== "routing" || !routingEmail) return;
+    if (!routingEmail) return;
 
     const currentSession = getSessionCookie();
     const role = currentSession?.role;
 
-    if (role === "admin") {
-      router.push("/dashboard");
-      return;
-    }
+    // Short-circuit for roles that don't need patient/membership data
+    if (role === "admin") { router.push("/dashboard"); return; }
+    if (role === "unverified" || !role) { router.push("/access/setup"); return; }
+    if (role === "provider") { router.push("/provider"); return; }
+    if (role === "pharmacy") { router.push("/pharmacy"); return; }
+    if (isDev) { router.push("/dashboard"); return; }
 
-    if (role === "unverified" || !role) {
-      router.push("/access/setup");
-      return;
-    }
+    // Fetch patient and membership data for verified patients
+    Promise.all([
+      patients.getByEmail(routingEmail).catch(() => null),
+      // Membership status not yet in api.ts — treat as unpaid until implemented
+      Promise.resolve(null as { isPaid?: boolean } | null),
+    ]).then(([patientData, membershipData]) => {
+      setPatient(patientData as Record<string, unknown> | null);
+      setMembership(membershipData);
 
-    if (role === "provider") {
-      router.push("/provider");
-      return;
-    }
+      if (currentSession) {
+        const paymentStatus = membershipData?.isPaid === true ? "active" : "none";
+        setSessionCookie({ ...currentSession, paymentStatus });
+      }
 
-    if (role === "pharmacy") {
-      router.push("/pharmacy");
-      return;
-    }
-
-    // Verified patients -- check payment status
-    if (isDev) {
-      router.push("/dashboard");
-      return;
-    }
-
-    if (patient === undefined || membership === undefined) return;
-
-    if (currentSession) {
-      const paymentStatus = membership?.isPaid === true ? "active" : "none";
-      setSessionCookie({ ...currentSession, paymentStatus });
-    }
-
-    const hasPaid = membership?.isPaid === true;
-    if (patient && hasPaid) {
-      router.push("/dashboard");
-    } else {
-      router.push("/intake/symptoms");
-    }
-  }, [step, routingEmail, patient, membership, router, isDev]);
+      const hasPaid = membershipData?.isPaid === true;
+      if (patientData && hasPaid) {
+        router.push("/dashboard");
+      } else {
+        router.push("/intake/symptoms");
+      }
+    });
+  }, [routingEmail, isDev, router]);
 
   /* -------------------------------------------------------------------------
      Auth handlers
      ------------------------------------------------------------------------- */
 
   function handleAuthError(err: unknown) {
-    const rawMessage =
+    const message =
       err instanceof Error ? err.message : "An unexpected error occurred";
-    const convexData = (err as Record<string, unknown>)?.data;
-    const message = typeof convexData === "string" ? convexData : rawMessage;
 
     if (
       message.includes("NotAllowed") ||
@@ -230,10 +192,7 @@ export default function LoginPage() {
   /** DEV MODE: Just create session and go. */
   async function handleDevLogin() {
     if (!email.trim() || !firstName.trim()) return;
-    await getOrCreateMember({
-      email: email.toLowerCase(),
-      name: firstName,
-    });
+    await members.getOrCreate(email.toLowerCase(), firstName).catch(() => {});
     completeAuth(email, firstName);
   }
 
@@ -262,33 +221,32 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const authOptions = await getAuthOptions({
-        email: email.toLowerCase(),
-      });
+      const { challenge } = await auth.createChallenge(email.toLowerCase(), "auth");
 
       setStatusText("Verify with your device...");
-      const authentication = await authenticatePasskey(authOptions);
+      const authentication = await authenticatePasskey({ challenge, rpId: window.location.hostname, allowCredentials: [] });
 
       setStatusText("Verifying...");
-      const result = await verifyAuth({
-        email: email.toLowerCase(),
-        response: JSON.stringify(authentication),
+      const credId = (authentication as unknown as Record<string, unknown>).id as string;
+      const verifyResult = await auth.verifyCredential({
+        credentialId: credId,
+        challenge,
       });
 
-      if (!result.success) throw new Error(result.error);
+      if (!verifyResult.success) throw new Error(verifyResult.error ?? "Verification failed");
 
-      completeAuth(email, firstName, result.sessionToken);
+      const authEmail = verifyResult.email || email;
+      const memberResult = await members.getOrCreate(authEmail.toLowerCase(), firstName);
+      const sessionResult = await auth.createSession(memberResult.memberId, authEmail.toLowerCase());
+      completeAuth(authEmail, firstName, sessionResult.sessionToken);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "";
-      const convexData = (err as Record<string, unknown>)?.data;
-      const fullMessage =
-        typeof convexData === "string" ? convexData : message;
 
       // No passkeys registered -- offer registration
       if (
-        fullMessage.includes("No passkeys") ||
-        fullMessage.includes("no credentials") ||
-        fullMessage.includes("No passkeys registered")
+        message.includes("No passkeys") ||
+        message.includes("no credentials") ||
+        message.includes("No passkeys registered")
       ) {
         setStep("passkey_register");
         setError("");
@@ -313,23 +271,34 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const regOptions = await getRegOptions({
-        email: email.toLowerCase(),
-        userName: firstName,
-      });
+      const { challenge } = await auth.createChallenge(email.toLowerCase(), "register");
 
       setStatusText("Register with your device...");
-      const registration = await registerPasskey(regOptions);
-
-      setStatusText("Securing your account...");
-      const result = await verifyReg({
-        email: email.toLowerCase(),
-        response: JSON.stringify(registration),
+      const registration = await registerPasskey({
+        challenge,
+        rp: { name: "ScriptsXO", id: window.location.hostname },
+        user: { id: btoa(email.toLowerCase()), name: email.toLowerCase(), displayName: firstName },
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+        timeout: 60000,
       });
 
-      if (!result.success) throw new Error(result.error);
+      setStatusText("Securing your account...");
+      const reg = registration as unknown as Record<string, unknown>;
+      const storeResult = await auth.storeCredential({
+        email: email.toLowerCase(),
+        credentialId: reg.id as string,
+        publicKey: JSON.stringify(reg.response),
+        counter: 0,
+        deviceType: "platform",
+        transports: ["internal"],
+      });
 
-      completeAuth(email, firstName, result.sessionToken);
+      if (!storeResult.success) throw new Error(storeResult.error ?? "Registration failed");
+
+      const memberResult = await members.getOrCreate(email.toLowerCase(), firstName);
+      const sessionResult = await auth.createSession(memberResult.memberId, email.toLowerCase());
+      completeAuth(email, firstName, sessionResult.sessionToken);
     } catch (err: unknown) {
       handleAuthError(err);
     }
@@ -342,12 +311,10 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const result = await requestMagicCode({
-        email: email.toLowerCase(),
-      });
+      const result = await auth.sendMagicLink(email.toLowerCase());
 
       if (!result.success) {
-        setError(result.error || "Failed to send verification code");
+        setError("Failed to send verification code");
         setStep("error");
         return;
       }
@@ -372,18 +339,17 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const result = await verifyMagicCode({
-        email: email.toLowerCase(),
-        code: verificationCode.trim(),
-      });
+      const result = await auth.verifyMagicLink(email.toLowerCase(), verificationCode.trim());
 
-      if (!result.success) {
-        setError(result.error || "Invalid code");
+      if (!result.valid) {
+        setError(result.error ?? "Invalid code");
         setStep("magic_link_verify");
         return;
       }
 
-      completeAuth(email, firstName, result.sessionToken);
+      const memberResult = await members.getOrCreate(email.toLowerCase(), firstName);
+      const sessionResult = await auth.createSession(memberResult.memberId, email.toLowerCase());
+      completeAuth(email, firstName, sessionResult.sessionToken);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Verification failed";
@@ -395,13 +361,11 @@ export default function LoginPage() {
   /** Sign in with passkey (discoverable credential, no email needed). */
   async function handlePasskeySignIn() {
     if (isDev) {
-      // Dev mode needs email, go to create_account form
       setStep("create_account");
       return;
     }
 
     if (!passkeysAvailable) {
-      // No passkeys available, prompt for email via magic link
       setStep("create_account");
       return;
     }
@@ -411,35 +375,30 @@ export default function LoginPage() {
     setError("");
 
     try {
-      // Try discoverable credential (no email needed)
-      const authOptions = await getAuthOptions({ email: "" });
-      const authentication = await authenticatePasskey(authOptions);
+      const { challenge } = await auth.createChallenge(undefined, "auth");
+      const authentication = await authenticatePasskey({ challenge, rpId: window.location.hostname, allowCredentials: [] });
 
       setStatusText("Verifying...");
-      const result = await verifyAuth({
-        email: "",
-        response: JSON.stringify(authentication),
-      });
+      const credId = (authentication as unknown as Record<string, unknown>).id as string;
+      const verifyResult = await auth.verifyCredential({ credentialId: credId, challenge });
 
-      if (!result.success) throw new Error(result.error);
+      if (!verifyResult.success) throw new Error(verifyResult.error ?? "Verification failed");
 
-      const authEmail = (result as Record<string, unknown>).email as string || email;
-      completeAuth(authEmail, firstName, result.sessionToken);
+      const authEmail = verifyResult.email || email;
+      const memberResult = await members.getOrCreate(authEmail.toLowerCase(), firstName || authEmail.split("@")[0]);
+      const sessionResult = await auth.createSession(memberResult.memberId, authEmail.toLowerCase());
+      completeAuth(authEmail, firstName, sessionResult.sessionToken);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "";
-      const convexData = (err as Record<string, unknown>)?.data;
-      const fullMessage = typeof convexData === "string" ? convexData : message;
 
-      // If discoverable credentials fail, fall back to email-based flow
       if (
-        fullMessage.includes("No passkeys") ||
-        fullMessage.includes("no credentials") ||
-        fullMessage.includes("NotAllowed") ||
-        fullMessage.includes("cancelled") ||
-        fullMessage.includes("aborted") ||
-        fullMessage.includes("The operation either timed out")
+        message.includes("No passkeys") ||
+        message.includes("no credentials") ||
+        message.includes("NotAllowed") ||
+        message.includes("cancelled") ||
+        message.includes("aborted") ||
+        message.includes("The operation either timed out")
       ) {
-        // Fall back to email-based sign in
         setStep("create_account");
         setError("");
       } else {

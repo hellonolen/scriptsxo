@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 import { getSessionCookie } from "@/lib/auth";
+import { consultations, patients, members } from "@/lib/api";
 import {
   Mic, MicOff, Video, VideoOff,
   MessageSquare, PhoneOff, FileText, FlaskConical,
@@ -87,7 +86,7 @@ function AiSidebar({ patient }: { patient: PatientData }) {
     setTimeout(() => {
       setChat((c) => [...c, {
         role: "ai",
-        text: "I can help you with clinical decision support. Please describe what you need assistance with.",
+        text: "I can help you with practical decision support. Please describe what you need assistance with.",
       }]);
     }, 800);
   }
@@ -258,34 +257,43 @@ function ConsultationRoomInner() {
   const params = useSearchParams();
   const consultationId = params.get("id");
 
-  const session = getSessionCookie();
-  const memberId = session?.memberId;
+  const [consultation, setConsultation] = useState<Record<string, any> | null>(null);
+  const [patient, setPatient] = useState<Record<string, any> | null>(null);
+  const [patientMember, setPatientMember] = useState<Record<string, any> | null>(null);
 
   const [duration, setDuration] = useState(0);
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Query real consultation data
-  const consultation = useQuery(
-    api.consultations.getById,
-    consultationId ? { consultationId: consultationId as any } : "skip"
-  );
+  // Load consultation data
+  useEffect(() => {
+    if (!consultationId) return;
+    consultations.getById(consultationId)
+      .then(setConsultation)
+      .catch(() => {});
+  }, [consultationId]);
 
-  // Query patient record via consultation.patientId
-  const patient = useQuery(
-    api.patients.getById,
-    consultation?.patientId ? { patientId: consultation.patientId } : "skip"
-  );
+  // Load patient from consultation
+  useEffect(() => {
+    const patientId = (consultation as any)?.patientId;
+    if (!patientId) return;
+    patients.getById(patientId)
+      .then(setPatient)
+      .catch(() => {});
+  }, [consultation]);
 
-  // Query patient member record for name
-  const patientMember = useQuery(
-    api.members.getByEmail,
-    patient?.email ? { email: patient.email } : "skip"
-  );
+  // Load member name from patient email
+  useEffect(() => {
+    const email = (patient as any)?.email;
+    if (!email) return;
+    members.getByEmail(email)
+      .then(setPatientMember)
+      .catch(() => {});
+  }, [patient]);
 
   // Derive display data from real records, fall back gracefully
-  const patientName = patientMember?.name ?? patient?.email ?? "Patient";
+  const patientName = (patientMember as any)?.name ?? (patient as any)?.email ?? "Patient";
   const patientInitials = patientName
     .split(" ")
     .map((w: string) => w[0])
@@ -296,20 +304,20 @@ function ConsultationRoomInner() {
   const patientData: PatientData = {
     name: patientName,
     initials: patientInitials,
-    dob: patient?.dateOfBirth ?? "",
+    dob: (patient as any)?.dateOfBirth ?? "",
     chief: "",
-    allergies: patient?.allergies ?? [],
-    currentMeds: patient?.currentMedications ?? [],
+    allergies: (patient as any)?.allergies ?? [],
+    currentMeds: (patient as any)?.currentMedications ?? [],
   };
 
   // Duration timer — start from consultation.startedAt if available
   useEffect(() => {
-    const startMs = consultation?.startedAt ?? Date.now();
+    const startMs = (consultation as any)?.startedAt ?? Date.now();
     const initialSecs = Math.max(0, Math.round((Date.now() - startMs) / 1000));
     setDuration(initialSecs);
     const timer = setInterval(() => setDuration((d) => d + 1), 1000);
     return () => clearInterval(timer);
-  }, [consultation?.startedAt]);
+  }, [(consultation as any)?.startedAt]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: "#0A0A12" }}>

@@ -4,8 +4,7 @@ import { useState, useEffect } from "react";
 import { Video, Calendar, Clock, CheckCircle2, Phone, Plus, Loader2, ChevronRight, AlertCircle } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { patients, consultations } from "@/lib/api";
 import Link from "next/link";
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
@@ -75,6 +74,9 @@ export default function DashboardAppointmentsPage() {
     const [email, setEmail] = useState<string | null>(null);
     const [sessionChecked, setSessionChecked] = useState(false);
     const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+    const [patientRecord, setPatientRecord] = useState<Record<string, unknown> | null | undefined>(undefined);
+    const [allConsults, setAllConsults] = useState<Record<string, unknown>[]>([]);
+    const [loadingConsults, setLoadingConsults] = useState(false);
 
     useEffect(() => {
         const session = getSessionCookie();
@@ -82,10 +84,25 @@ export default function DashboardAppointmentsPage() {
         setSessionChecked(true);
     }, []);
 
-    const patient = useQuery(api.patients.getByEmail, email ? { email } : "skip");
-    const consultations = useQuery(api.consultations.getByPatient, patient ? { patientId: patient._id } : "skip");
+    // Fetch patient record by email
+    useEffect(() => {
+        if (!email) return;
+        patients.getByEmail(email)
+            .then((p) => setPatientRecord(p))
+            .catch(() => setPatientRecord(null));
+    }, [email]);
 
-    const isLoading = !sessionChecked || (email !== null && patient === undefined);
+    // Fetch consultations once patient is resolved
+    useEffect(() => {
+        if (!patientRecord || !patientRecord.id) return;
+        setLoadingConsults(true);
+        consultations.getByPatient(patientRecord.id as string)
+            .then((data) => setAllConsults(Array.isArray(data) ? data : []))
+            .catch(() => setAllConsults([]))
+            .finally(() => setLoadingConsults(false));
+    }, [patientRecord]);
+
+    const isLoading = !sessionChecked || (email !== null && patientRecord === undefined);
 
     if (isLoading) {
         return (
@@ -100,7 +117,6 @@ export default function DashboardAppointmentsPage() {
     }
 
     const ACTIVE = new Set(["scheduled", "waiting", "assigned", "in_progress"]);
-    const allConsults = consultations ?? [];
     const upcoming = allConsults.length > 0
         ? allConsults.filter((c: any) => ACTIVE.has(c.status))
         : MOCK_UPCOMING;

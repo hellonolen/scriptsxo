@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAction } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { pharmacies } from "@/lib/api";
 import { Search, MapPin, Phone, Printer, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -25,8 +24,6 @@ interface PharmacySearchProps {
 }
 
 export function PharmacySearch({ onSelect, className = "" }: PharmacySearchProps) {
-  const searchPharmacy = useAction(api.actions.lookupPharmacy.search);
-
   const [query, setQuery] = useState("");
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
@@ -39,12 +36,22 @@ export function PharmacySearch({ onSelect, className = "" }: PharmacySearchProps
     setSearching(true);
     setResults([]);
     try {
-      const data = await searchPharmacy({
+      const raw = await pharmacies.npiLookup({
         name: query || undefined,
         state: state || undefined,
         zip: zip || undefined,
       });
-      setResults(data);
+      // npiLookup returns flat objects; reshape to match PharmacyResult
+      const shaped: PharmacyResult[] = raw.map((r) => ({
+        npi: r.npi,
+        name: r.name,
+        address: typeof r.address === "object" && r.address !== null
+          ? (r.address as PharmacyResult["address"])
+          : { street: String(r.address ?? ""), city: "", state: "", zip: "" },
+        phone: r.phone ?? "",
+        fax: r.fax ?? "",
+      }));
+      setResults(shaped);
     } catch (err) {
       console.error("Pharmacy search failed:", err);
     } finally {

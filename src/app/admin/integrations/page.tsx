@@ -2,8 +2,6 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { useAction } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +14,6 @@ import {
   Loader2,
   Calendar,
   Mail,
-  Printer,
   ShieldCheck,
   Pill,
   FileText,
@@ -57,30 +54,53 @@ const CATEGORY_ICON: Record<ComposioToolkit["category"], React.ElementType> = {
   insurance: ShieldCheck,
 };
 
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+
+function getToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function makeHeaders(): Record<string, string> {
+  const token = getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
+
 /* ---------------------------------------------------------------------------
    PAGE
    --------------------------------------------------------------------------- */
 
 export default function AdminIntegrationsPage() {
-  // Convex actions
-  const runHealthCheck = useAction(api.integrations.composio.healthCheck);
-  const runListActions = useAction(api.integrations.composio.listActions);
-
-  // State
   const [health, setHealth] = useState<HealthResult | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [probes, setProbes] = useState<Record<string, ToolkitProbeResult>>({});
   const [probing, setProbing] = useState<string | null>(null);
 
   /* -----------------------------------------------------------------------
-     HEALTH CHECK
+     HEALTH CHECK — direct fetch to Worker API
      ----------------------------------------------------------------------- */
 
   const doHealthCheck = useCallback(async () => {
     setHealthLoading(true);
     try {
-      const result = await runHealthCheck();
-      setHealth(result as HealthResult);
+      const res = await fetch(`${API_BASE}/integrations/composio/health`, {
+        headers: makeHeaders(),
+        credentials: "include",
+      });
+      const json = await res.json() as { success: boolean; data?: HealthResult; error?: string };
+      if (json.success && json.data) {
+        setHealth(json.data);
+      } else {
+        setHealth({
+          configured: false,
+          reachable: false,
+          error: json.error ?? "Health check failed",
+        });
+      }
     } catch (err) {
       setHealth({
         configured: false,
@@ -90,20 +110,23 @@ export default function AdminIntegrationsPage() {
     } finally {
       setHealthLoading(false);
     }
-  }, [runHealthCheck]);
+  }, []);
 
   /* -----------------------------------------------------------------------
-     TOOLKIT PROBE — test a specific toolkit by listing its tools
+     TOOLKIT PROBE — direct fetch to Worker API
      ----------------------------------------------------------------------- */
 
   const probeToolkit = useCallback(
     async (toolkitId: string, composioToolkitSlug: string) => {
       setProbing(toolkitId);
       try {
-        const result = await runListActions({ toolkit: composioToolkitSlug });
-        const r = result as { success: boolean; data?: unknown; error?: string };
-        if (r.success) {
-          const items = Array.isArray(r.data) ? r.data : [];
+        const res = await fetch(`${API_BASE}/integrations/composio/actions?toolkit=${encodeURIComponent(composioToolkitSlug)}`, {
+          headers: makeHeaders(),
+          credentials: "include",
+        });
+        const json = await res.json() as { success: boolean; data?: unknown; error?: string };
+        if (json.success) {
+          const items = Array.isArray(json.data) ? json.data : [];
           setProbes((prev) => ({
             ...prev,
             [toolkitId]: {
@@ -118,7 +141,7 @@ export default function AdminIntegrationsPage() {
             [toolkitId]: {
               toolkit: composioToolkitSlug,
               available: false,
-              error: r.error || "No tools found",
+              error: json.error || "No tools found",
             },
           }));
         }
@@ -135,7 +158,7 @@ export default function AdminIntegrationsPage() {
         setProbing(null);
       }
     },
-    [runListActions]
+    []
   );
 
   /* -----------------------------------------------------------------------

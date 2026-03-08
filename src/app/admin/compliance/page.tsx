@@ -29,7 +29,7 @@ const AUDIT_EVENTS = [
   { id: "evt_1", action: "ROLE_CHANGE", actor: "Alexander Grant", target: "dr.smith@example.com", details: "Changed role from 'unverified' to 'provider'", timestamp: new Date(Date.now() - 1000 * 60 * 5).getTime(), status: "normal" },
   { id: "evt_2", action: "PHI_EXPORT", actor: "System Agent", target: "Patient Records (Batch 42)", details: "Exported 142 records to secure vault", timestamp: new Date(Date.now() - 1000 * 60 * 25).getTime(), status: "flagged" },
   { id: "evt_3", action: "SESSION_REVOKED", actor: "Security Policy", target: "m.jones@gmail.com", details: "Multiple failed login attempts", timestamp: new Date(Date.now() - 1000 * 60 * 140).getTime(), status: "flagged" },
-  { id: "evt_4", action: "MEMBER_INVITED", actor: "Dr. Sarah Jenkins", target: "nurse.kelly@clinic.com", details: "Invited to organization 'Genesis Healthcare'", timestamp: new Date(Date.now() - 1000 * 60 * 210).getTime(), status: "normal" },
+  { id: "evt_4", action: "MEMBER_INVITED", actor: "Dr. Sarah Jenkins", target: "nurse.kelly@practice.com", details: "Invited to organization 'Genesis Healthcare'", timestamp: new Date(Date.now() - 1000 * 60 * 210).getTime(), status: "normal" },
   { id: "evt_5", action: "PLATFORM_OWNER_GRANT_REQUESTED", actor: "Alexander Grant", target: "Security Admin", details: "Requested elevation to platform owner", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).getTime(), status: "flagged" },
   { id: "evt_6", action: "SYSTEM_BOOTSTRAP", actor: "Deployment Pipeline", target: "Production Environment", details: "V2.4.1 initialized successfully", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).getTime(), status: "normal" },
 ];

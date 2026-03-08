@@ -1,16 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { useState, useCallback, useEffect } from "react";
+import { auth } from "@/lib/api";
 import {
   setSessionCookie,
-  setAdminCookie,
   clearSessionCookie,
   clearAllAuthCookies,
   getSessionCookie,
   createSession,
-  createAdminSession,
   type Session,
 } from "@/lib/auth";
 
@@ -20,11 +17,11 @@ import {
  * ZERO browser dialogs. ZERO navigator.credentials calls.
  *
  * Uses Web Crypto API (ECDSA P-256) + IndexedDB for device-only keys.
- * The private key NEVER leaves the device. The public key is stored in Convex.
+ * The private key NEVER leaves the device. The public key is stored server-side.
  *
  * Flow:
- *   Register: Generate ECDSA key pair -> store private key in IndexedDB -> send public key to Convex
- *   Authenticate: Get challenge from Convex -> sign with local private key -> verify on server
+ *   Register: Generate ECDSA key pair -> store private key in IndexedDB -> send public key to API
+ *   Authenticate: Get challenge from API -> sign with local private key -> verify on server
  *
  * Sessions stored in:
  *   - localStorage (fast client-side state)
@@ -221,10 +218,6 @@ export function usePasskey(): UsePasskeyReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createChallenge = useMutation(api.passkeys.createChallenge);
-  const storeCredential = useMutation(api.passkeys.storeCredential);
-  const verifyCredential = useMutation(api.passkeys.verifyCredential);
-
   const register = useCallback(
     async (
       email: string,
@@ -243,7 +236,7 @@ export function usePasskey(): UsePasskeyReturn {
         const publicKeyJwk = await exportPublicKeyJwk(keyPair.publicKey);
         const credentialId = generateCredentialId();
 
-        const result = await storeCredential({
+        const result = await auth.storeCredential({
           email: email.toLowerCase(),
           credentialId,
           publicKey: JSON.stringify(publicKeyJwk),
@@ -279,7 +272,7 @@ export function usePasskey(): UsePasskeyReturn {
         setIsLoading(false);
       }
     },
-    [storeCredential]
+    []
   );
 
   const authenticate = useCallback(
@@ -326,16 +319,16 @@ export function usePasskey(): UsePasskeyReturn {
           `[SXO-AUTH] Step 2: Requesting challenge for ${credential.email}...`
         );
 
-        const { challenge } = await createChallenge({
-          email: credential.email,
-          type: "authentication",
-        });
+        const { challenge } = await auth.createChallenge(
+          credential.email,
+          "authentication"
+        );
         console.debug("[SXO-AUTH] Step 3: Got challenge, signing...");
 
         const signature = await signChallenge(credential.privateKey, challenge);
         console.debug("[SXO-AUTH] Step 4: Signed, verifying with server...");
 
-        const result = await verifyCredential({
+        const result = await auth.verifyCredential({
           credentialId: credential.credentialId,
           signature,
           challenge,
@@ -428,7 +421,7 @@ export function usePasskey(): UsePasskeyReturn {
         setIsLoading(false);
       }
     },
-    [createChallenge, verifyCredential]
+    []
   );
 
   const getSession = useCallback((): PasskeySession | null => {
@@ -475,12 +468,18 @@ export function usePasskey(): UsePasskeyReturn {
 }
 
 /**
- * Hook to check passkey status for an email (uses Convex query)
+ * Hook to check whether a device key exists for an email (IndexedDB local check).
+ * Previously used a Convex query; now checks device storage directly.
  */
-export function useHasPasskey(email: string | undefined) {
-  const hasPasskey = useQuery(
-    api.passkeys.hasPasskey,
-    email ? { email } : "skip"
-  );
-  return hasPasskey ?? false;
+export function useHasPasskey(email: string | undefined): boolean {
+  const [hasKey, setHasKey] = useState(false);
+
+  useEffect(() => {
+    if (!email || !isPasskeySupported()) return;
+    getLocalCredentialByEmail(email.toLowerCase())
+      .then((cred) => setHasKey(cred !== null))
+      .catch(() => setHasKey(false));
+  }, [email]);
+
+  return hasKey;
 }

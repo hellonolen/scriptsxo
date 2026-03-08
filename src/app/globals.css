@@ -349,6 +349,14 @@
     z-index: 0;
   }
 
+  /* ---- Accent line — signature element ---- */
+  .accent-line {
+    display: block;
+    height: 3px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+
   /* ---- Eyebrow ---- */
   .eyebrow {
     font-size: 11px;

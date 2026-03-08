@@ -3,14 +3,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { MessageSquare, Send, X, Loader2, Minimize2 } from "lucide-react";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
 import { getSessionCookie } from "@/lib/auth";
-import type { Id } from "../../convex/_generated/dataModel";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
 
 /* ---------------------------------------------------------------------------
    PAGE CONTEXT MAP
-   Maps route paths to human-readable context for Gemini
+   Maps route paths to human-readable context for the AI
    --------------------------------------------------------------------------- */
 
 function getPageContext(pathname: string): string {
@@ -44,58 +44,17 @@ export function GeminiChat() {
   const [localMessages, setLocalMessages] = useState<
     { role: string; content: string; page?: string }[]
   >([]);
-  const [conversationId, setConversationId] = useState<Id<"aiConversations"> | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Convex hooks
-  const aiChat = useAction(api.actions.aiChat.chat);
-  const getOrCreate = useMutation(api.aiConversations.getOrCreate);
-  const addMessage = useMutation(api.aiConversations.addMessage);
-  const updatePageContext = useMutation(api.aiConversations.updatePageContext);
-
-  // Load conversation from Convex
-  const conversation = useQuery(
-    api.aiConversations.getByEmail,
-    userEmail ? { email: userEmail } : "skip"
-  );
-
-  // Initialize session + conversation
+  // Initialize session
   useEffect(() => {
     const session = getSessionCookie();
     if (session?.email) {
       setUserEmail(session.email);
     }
   }, []);
-
-  // Create or load conversation when email is available
-  useEffect(() => {
-    if (!userEmail) return;
-    getOrCreate({ email: userEmail }).then((id) => {
-      setConversationId(id);
-    });
-  }, [userEmail]);
-
-  // Sync Convex messages to local state
-  useEffect(() => {
-    if (conversation?.messages) {
-      setLocalMessages(
-        conversation.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          page: m.page,
-        }))
-      );
-    }
-  }, [conversation?.messages]);
-
-  // Update page context in Convex when navigating
-  useEffect(() => {
-    if (conversationId && pathname) {
-      updatePageContext({ conversationId, page: pathname });
-    }
-  }, [conversationId, pathname]);
 
   // Auto-scroll
   useEffect(() => {
@@ -117,52 +76,46 @@ export function GeminiChat() {
     const message = inputValue.trim();
     setInputValue("");
 
-    // Add user message locally + to Convex
     const userMsg = { role: "user", content: message, page: pathname };
     setLocalMessages((prev) => [...prev, userMsg]);
-
-    if (conversationId) {
-      addMessage({
-        conversationId,
-        role: "user",
-        content: message,
-        page: pathname,
-      });
-    }
 
     setIsLoading(true);
 
     try {
       const pageContext = getPageContext(pathname);
-      const contextHint = `The client is currently on: ${pageContext}. Answer their question helpfully. If they're asking about something on this page, guide them. Keep responses concise (2-3 sentences).`;
-
-      // Build conversation history from recent messages
       const recentHistory = localMessages.slice(-16).map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
-      const result = await aiChat({
-        message: `[Page: ${pathname}] ${message}`,
-        conversationHistory: recentHistory,
-        patientEmail: userEmail || "anonymous",
+      const token =
+        typeof document !== "undefined"
+          ? document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/)?.[1]
+          : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${decodeURIComponent(token)}`;
+
+      const res = await fetch(`${API_BASE}/ai/chat`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({
+          message: `[Page: ${pathname}] ${message}`,
+          conversationHistory: recentHistory,
+          patientEmail: userEmail || "anonymous",
+          pageContext,
+        }),
       });
+
+      const json = await res.json() as { success: boolean; data?: { content: string }; error?: string };
+      if (!json.success) throw new Error(json.error ?? "AI error");
 
       const assistantMsg = {
         role: "assistant",
-        content: result.content,
+        content: json.data?.content ?? "",
         page: pathname,
       };
       setLocalMessages((prev) => [...prev, assistantMsg]);
-
-      if (conversationId) {
-        addMessage({
-          conversationId,
-          role: "assistant",
-          content: result.content,
-          page: pathname,
-        });
-      }
     } catch {
       const errorMsg = {
         role: "assistant",
@@ -173,7 +126,7 @@ export function GeminiChat() {
     } finally {
       setIsLoading(false);
     }
-  }, [inputValue, isLoading, conversationId, pathname, userEmail, localMessages]);
+  }, [inputValue, isLoading, pathname, userEmail, localMessages]);
 
   // Don't render on /start page (it has its own integrated chat)
   if (pathname === "/start") return null;

@@ -2,9 +2,8 @@
 
 export const runtime = "edge";
 
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useQuery } from "convex/react";
-import { api } from "../../../../../convex/_generated/api";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,15 +12,12 @@ import {
   ArrowLeft,
   Pill,
   Shield,
-  Calendar,
   DollarSign,
-  Activity,
   RefreshCw,
   Stethoscope,
   CreditCard,
 } from "lucide-react";
 import Link from "next/link";
-import type { Id } from "../../../../../convex/_generated/dataModel";
 
 // -- Status badge mapping for verification --
 const VERIFICATION_VARIANT = {
@@ -139,16 +135,113 @@ function ClientDetailSkeleton() {
   );
 }
 
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+
+function getToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function makeHeaders(): Record<string, string> {
+  const token = getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
+}
+
+interface PatientRecord {
+  patient: {
+    email: string;
+    idVerificationStatus: string;
+    state: string;
+  };
+  prescriptions: Array<{
+    _id: string;
+    medicationName: string;
+    genericName?: string;
+    dosage: string;
+    form: string;
+    quantity: number;
+    refillsUsed: number;
+    refillsAuthorized: number;
+    nextRefillDate?: number;
+    status: string;
+  }>;
+  consultations: Array<{
+    _id: string;
+    type: string;
+    scheduledAt: number;
+    status: string;
+    diagnosis?: string;
+  }>;
+  billing: Array<{
+    _id: string;
+    type: string;
+    amount: number;
+    status: string;
+    createdAt: number;
+  }>;
+  stats: {
+    activeRxCount: number;
+    totalRefills: number;
+    lifetimeConsultations: number;
+    totalSpent: number;
+    memberSince: number;
+  };
+}
+
 export default function AdminClientDetailPage() {
   const params = useParams();
-  const patientId = params.id as Id<"patients">;
+  const patientId = params.id as string;
 
-  const record = useQuery(api.patients.getFullRecord, { patientId });
+  const [record, setRecord] = useState<PatientRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!record) {
+  useEffect(() => {
+    if (!patientId) return;
+    setLoading(true);
+    fetch(`${API_BASE}/patients/${patientId}/full-record`, {
+      headers: makeHeaders(),
+      credentials: "include",
+    })
+      .then((res) => res.json())
+      .then((json: { success: boolean; data?: PatientRecord; error?: string }) => {
+        if (json.success && json.data) {
+          setRecord(json.data);
+        } else {
+          setError(json.error ?? "Failed to load client record");
+        }
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Network error"))
+      .finally(() => setLoading(false));
+  }, [patientId]);
+
+  if (loading) {
     return (
       <AppShell>
         <ClientDetailSkeleton />
+      </AppShell>
+    );
+  }
+
+  if (error || !record) {
+    return (
+      <AppShell>
+        <div className="p-6 lg:p-10 max-w-[1400px]">
+          <Link
+            href="/admin/clients"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-4"
+          >
+            <ArrowLeft size={14} aria-hidden="true" />
+            Back to Clients
+          </Link>
+          <div className="p-8 text-center text-muted-foreground font-light text-sm">
+            {error ?? "Client record not found."}
+          </div>
+        </div>
       </AppShell>
     );
   }

@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Mic, MicOff, Loader2 } from "lucide-react";
-import { useAction } from "convex/react";
-import { api } from "../../convex/_generated/api";
 import { getSessionCookie } from "@/lib/auth";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
 
 interface Message {
   id: string;
@@ -43,8 +44,6 @@ export function AIConcierge({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const chatAction = useAction(api.actions.aiChat.chat);
-
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
@@ -81,17 +80,32 @@ export function AIConcierge({
           content: m.content,
         }));
 
-      const response = await chatAction({
-        message: text,
-        conversationHistory: history,
-        patientEmail: email,
-        intakeId: intakeId || undefined,
+      const token =
+        typeof document !== "undefined"
+          ? document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/)?.[1]
+          : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${decodeURIComponent(token)}`;
+
+      const res = await fetch(`${API_BASE}/ai/chat`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({
+          message: text,
+          conversationHistory: history,
+          patientEmail: email,
+          intakeId: intakeId || undefined,
+        }),
       });
+
+      const json = await res.json() as { success: boolean; data?: { content: string }; error?: string };
+      if (!json.success) throw new Error(json.error ?? "AI error");
 
       const aiResponse: Message = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: response.content,
+        content: json.data?.content ?? "",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiResponse]);
@@ -123,7 +137,7 @@ export function AIConcierge({
     } finally {
       setIsTyping(false);
     }
-  }, [input, isTyping, messages, chatAction, intakeId]);
+  }, [input, isTyping, messages, intakeId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {

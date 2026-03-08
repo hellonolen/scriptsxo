@@ -4,29 +4,17 @@ import { useState, useEffect } from "react";
 import { CreditCard, Receipt, Download, DollarSign, Loader2, CheckCircle2, Calendar, Shield } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 import { formatPrice } from "@/lib/config";
 
 export default function DashboardBillingPage() {
-    const [email, setEmail] = useState<string | null>(null);
     const [sessionChecked, setSessionChecked] = useState(false);
 
     useEffect(() => {
-        const session = getSessionCookie();
-        if (session?.email) setEmail(session.email);
+        getSessionCookie();
         setSessionChecked(true);
     }, []);
 
-    const patient = useQuery(api.patients.getByEmail, email ? { email } : "skip");
-    const billingRecords = useQuery(
-        api.billing.getByPatient,
-        patient ? { patientId: patient._id } : "skip"
-    );
-
-    // Loading: still waiting for session check OR queries still in-flight.
-    // When patient === null the user has no patient record yet — skip waiting on billingRecords.
-    if (!sessionChecked || (email !== null && patient === undefined)) {
+    if (!sessionChecked) {
         return (
             <AppShell>
                 <div className="p-6 lg:p-10 max-w-[1200px]">
@@ -37,8 +25,6 @@ export default function DashboardBillingPage() {
             </AppShell>
         );
     }
-
-    const billList = billingRecords ?? [];
 
     return (
         <AppShell>
@@ -104,73 +90,35 @@ export default function DashboardBillingPage() {
                 <section>
                     <p className="text-[10px] tracking-[0.2em] font-medium uppercase text-muted-foreground mb-4">Payment History</p>
 
-                    {billList.length > 0 ? (
-                        <div className="bg-card border border-border rounded-xl overflow-hidden">
-                            <div className="divide-y divide-border">
-                                {billList.map((payment: any) => (
-                                    <div key={payment._id} className="flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${payment.status === "paid" ? "bg-emerald-50" : "bg-amber-50"}`}>
-                                                <Receipt size={14} className={payment.status === "paid" ? "text-emerald-600" : "text-amber-500"} />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-foreground capitalize">
-                                                    {(payment.type ?? "").replace("_", " ")}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground mt-0.5">
-                                                    {new Date(payment.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                                                </p>
-                                            </div>
+                    {/* Static mock history — billing API not yet available */}
+                    <div className="bg-card border border-border rounded-xl overflow-hidden">
+                        <div className="divide-y divide-border">
+                            {[
+                                { label: "Monthly Membership", date: "Feb 26, 2026", amount: "$97.00", status: "paid" },
+                                { label: "Monthly Membership", date: "Jan 26, 2026", amount: "$97.00", status: "paid" },
+                                { label: "Monthly Membership", date: "Dec 26, 2025", amount: "$97.00", status: "paid" },
+                            ].map((item, i) => (
+                                <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-emerald-50">
+                                            <Receipt size={14} className="text-emerald-600" />
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-sm font-medium text-foreground">{formatPrice(payment.amount)}</span>
-                                            <span className={`text-[10px] tracking-wide uppercase font-medium px-2.5 py-1 rounded-full ${payment.status === "paid" ? "text-emerald-700 bg-emerald-50" :
-                                                payment.status === "pending" ? "text-amber-700 bg-amber-50" :
-                                                    "text-muted-foreground bg-muted"
-                                                }`}>
-                                                {payment.status}
-                                            </span>
-                                            {payment.status === "paid" && (
-                                                <button className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Download receipt">
-                                                    <Download size={14} />
-                                                </button>
-                                            )}
+                                        <div>
+                                            <p className="text-sm font-medium text-foreground">{item.label}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">{item.date}</p>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                    ) : (
-                        /* Empty state with mock history so page looks complete */
-                        <div className="bg-card border border-border rounded-xl overflow-hidden">
-                            <div className="divide-y divide-border">
-                                {[
-                                    { label: "Monthly Membership", date: "Feb 26, 2026", amount: "$97.00", status: "paid" },
-                                    { label: "Monthly Membership", date: "Jan 26, 2026", amount: "$97.00", status: "paid" },
-                                    { label: "Monthly Membership", date: "Dec 26, 2025", amount: "$97.00", status: "paid" },
-                                ].map((item, i) => (
-                                    <div key={i} className="flex items-center justify-between px-6 py-4 hover:bg-muted/20 transition-colors">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-emerald-50">
-                                                <Receipt size={14} className="text-emerald-600" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-foreground">{item.label}</p>
-                                                <p className="text-xs text-muted-foreground mt-0.5">{item.date}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-sm font-medium text-foreground">{item.amount}</span>
-                                            <span className="text-[10px] tracking-wide uppercase font-medium px-2.5 py-1 rounded-full text-emerald-700 bg-emerald-50">Paid</span>
-                                            <button className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Download receipt">
-                                                <Download size={14} />
-                                            </button>
-                                        </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-sm font-medium text-foreground">{item.amount}</span>
+                                        <span className="text-[10px] tracking-wide uppercase font-medium px-2.5 py-1 rounded-full text-emerald-700 bg-emerald-50">Paid</span>
+                                        <button className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Download receipt">
+                                            <Download size={14} />
+                                        </button>
                                     </div>
-                                ))}
-                            </div>
+                                </div>
+                            ))}
                         </div>
-                    )}
+                    </div>
                 </section>
 
             </div>

@@ -2,14 +2,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 import { Loader2, Clock, ArrowRight, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { StatCard } from "@/components/ui/stat-card";
 import { getSessionCookie } from "@/lib/auth";
 import { CAP, hasCap, parseRolesFromSession } from "@/lib/capabilities";
 import { Badge } from "@/components/ui/badge";
+import { consultations } from "@/lib/api";
 
 /* ---------------------------------------------------------------------------
    Constants
@@ -40,14 +39,40 @@ function PatientWaitingRoom() {
   const router = useRouter();
   const [elapsed, setElapsed] = useState(0);
   const [tipIndex, setTipIndex] = useState(0);
+  const [activeConsult, setActiveConsult] = useState<Record<string, any> | null>(null);
   const tipRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Read active consultation status from Convex
   const session = getSessionCookie();
-  const activeConsult = useQuery(
-    api.consultations.getMyActiveConsultation,
-    session?.email ? { patientEmail: session.email } : "skip"
-  );
+
+  // Poll for active consultation every 3 seconds
+  useEffect(() => {
+    if (!session?.email) return;
+
+    async function poll() {
+      try {
+        // Get patient record first, then find active consultation
+        const patientRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev"}/patients/by-email?email=${encodeURIComponent(session!.email)}`,
+          { credentials: "include" }
+        );
+        const patientJson = await patientRes.json() as { success: boolean; data?: { id?: string; _id?: string } };
+        const patientId = patientJson.data?._id ?? patientJson.data?.id;
+        if (!patientId) return;
+
+        const list = await consultations.getByPatient(patientId);
+        const active = Array.isArray(list)
+          ? list.find((c: any) => c.status === "waiting" || c.status === "assigned" || c.status === "in_progress")
+          : null;
+        setActiveConsult(active ?? null);
+      } catch {
+        // Non-fatal polling failure
+      }
+    }
+
+    poll();
+    const poller = setInterval(poll, 3000);
+    return () => clearInterval(poller);
+  }, [session?.email]);
 
   useEffect(() => {
     const elapsed_timer = setInterval(() => setElapsed((t) => t + 1), 1000);
@@ -66,7 +91,8 @@ function PatientWaitingRoom() {
   // Auto-navigate when consultation is assigned/in_progress
   useEffect(() => {
     if (activeConsult?.status === "in_progress" || activeConsult?.status === "assigned") {
-      router.push(`/consultation/room?id=${activeConsult._id}`);
+      const id = activeConsult._id ?? activeConsult.id;
+      router.push(`/consultation/room?id=${id}`);
     }
   }, [activeConsult, router]);
 
@@ -223,24 +249,34 @@ function ProviderWaitingQueue() {
   const router = useRouter();
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<string | null>(null);
+  const [queue, setQueue] = useState<Record<string, any>[] | undefined>(undefined);
 
   useEffect(() => {
     const session = getSessionCookie();
-    if (session?.sessionToken) setSessionToken(session.sessionToken);
     if (session?.memberId) setMemberId(session.memberId);
   }, []);
 
-  const queue = useQuery(api.consultations.getWaitingQueue, {});
+  // Poll queue every 3 seconds
+  useEffect(() => {
+    async function fetchQueue() {
+      try {
+        const list = await consultations.getQueue();
+        setQueue(Array.isArray(list) ? list : []);
+      } catch {
+        setQueue([]);
+      }
+    }
 
-  const claimConsultation = useMutation(api.consultations.claim);
+    fetchQueue();
+    const poller = setInterval(fetchQueue, 3000);
+    return () => clearInterval(poller);
+  }, []);
 
-  // Compute stats from real queue data
   const waitingCount = queue?.length ?? 0;
   const avgWait =
     queue && queue.length > 0
-      ? Math.round(queue.reduce((sum, p) => sum + p.waitMin, 0) / queue.length)
+      ? Math.round(queue.reduce((sum, p) => sum + (p.waitMin ?? 0), 0) / queue.length)
       : null;
   const nextPatient = queue?.[0]?.patientName ?? "No patients waiting";
 
@@ -249,10 +285,7 @@ function ProviderWaitingQueue() {
     setClaimingId(consultationId);
     setErrorMsg(null);
     try {
-      await claimConsultation({
-        sessionToken: sessionToken as any,
-        consultationId: consultationId as any,
-      });
+      await consultations.claim(consultationId, memberId);
       router.push(`/consultation/room?id=${consultationId}`);
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Failed to claim consultation.");
@@ -316,43 +349,46 @@ function ProviderWaitingQueue() {
                   </td>
                 </tr>
               ) : (
-                queue.map((patient) => (
-                  <tr key={patient._id}>
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
-                          {patient.patientInitials}
+                queue.map((patient) => {
+                  const patientId = patient._id ?? patient.id;
+                  return (
+                    <tr key={patientId}>
+                      <td>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-sm bg-brand-secondary-muted flex items-center justify-center text-xs font-light text-foreground tracking-wide">
+                            {patient.patientInitials}
+                          </div>
+                          <span className="text-sm font-light text-foreground">
+                            {patient.patientName}
+                          </span>
                         </div>
-                        <span className="text-sm font-light text-foreground">
-                          {patient.patientName}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="text-sm font-light text-muted-foreground">
-                      {patient.chiefComplaint}
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-1.5 text-sm font-light text-foreground">
-                        <Clock size={12} className="text-muted-foreground" aria-hidden="true" />
-                        {patient.waitMin} min
-                      </div>
-                    </td>
-                    <td className="text-right">
-                      <button
-                        onClick={() => handleClaim(patient._id)}
-                        disabled={claimingId === patient._id}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {claimingId === patient._id ? (
-                          <Loader2 size={11} className="animate-spin" aria-hidden="true" />
-                        ) : (
-                          <ArrowRight size={11} aria-hidden="true" />
-                        )}
-                        Begin Consultation
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="text-sm font-light text-muted-foreground">
+                        {patient.chiefComplaint}
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-1.5 text-sm font-light text-foreground">
+                          <Clock size={12} className="text-muted-foreground" aria-hidden="true" />
+                          {patient.waitMin} min
+                        </div>
+                      </td>
+                      <td className="text-right">
+                        <button
+                          onClick={() => handleClaim(patientId)}
+                          disabled={claimingId === patientId}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {claimingId === patientId ? (
+                            <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+                          ) : (
+                            <ArrowRight size={11} aria-hidden="true" />
+                          )}
+                          Begin Consultation
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

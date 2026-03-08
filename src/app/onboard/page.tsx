@@ -1,194 +1,134 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Stethoscope, UserCheck, Package, HeartPulse, ArrowRight } from "lucide-react";
-import { getSessionCookie } from "@/lib/auth";
-import { SITECONFIG, term } from "@/lib/config";
+import { User, Stethoscope, Building2, ArrowRight } from "lucide-react";
+import { SITECONFIG } from "@/lib/config";
 
 const ROLES = [
   {
-    id: "patient" as const,
-    label: term("title"),
-    description: `I need telehealth consultations and prescriptions. You will verify your identity with a government-issued ID.`,
-    icon: UserCheck,
+    id: "patient",
+    label: "Client",
+    description: "I need a prescription processed through telehealth.",
+    icon: User,
+    href: "/onboard/patient",
   },
   {
-    id: "provider" as const,
+    id: "provider",
     label: "Healthcare Provider",
-    description:
-      "I am a licensed physician, NP, PA, or APRN. You will verify your NPI number and medical license.",
+    description: "I am a provider, NP, PA, or APRN.",
     icon: Stethoscope,
+    href: "/onboard/provider",
   },
   {
-    id: "nurse" as const,
-    label: "Nurse / Clinical Staff",
-    description:
-      "I am a licensed RN, LPN, or clinical staff member. You will provide your government-issued ID and nursing license.",
-    icon: HeartPulse,
-  },
-  {
-    id: "pharmacy" as const,
+    id: "pharmacy",
     label: "Pharmacy",
-    description:
-      "I represent a pharmacy for prescription fulfillment. You will verify your NCPDP or pharmacy NPI.",
-    icon: Package,
+    description: "We fulfill prescriptions for ScriptsXO clients.",
+    icon: Building2,
+    href: "/onboard/pharmacy",
   },
 ] as const;
 
-export default function OnboardPage() {
+export default function OnboardRoleSelectPage() {
   const router = useRouter();
-  const [selected, setSelected] = useState<string | null>(null);
-  const [userName, setUserName] = useState("");
-
-  useEffect(() => {
-    const session = getSessionCookie();
-    if (!session) {
-      router.push("/");
-      return;
-    }
-    setUserName(session.name || session.email.split("@")[0]);
-  }, [router]);
-
-  function handleContinue() {
-    if (!selected) return;
-    router.push(`/onboard/${selected}`);
-  }
 
   return (
-    <main className="min-h-screen flex">
-      {/* Left panel — same editorial style as login */}
-      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-[#1E1037]">
-        <div className="absolute inset-0">
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "radial-gradient(ellipse at 20% 50%, rgba(124, 58, 237, 0.12) 0%, transparent 70%), radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 70%)",
-            }}
-          />
-        </div>
-        <div className="relative z-10 flex flex-col justify-between p-16 xl:p-24 w-full">
+    <main className="min-h-screen flex flex-col">
+      {/* Dark hero header */}
+      <header
+        className="px-8 py-10 flex flex-col gap-6"
+        style={{ background: "var(--sidebar-background)" }}
+      >
+        <div className="max-w-2xl mx-auto w-full">
+          {/* Brand wordmark */}
           <span
-            className="text-[13px] tracking-[0.35em] font-light uppercase"
+            className="eyebrow"
             style={{ color: "rgba(167, 139, 250, 0.7)" }}
           >
             {SITECONFIG.brand.name}
           </span>
 
-          <div className="max-w-lg">
+          <div className="mt-6">
             <h1
-              className="text-4xl xl:text-5xl text-white/85 font-light leading-[1.08] tracking-[-0.02em]"
-              style={{ fontFamily: "var(--font-heading)" }}
+              className="text-3xl sm:text-4xl font-light text-white/90 leading-tight tracking-tight"
+              style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.025em" }}
             >
-              Welcome,
-              <br />
-              <em className="gradient-text-soft">{userName}</em>
+              Get started.{" "}
+              <em className="gradient-text-soft not-italic">Choose your role.</em>
             </h1>
-            <p className="text-white/50 text-base font-light leading-relaxed mt-10 max-w-sm">
-              Select your access type to begin the credential verification process.
-              Your credentials will be verified before access is granted.
-            </p>
+            <div
+              className="mt-4 h-px w-16"
+              style={{ background: "rgba(167, 139, 250, 0.35)" }}
+            />
           </div>
 
-          <div className="flex items-center gap-8 text-[10px] tracking-[0.25em] text-white/35 uppercase font-light">
-            <span>HIPAA Secure</span>
-            <span className="w-5 h-px bg-white/10" />
-            <span>Credential Verified</span>
-            <span className="w-5 h-px bg-white/10" />
-            <span>Encrypted</span>
-          </div>
+          <p className="mt-4 text-sm font-light" style={{ color: "rgba(255,255,255,0.45)" }}>
+            Select how you will use {SITECONFIG.brand.name}. Access is granted after credential verification.
+          </p>
         </div>
-      </div>
+      </header>
 
-      {/* Right panel — role selection */}
-      <div className="flex-1 flex items-center justify-center px-8 sm:px-16 py-16 bg-background">
-        <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="lg:hidden mb-12">
-            <span className="text-[13px] tracking-[0.35em] text-foreground font-light uppercase">
-              {SITECONFIG.brand.name}
-            </span>
-          </div>
-
-          <div className="mb-10">
-            <h2
-              className="text-3xl font-light text-foreground tracking-[-0.02em] mb-3"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              Complete Your Access Setup
-            </h2>
-            <p className="text-muted-foreground font-light text-sm">
-              Access is granted after your credentials are verified.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {ROLES.map((role) => {
-              const Icon = role.icon;
-              const isSelected = selected === role.id;
-              return (
-                <button
-                  key={role.id}
-                  onClick={() => setSelected(role.id)}
-                  className={`w-full text-left p-5 rounded-xl border-2 transition-all duration-200 ${isSelected
-                      ? "border-[#7C3AED] bg-[#7C3AED]/5"
-                      : "border-border hover:border-border/80 hover:bg-muted/50"
-                    }`}
+      {/* Role cards */}
+      <section className="flex-1 bg-background px-8 py-10">
+        <div className="max-w-2xl mx-auto w-full space-y-4">
+          {ROLES.map((role) => {
+            const Icon = role.icon;
+            return (
+              <button
+                key={role.id}
+                onClick={() => router.push(role.href)}
+                className="glass-card w-full text-left group cursor-pointer"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1.25rem",
+                  padding: "1.5rem",
+                  transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)",
+                }}
+              >
+                {/* Icon */}
+                <div
+                  className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center"
+                  style={{
+                    background: "var(--brand-muted)",
+                    transition: "background 0.25s ease",
+                  }}
                 >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isSelected
-                          ? "bg-[#7C3AED]/10"
-                          : "bg-muted"
-                        }`}
-                    >
-                      <Icon
-                        size={18}
-                        className={
-                          isSelected ? "text-[#7C3AED]" : "text-muted-foreground"
-                        }
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <p
-                        className={`text-sm font-medium mb-1 ${isSelected ? "text-foreground" : "text-foreground"
-                          }`}
-                      >
-                        {role.label}
-                      </p>
-                      <p className="text-xs text-muted-foreground font-light leading-relaxed">
-                        {role.description}
-                      </p>
-                    </div>
-                    {isSelected && (
-                      <div className="w-5 h-5 rounded-full bg-[#7C3AED] flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <div className="w-2 h-2 rounded-full bg-white" />
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                  <Icon
+                    size={22}
+                    style={{ color: "var(--brand-secondary)", strokeWidth: 1.5 }}
+                  />
+                </div>
 
-          <button
-            onClick={handleContinue}
-            disabled={!selected}
-            className={`w-full mt-8 inline-flex items-center justify-center gap-2 px-8 py-3.5 text-[11px] tracking-[0.15em] uppercase font-light rounded-lg transition-all duration-300 ${selected
-                ? "bg-foreground text-background hover:bg-foreground/90"
-                : "bg-muted text-muted-foreground cursor-not-allowed"
-              }`}
-          >
-            Continue
-            <ArrowRight size={14} aria-hidden="true" />
-          </button>
+                {/* Text */}
+                <div className="flex-1 min-w-0">
+                  <p
+                    className="text-sm font-medium text-foreground"
+                    style={{ letterSpacing: "-0.01em" }}
+                  >
+                    {role.label}
+                  </p>
+                  <p className="text-xs font-light text-muted-foreground mt-0.5 leading-relaxed">
+                    {role.description}
+                  </p>
+                </div>
 
-          <p className="text-center text-[10px] text-muted-foreground mt-8 font-light">
+                {/* Arrow */}
+                <ArrowRight
+                  size={16}
+                  className="flex-shrink-0 text-muted-foreground"
+                  style={{
+                    transition: "transform 0.2s ease, color 0.2s ease",
+                  }}
+                />
+              </button>
+            );
+          })}
+
+          <p className="text-center text-[10px] font-light text-muted-foreground pt-4">
             Verification typically completes within minutes.
           </p>
         </div>
-      </div>
+      </section>
     </main>
   );
 }

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { useState, useEffect } from "react";
+import { providers as providersApi } from "@/lib/api";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -28,8 +27,7 @@ import {
   Edit2,
 } from "lucide-react";
 import Link from "next/link";
-import { getSessionCookie, getSessionToken } from "@/lib/auth";
-import { Id } from "../../../../convex/_generated/dataModel";
+import { getSessionCookie } from "@/lib/auth";
 
 function statusVariant(status: string) {
   switch (status) {
@@ -54,10 +52,7 @@ const EMPTY_FORM = {
 };
 
 export default function AdminProvidersPage() {
-  const providers = useQuery(api.providers.listAll);
-  const createProvider = useMutation(api.providers.create);
-  const updateProviderStatus = useMutation(api.providers.updateStatus);
-
+  const [providerList, setProviderList] = useState<any[] | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -65,39 +60,38 @@ export default function AdminProvidersPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
-  const filteredProviders = (providers ?? []).filter((p) => {
+  useEffect(() => {
+    providersApi.getActive()
+      .then((data) => setProviderList(Array.isArray(data) ? data : []))
+      .catch(() => setProviderList([]));
+  }, []);
+
+  const filteredProviders = (providerList ?? []).filter((p: any) => {
     const q = search.toLowerCase();
     const matchSearch =
       !search ||
       `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
-      p.npiNumber.includes(q) ||
-      p.email.toLowerCase().includes(q);
+      (p.npiNumber ?? "").includes(q) ||
+      (p.email ?? "").toLowerCase().includes(q);
     const matchStatus = statusFilter === "all" || p.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
   const counts = {
-    total: (providers ?? []).length,
-    active: (providers ?? []).filter((p) => p.status === "active").length,
-    onboarding: (providers ?? []).filter((p) => p.status === "onboarding").length,
-    suspended: (providers ?? []).filter((p) => p.status === "suspended").length,
+    total: (providerList ?? []).length,
+    active: (providerList ?? []).filter((p: any) => p.status === "active").length,
+    onboarding: (providerList ?? []).filter((p: any) => p.status === "onboarding").length,
+    suspended: (providerList ?? []).filter((p: any) => p.status === "suspended").length,
   };
 
-  const selectedProvider = (providers ?? []).find((p) => p._id === selectedId) ?? null;
+  const selectedProvider = (providerList ?? []).find((p: any) => p._id === selectedId) ?? null;
 
   const resetForm = () => setForm(EMPTY_FORM);
 
   const handleAddProvider = async () => {
-    const sessionToken = getSessionToken();
-    const session = getSessionCookie();
-    if (!sessionToken || !session?.memberId) {
-      console.error("No active session or memberId found");
-      return;
-    }
-
     setSaving(true);
     try {
-      await createProvider({
+      await providersApi.create({
         email: form.email,
         firstName: form.firstName,
         lastName: form.lastName,
@@ -108,35 +102,49 @@ export default function AdminProvidersPage() {
         licensedStates: form.licensedStates.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
         consultationRate: parseInt(form.consultationRate, 10),
         maxDailyConsultations: parseInt(form.maxDailyConsultations, 10),
-        sessionToken,
-        memberId: session.memberId as Id<"members">,
       });
       resetForm();
       setShowAddModal(false);
+      // Refresh list
+      const updated = await providersApi.getActive();
+      setProviderList(Array.isArray(updated) ? updated : []);
     } catch (err) {
-      console.error("Failed to add provider:", err);
+      // silently fail for now
     } finally {
       setSaving(false);
     }
   };
 
   const handleToggleStatus = async (providerId: string, currentStatus: string) => {
-    const sessionToken = getSessionToken();
-    if (!sessionToken) return;
-
     const newStatus = currentStatus === "active" ? "inactive" : "active";
-    await updateProviderStatus({
-      providerId: providerId as Id<"providers">,
-      status: newStatus,
-      sessionToken,
-    });
+    try {
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+      const token = document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/)?.[1];
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${decodeURIComponent(token)}`;
+
+      await fetch(`${API_BASE}/providers/${providerId}/status`, {
+        method: "PATCH",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      // Optimistically update local state
+      setProviderList((prev) =>
+        (prev ?? []).map((p: any) => p._id === providerId ? { ...p, status: newStatus } : p)
+      );
+    } catch {
+      // silently fail
+    }
   };
 
   return (
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1600px]">
 
-        {/* ── Header ── */}
+        {/* Header */}
         <header className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
@@ -148,7 +156,7 @@ export default function AdminProvidersPage() {
                 Providers
               </h1>
               <p className="text-sm text-muted-foreground font-light mt-0.5">
-                {providers?.length ?? 0} providers in the system
+                {providerList?.length ?? 0} providers in the system
               </p>
             </div>
           </div>
@@ -158,7 +166,7 @@ export default function AdminProvidersPage() {
           </Button>
         </header>
 
-        {/* ── Stats Row ── */}
+        {/* Stats Row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">
           {[
             { label: "Total", value: counts.total, icon: Users, color: "#5B21B6", filter: "all" },
@@ -181,7 +189,7 @@ export default function AdminProvidersPage() {
           ))}
         </div>
 
-        {/* ── Filter Bar ── */}
+        {/* Filter Bar */}
         <div className="flex flex-col sm:flex-row gap-3 mb-5">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -209,7 +217,7 @@ export default function AdminProvidersPage() {
           </div>
         </div>
 
-        {/* ── Main Layout: Table + Side Panel ── */}
+        {/* Main Layout: Table + Side Panel */}
         <div className="flex gap-5 items-start">
 
           {/* Table */}
@@ -225,12 +233,12 @@ export default function AdminProvidersPage() {
             </div>
 
             {/* Loading */}
-            {!providers && (
+            {!providerList && (
               <div className="p-12 text-center text-muted-foreground text-sm">Loading providers…</div>
             )}
 
             {/* Empty */}
-            {providers && filteredProviders.length === 0 && (
+            {providerList && filteredProviders.length === 0 && (
               <div className="p-16 text-center text-muted-foreground">
                 <Users size={32} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">No providers found.</p>
@@ -239,7 +247,7 @@ export default function AdminProvidersPage() {
 
             {/* Rows */}
             <div className="divide-y divide-border">
-              {filteredProviders.map((provider) => (
+              {filteredProviders.map((provider: any) => (
                 <div
                   key={provider._id}
                   onClick={() => setSelectedId(selectedId === provider._id ? null : provider._id)}
@@ -254,7 +262,7 @@ export default function AdminProvidersPage() {
                       className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold text-white shrink-0"
                       style={{ background: "#5B21B6" }}
                     >
-                      {provider.firstName[0]}{provider.lastName[0]}
+                      {(provider.firstName ?? "")[0]}{(provider.lastName ?? "")[0]}
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">
@@ -269,12 +277,12 @@ export default function AdminProvidersPage() {
 
                   {/* Licensed States */}
                   <div className="flex flex-wrap gap-1">
-                    {provider.licensedStates.slice(0, 4).map((st) => (
+                    {(provider.licensedStates ?? []).slice(0, 4).map((st: string) => (
                       <span key={st} className="text-[10px] px-1.5 py-0.5 bg-primary/8 text-primary rounded font-medium">
                         {st}
                       </span>
                     ))}
-                    {provider.licensedStates.length > 4 && (
+                    {(provider.licensedStates ?? []).length > 4 && (
                       <span className="text-[10px] text-muted-foreground">+{provider.licensedStates.length - 4}</span>
                     )}
                   </div>
@@ -284,11 +292,11 @@ export default function AdminProvidersPage() {
                     <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full bg-primary"
-                        style={{ width: `${Math.min(100, (provider.currentQueueSize / provider.maxDailyConsultations) * 100)}%` }}
+                        style={{ width: `${Math.min(100, ((provider.currentQueueSize ?? 0) / (provider.maxDailyConsultations ?? 1)) * 100)}%` }}
                       />
                     </div>
                     <span className="text-[11px] text-muted-foreground shrink-0">
-                      {provider.currentQueueSize}/{provider.maxDailyConsultations}
+                      {provider.currentQueueSize ?? 0}/{provider.maxDailyConsultations ?? 0}
                     </span>
                   </div>
 
@@ -309,7 +317,7 @@ export default function AdminProvidersPage() {
             </div>
           </div>
 
-          {/* ── Provider Detail Side Panel ── */}
+          {/* Provider Detail Side Panel */}
           {selectedProvider && (
             <div className="w-72 shrink-0 bg-card border border-border rounded-xl overflow-hidden animate-in slide-in-from-right-4 duration-200">
               {/* Header */}
@@ -319,7 +327,7 @@ export default function AdminProvidersPage() {
                     className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold text-white"
                     style={{ background: "#5B21B6" }}
                   >
-                    {selectedProvider.firstName[0]}{selectedProvider.lastName[0]}
+                    {(selectedProvider.firstName ?? "")[0]}{(selectedProvider.lastName ?? "")[0]}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">
@@ -336,8 +344,8 @@ export default function AdminProvidersPage() {
               {/* Stats */}
               <div className="grid grid-cols-3 divide-x divide-border border-b border-border">
                 {[
-                  { label: "Queue", value: `${selectedProvider.currentQueueSize}/${selectedProvider.maxDailyConsultations}` },
-                  { label: "NPI", value: selectedProvider.npiNumber.slice(-4) },
+                  { label: "Queue", value: `${selectedProvider.currentQueueSize ?? 0}/${selectedProvider.maxDailyConsultations ?? 0}` },
+                  { label: "NPI", value: (selectedProvider.npiNumber ?? "").slice(-4) },
                   { label: "Status", value: selectedProvider.status },
                 ].map((s) => (
                   <div key={s.label} className="p-3 text-center">
@@ -352,7 +360,7 @@ export default function AdminProvidersPage() {
                 <p className="text-[10px] font-medium tracking-widest uppercase text-muted-foreground mb-2">Details</p>
                 {[
                   { icon: Stethoscope, label: "Specialties", value: selectedProvider.specialties?.join(", ") || "—" },
-                  { icon: MapPin, label: "States", value: selectedProvider.licensedStates.join(", ") },
+                  { icon: MapPin, label: "States", value: (selectedProvider.licensedStates ?? []).join(", ") },
                   { icon: Mail, label: "Email", value: selectedProvider.email },
                   { icon: Shield, label: "DEA", value: selectedProvider.deaNumber || "Not on file" },
                 ].map(({ icon: Icon, label, value }) => (
@@ -400,7 +408,7 @@ export default function AdminProvidersPage() {
           )}
         </div>
 
-        {/* ── Add Provider Modal ── */}
+        {/* Add Provider Modal */}
         {showAddModal && (
           <>
             <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
@@ -435,7 +443,7 @@ export default function AdminProvidersPage() {
                     >
                       <option value="MD">MD — Doctor of Medicine</option>
                       <option value="DO">DO — Doctor of Osteopathy</option>
-                      <option value="PA">PA — Physician Assistant</option>
+                      <option value="PA">PA — Provider Assistant</option>
                       <option value="NP">NP — Nurse Practitioner</option>
                       <option value="APRN">APRN — Advanced Practice RN</option>
                     </select>

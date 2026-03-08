@@ -9,8 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { getSessionCookie } from "@/lib/auth";
 import { shouldShowDemoData } from "@/lib/demo";
 import { SEED_SCHEDULE } from "@/lib/seed-data";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { consultations } from "@/lib/api";
 
 const STATUS_VARIANT: Record<string, "success" | "info" | "secondary"> = {
   completed:   "success",
@@ -43,17 +42,20 @@ function formatTime(ts: number) {
 export default function ProviderSchedulePage() {
   const [showDemo, setShowDemo] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [consultationList, setConsultationList] = useState<any[]>([]);
 
   useEffect(() => {
-    setShowDemo(shouldShowDemoData());
+    const demo = shouldShowDemoData();
+    setShowDemo(demo);
     const session = getSessionCookie();
     if (session?.email) setEmail(session.email);
-  }, []);
 
-  const consultations = useQuery(
-    api.consultations.getProviderQueue,
-    !showDemo && email ? { providerEmail: email } : "skip"
-  );
+    if (!demo) {
+      consultations.getQueue()
+        .then((data) => setConsultationList(Array.isArray(data) ? data : []))
+        .catch(() => setConsultationList([]));
+    }
+  }, []);
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long", month: "long", day: "numeric",
@@ -61,7 +63,7 @@ export default function ProviderSchedulePage() {
 
   // Build display rows from real consultations filtered to today
   const { start, end } = todayBounds();
-  const realRows = (consultations ?? [])
+  const realRows = consultationList
     .filter((c: any) => c.scheduledAt >= start && c.scheduledAt <= end)
     .sort((a: any, b: any) => a.scheduledAt - b.scheduledAt)
     .map((c: any) => ({

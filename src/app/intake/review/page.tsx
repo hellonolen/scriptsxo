@@ -3,544 +3,356 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Heart,
-  Stethoscope,
-  ScanLine,
-  FileCheck,
-  ArrowRight,
-  ArrowLeft,
-  Check,
-  Pencil,
-  ShieldCheck,
-  CreditCard,
-  CheckCircle2,
-  Lock
-} from "lucide-react";
-import { AppShell } from "@/components/app-shell";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
-import { isDev, DevIntakeStore } from "@/lib/dev-helpers";
+import { Heart, Stethoscope, ScanLine, ShieldCheck, FileCheck, Pencil, CheckCircle2 } from "lucide-react";
+import { getSessionCookie } from "@/lib/auth";
+import { patients } from "@/lib/api";
 
-const INTAKE_STEPS = [
-  { label: "Symptoms", icon: Stethoscope },
-  { label: "Medical History", icon: Heart },
-  { label: "Verification", icon: ScanLine },
-  { label: "Payment", icon: CreditCard },
-  { label: "Review", icon: FileCheck },
-] as const;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+
+const STEPS = [
+  { id: 1, label: "Symptoms" },
+  { id: 2, label: "History" },
+  { id: 3, label: "Verify" },
+  { id: 4, label: "Payment" },
+  { id: 5, label: "Review" },
+];
 
 export default function IntakeReviewPage() {
   const router = useRouter();
   const [finalConsent, setFinalConsent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [intakeId, setIntakeId] = useState<Id<"intakes"> | null>(null);
-  const [isDevMode, setIsDevMode] = useState(false);
-  const [devData, setDevData] = useState<any>(null);
+  const [consultationId, setConsultationId] = useState<string | null>(null);
 
-  const updateIntakeStep = useMutation(api.intake.updateStep);
-  const completeIntake = useMutation(api.intake.complete);
-  const intakeData = useQuery(
-    api.intake.getById,
-    !isDevMode && intakeId ? { intakeId } : "skip"
-  );
+  // Data read from localStorage — set by previous intake steps
+  const [medicalHistory, setMedicalHistory] = useState<Record<string, any> | null>(null);
+  const [currentSymptoms, setCurrentSymptoms] = useState<Record<string, any> | null>(null);
+  const [idVerified, setIdVerified] = useState(false);
 
-  const currentStep = 4; // Review step is index 4 (last)
+  const currentStep = 5;
+  const pct = (currentStep / STEPS.length) * 100;
 
   useEffect(() => {
-    const dev = isDev();
-    setIsDevMode(dev);
+    const symptomsRaw = localStorage.getItem("sxo_symptoms");
+    const historyRaw = localStorage.getItem("sxo_medical_history");
 
-    if (dev) {
-      const localData = DevIntakeStore.get();
-      if (!localData) {
-        router.push("/intake/symptoms");
-        return;
-      }
-      setIntakeId(localData.id as Id<"intakes">);
-      setDevData(localData);
-    } else {
-      const storedIntakeId = localStorage.getItem("sxo_intake_id");
-      if (!storedIntakeId) {
-        router.push("/intake/symptoms");
-        return;
-      }
-      setIntakeId(storedIntakeId as Id<"intakes">);
-    }
-  }, [router]);
-
-  async function handleSubmit() {
-    if (!finalConsent || !intakeId) return;
-    setIsSubmitting(true);
-
-    if (isDevMode) {
-      DevIntakeStore.updateStep("consent", true);
-      DevIntakeStore.complete();
-      setIsSubmitted(true);
+    if (!symptomsRaw && !historyRaw) {
+      router.push("/intake/symptoms");
       return;
     }
 
-    try {
-      await updateIntakeStep({
-        intakeId,
-        stepName: "consent",
-        data: true,
-      });
+    if (symptomsRaw) {
+      try { setCurrentSymptoms(JSON.parse(symptomsRaw)); } catch { }
+    }
+    if (historyRaw) {
+      try { setMedicalHistory(JSON.parse(historyRaw)); } catch { }
+    }
 
-      await completeIntake({ intakeId });
+    setIdVerified(localStorage.getItem("sxo_id_verified") === "true");
+  }, [router]);
+
+  async function handleSubmit() {
+    if (!finalConsent) return;
+    setIsSubmitting(true);
+
+    try {
+      const session = getSessionCookie();
+      if (!session?.email) { router.push("/access"); return; }
+
+      // Ensure patient record exists
+      let patientRecord = await patients.getByEmail(session.email).catch(() => null);
+      if (!patientRecord && medicalHistory) {
+        patientRecord = await patients.create({
+          email: session.email,
+          firstName: medicalHistory.firstName,
+          lastName: medicalHistory.lastName,
+          dateOfBirth: medicalHistory.dob,
+          gender: medicalHistory.gender,
+          phone: medicalHistory.phone,
+          conditions: medicalHistory.conditions ?? [],
+          medications: medicalHistory.medications ?? [],
+          allergies: medicalHistory.allergies ?? [],
+          surgeries: medicalHistory.surgeries ?? "",
+          familyHistory: medicalHistory.familyHistory ?? [],
+          idVerified,
+        }).catch(() => null);
+      }
+
+      const patientId = (patientRecord as any)?._id ?? (patientRecord as any)?.id;
+
+      // Create consultation record
+      const consultRes = await fetch(`${API_BASE}/consultations/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          patientId,
+          chiefComplaint: currentSymptoms?.chiefComplaint ?? "",
+          status: "waiting",
+          type: "video",
+        }),
+      });
+      const consultJson = await consultRes.json() as { success: boolean; data?: { id: string }; error?: string };
+      const newConsultId = consultJson.data?.id ?? null;
+      if (newConsultId) setConsultationId(newConsultId);
+
+      // Enqueue the consultation in the waiting room
+      if (newConsultId) {
+        await fetch(`${API_BASE}/consultations/${newConsultId}/enqueue`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: "{}",
+        }).catch(() => {});
+      }
+
+      // Clear intake localStorage
+      localStorage.removeItem("sxo_symptoms");
+      localStorage.removeItem("sxo_medical_history");
+      localStorage.removeItem("sxo_id_verified");
+
       setIsSubmitted(true);
-    } catch (error) {
-      console.error("Failed to submit intake:", error);
-      // Fallback for dev/demo: mark as submitted anyway
-      DevIntakeStore.complete();
-      setIsSubmitted(true);
+    } catch {
+      setIsSubmitting(false);
     }
   }
 
-  // Determine the data source (Convex or localStorage)
-  const resolvedData = isDevMode ? devData : intakeData;
-
-  if (!resolvedData) {
+  if (isSubmitted) {
     return (
-      <AppShell>
-        <div className="min-h-screen pt-28 pb-24 px-6 flex items-center justify-center">
-          <span className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-brand-secondary border-t-transparent" />
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="bg-card border-b border-border px-6 h-14 flex items-center justify-between shrink-0">
+          <div>
+            <span className="text-[15px] font-bold tracking-tight text-foreground">ScriptsXO</span>
+            <div className="mt-1 w-6 h-[2px] rounded-full bg-brand-secondary" />
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            HIPAA Compliant
+          </div>
+        </header>
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="glass-card text-center max-w-sm w-full">
+            <div className="w-16 h-16 rounded-full bg-brand-secondary/10 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-8 h-8 text-brand-secondary" />
+            </div>
+            <h2 className="text-xl font-medium text-foreground mb-2" style={{ fontFamily: "var(--font-heading)" }}>
+              Intake Complete
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+              Your information has been submitted. A licensed provider will review your intake shortly.
+            </p>
+            <Link
+              href={consultationId ? `/consultation/waiting-room?id=${consultationId}` : "/consultation/waiting-room"}
+              className="btn-gradient inline-flex items-center justify-center w-full py-3.5 text-sm font-medium relative z-10"
+            >
+              Enter Consultation
+            </Link>
+          </div>
         </div>
-      </AppShell>
+      </div>
     );
   }
 
-  const medicalHistory = resolvedData.medicalHistory as any;
-  const currentSymptoms = resolvedData.currentSymptoms as any;
-
-  if (isSubmitted) {
+  if (!medicalHistory && !currentSymptoms) {
     return (
-      <AppShell>
-        <div className="min-h-screen pt-28 pb-24 px-6 flex items-center justify-center bg-background">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center bg-card border border-border rounded-2xl p-12 shadow-sm max-w-lg w-full"
-          >
-            <div className="w-20 h-20 rounded-full bg-brand-secondary/10 flex items-center justify-center mx-auto mb-6">
-              <CheckCircle2 className="w-10 h-10 text-brand-secondary" />
-            </div>
-            <h2
-              className="text-3xl font-light text-foreground mb-3"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              Intake Complete
-            </h2>
-            <p className="text-muted-foreground font-light mb-8 max-w-sm mx-auto leading-relaxed">
-              Your information has been submitted successfully. A licensed provider will review your medical history shortly.
-            </p>
-            <Link
-              href={`/consultation?intakeId=${intakeId}`}
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-brand-secondary text-white text-xs tracking-wider uppercase font-light hover:bg-brand-secondary/90 transition-all shadow-[0_4px_14px_0_rgba(124,58,237,0.3)] hover:shadow-[0_6px_20px_rgba(124,58,237,0.23)] rounded-xl w-full sm:w-auto"
-            >
-              Enter Consultation
-              <ArrowRight size={16} aria-hidden="true" />
-            </Link>
-          </motion.div>
-        </div>
-      </AppShell>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <span className="spinner spinner-lg text-brand-secondary" />
+      </div>
     );
   }
 
   return (
-    <AppShell>
-      <main className="min-h-screen pt-28 pb-24 px-6 sm:px-8 lg:px-12 bg-background">
-        <div className="max-w-[1400px] mx-auto">
-          {/* Main Layout Grid */}
-          <div className="lg:grid lg:grid-cols-12 lg:gap-16">
+    <div className="min-h-screen bg-background flex flex-col">
 
-            {/* Left Column - Sticky Navigation & Context */}
-            <div className="lg:col-span-4 lg:col-start-2 xl:col-span-3 xl:col-start-2">
-              <div className="sticky top-28 mb-12 lg:mb-0 space-y-12">
+      {/* Header */}
+      <header className="bg-card border-b border-border px-6 h-14 flex items-center justify-between shrink-0">
+        <div>
+          <span className="text-[15px] font-bold tracking-tight text-foreground">ScriptsXO</span>
+          <div className="mt-1 w-6 h-[2px] rounded-full bg-brand-secondary" />
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          HIPAA Compliant
+        </div>
+      </header>
 
-                {/* Page Header */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <h1
-                    className="text-3xl lg:text-4xl font-light text-foreground mb-4"
-                    style={{ fontFamily: "var(--font-heading)" }}
-                  >
-                    Review Your Information
-                  </h1>
-                  <p className="text-muted-foreground font-light leading-relaxed">
-                    Please review everything below before submitting. You can go back to any section to make changes.
-                  </p>
+      {/* Progress bar */}
+      <div className="progress-bar h-[3px] rounded-none shrink-0">
+        <div className="progress-bar-fill transition-all duration-500" style={{ width: `${pct}%` }} />
+      </div>
 
-                  {isDevMode && (
-                    <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#7C3AED]/10 border border-[#7C3AED]/20 text-[#7C3AED] text-xs font-medium">
-                      <FileCheck size={14} />
-                      DEV MODE: LOCAL DATA
-                    </div>
+      <main className="flex-1 flex justify-center px-4 py-8 pb-16">
+        <div className="w-full max-w-[560px]">
+
+          {/* Step dots */}
+          <div className="flex items-center mb-6 px-2">
+            {STEPS.map((st, i) => (
+              <div key={st.id} className="flex items-center" style={{ flex: i < STEPS.length - 1 ? 1 : undefined }}>
+                <div className={[
+                  "rounded-full shrink-0 flex items-center justify-center font-bold transition-all duration-300",
+                  st.id === currentStep
+                    ? "w-8 h-8 bg-brand-secondary text-white shadow-[0_0_0_4px_rgba(124,58,237,0.15)]"
+                    : st.id < currentStep
+                    ? "w-7 h-7 bg-brand-secondary text-white"
+                    : "w-7 h-7 bg-transparent border-2 border-border text-muted-foreground",
+                ].join(" ")}>
+                  {st.id < currentStep ? (
+                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <span className={st.id === currentStep ? "text-[13px]" : "text-[11px]"}>{st.id}</span>
                   )}
-                </motion.div>
-
-                {/* Vertical Progress Component */}
-                <div className="hidden lg:block">
-                  <h3 className="text-xs tracking-[0.2em] text-brand-secondary uppercase font-light mb-6">
-                    Intake Progress
-                  </h3>
-                  <div className="space-y-6 relative before:absolute before:inset-0 before:ml-[15px] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                    {INTAKE_STEPS.map((step, index) => {
-                      const StepIcon = step.icon;
-                      const isActive = index === currentStep;
-                      const isCompleted = index < currentStep;
-
-                      return (
-                        <div key={step.label} className="relative flex items-center gap-4">
-                          <div
-                            className={`flex items-center justify-center w-8 h-8 rounded-full border bg-background z-10 transition-colors ${isActive
-                              ? "border-brand-secondary shadow-[0_0_15px_rgba(124,58,237,0.2)]"
-                              : isCompleted
-                                ? "border-brand-secondary bg-brand-secondary/5"
-                                : "border-border"
-                              }`}
-                          >
-                            <StepIcon
-                              size={14}
-                              className={
-                                isActive
-                                  ? "text-brand-secondary"
-                                  : isCompleted
-                                    ? "text-brand-secondary/70"
-                                    : "text-muted-foreground/50"
-                              }
-                            />
-                          </div>
-                          <span
-                            className={`text-sm font-light transition-colors ${isActive
-                              ? "text-foreground"
-                              : isCompleted
-                                ? "text-foreground/70"
-                                : "text-muted-foreground/50"
-                              }`}
-                          >
-                            {step.label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
+                {i < STEPS.length - 1 && (
+                  <div className={["flex-1 h-0.5 mx-1 rounded-full transition-colors duration-300", st.id < currentStep ? "bg-brand-secondary" : "bg-border"].join(" ")} />
+                )}
+              </div>
+            ))}
+          </div>
 
-                {/* Mobile/Tablet Horizontal Progress */}
-                <div className="lg:hidden">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-[11px] tracking-[0.2em] text-brand-secondary uppercase font-light">
-                      Step {currentStep + 1} of {INTAKE_STEPS.length}
-                    </span>
-                  </div>
-                  <div className="w-full h-px bg-border flex">
-                    {INTAKE_STEPS.map((step, index) => {
-                      const isActive = index === currentStep;
-                      const isCompleted = index < currentStep;
-                      return (
-                        <div
-                          key={step.label}
-                          className={`h-full flex-1 transition-colors ${isActive || isCompleted ? "bg-brand-secondary" : ""
-                            }`}
-                        />
-                      );
-                    })}
-                  </div>
+          {/* Step labels */}
+          <div className="flex justify-between mb-8 px-1">
+            {STEPS.map(st => (
+              <div key={st.id} className={["flex-1 text-center eyebrow transition-colors duration-300", st.id === currentStep || st.id < currentStep ? "text-brand-secondary" : "text-muted-foreground"].join(" ")}>
+                {st.label}
+              </div>
+            ))}
+          </div>
+
+          <div className="mb-6">
+            <h1 className="text-xl font-medium text-foreground mb-1.5 tracking-tight" style={{ fontFamily: "var(--font-heading)" }}>
+              Review Your Information
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Review everything below before submitting.
+            </p>
+          </div>
+
+          {/* Medical History */}
+          {medicalHistory && (
+            <div className="glass-card mb-4">
+              <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Heart className="w-4 h-4 text-brand-secondary" />
+                  <span className="text-sm font-medium text-foreground">Medical History</span>
                 </div>
+                <Link href="/intake/medical-history" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand-secondary transition-colors">
+                  <Pencil className="w-3 h-3" /> Edit
+                </Link>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: "Name", value: `${medicalHistory.firstName} ${medicalHistory.lastName}` },
+                  { label: "Date of Birth", value: medicalHistory.dob },
+                  { label: "Gender", value: medicalHistory.gender },
+                  { label: "Phone", value: medicalHistory.phone },
+                  medicalHistory.conditions?.length > 0 && { label: "Conditions", value: medicalHistory.conditions.join(", ") },
+                  medicalHistory.medications?.length > 0 && { label: "Medications", value: medicalHistory.medications.join(", ") },
+                  medicalHistory.allergies?.length > 0 && { label: "Allergies", value: medicalHistory.allergies.join(", ") },
+                  medicalHistory.surgeries && { label: "Surgeries", value: medicalHistory.surgeries },
+                  medicalHistory.familyHistory?.length > 0 && { label: "Family History", value: medicalHistory.familyHistory.join(", ") },
+                ].filter(Boolean).map((row: any) => (
+                  <div key={row.label} className="flex gap-3">
+                    <span className="eyebrow text-muted-foreground w-28 shrink-0 pt-0.5">{row.label}</span>
+                    <span className="text-sm text-foreground">{row.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
+          )}
 
-            {/* Right Column - Main Content */}
-            <div className="lg:col-span-6 xl:col-span-6">
-              <div className="space-y-8">
-
-                {/* Medical History Section */}
-                {medicalHistory && (
-                  <motion.section
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm"
-                  >
-                    <div className="flex items-center justify-between px-6 py-5 border-b border-border bg-muted/20">
-                      <div className="flex items-center gap-3">
-                        <Heart size={18} className="text-brand-secondary" aria-hidden="true" />
-                        <h2
-                          className="text-lg font-light text-foreground"
-                          style={{ fontFamily: "var(--font-heading)" }}
-                        >
-                          Medical History
-                        </h2>
-                      </div>
-                      <Link
-                        href="/intake/medical-history"
-                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-brand-secondary transition-colors"
-                      >
-                        <Pencil size={14} aria-hidden="true" />
-                        Edit
-                      </Link>
-                    </div>
-                    <div className="divide-y divide-border/50">
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Name</span>
-                        <span className="text-sm font-light text-foreground">{medicalHistory.firstName} {medicalHistory.lastName}</span>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Date of Birth</span>
-                        <span className="text-sm font-light text-foreground">{medicalHistory.dob}</span>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Gender</span>
-                        <span className="text-sm font-light text-foreground">{medicalHistory.gender}</span>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Phone</span>
-                        <span className="text-sm font-light text-foreground">{medicalHistory.phone}</span>
-                      </div>
-                      {medicalHistory.conditions?.length > 0 && (
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                          <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Conditions</span>
-                          <span className="text-sm font-light text-foreground">{medicalHistory.conditions.join(", ")}</span>
-                        </div>
-                      )}
-                      {medicalHistory.medications?.length > 0 && (
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                          <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Medications</span>
-                          <span className="text-sm font-light text-foreground">{medicalHistory.medications.join(", ")}</span>
-                        </div>
-                      )}
-                      {medicalHistory.allergies?.length > 0 && (
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                          <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Allergies</span>
-                          <span className="text-sm font-light text-foreground">{medicalHistory.allergies.join(", ")}</span>
-                        </div>
-                      )}
-                      {medicalHistory.surgeries && (
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                          <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Surgeries</span>
-                          <span className="text-sm font-light text-foreground">{medicalHistory.surgeries}</span>
-                        </div>
-                      )}
-                      {medicalHistory.familyHistory?.length > 0 && (
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                          <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Family History</span>
-                          <span className="text-sm font-light text-foreground">{medicalHistory.familyHistory.join(", ")}</span>
-                        </div>
-                      )}
-                    </div>
-                  </motion.section>
-                )}
-
-                {/* Current Symptoms Section */}
-                {currentSymptoms && (
-                  <motion.section
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm"
-                  >
-                    <div className="flex items-center justify-between px-6 py-5 border-b border-border bg-muted/20">
-                      <div className="flex items-center gap-3">
-                        <Stethoscope size={18} className="text-brand-secondary" aria-hidden="true" />
-                        <h2
-                          className="text-lg font-light text-foreground"
-                          style={{ fontFamily: "var(--font-heading)" }}
-                        >
-                          Current Symptoms
-                        </h2>
-                      </div>
-                      <Link
-                        href="/intake/symptoms"
-                        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-brand-secondary transition-colors"
-                      >
-                        <Pencil size={14} aria-hidden="true" />
-                        Edit
-                      </Link>
-                    </div>
-                    <div className="divide-y divide-border/50">
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                        <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Chief Concern</span>
-                        <span className="text-sm font-light text-foreground">{currentSymptoms.chiefComplaint || resolvedData.chiefComplaint}</span>
-                      </div>
-                      {currentSymptoms.duration && (
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                          <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Duration</span>
-                          <span className="text-sm font-light text-foreground">{currentSymptoms.duration}</span>
-                        </div>
-                      )}
-                      {currentSymptoms.severity && (
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                          <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Severity</span>
-                          <span className="text-sm font-light text-foreground">{currentSymptoms.severity} / 10</span>
-                        </div>
-                      )}
-                      {currentSymptoms.relatedSymptoms?.length > 0 && (
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                          <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Related Symptoms</span>
-                          <span className="text-sm font-light text-foreground">{currentSymptoms.relatedSymptoms.join(", ")}</span>
-                        </div>
-                      )}
-                      {currentSymptoms.previousTreatments && (
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-6 py-4">
-                          <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0 sm:pt-0.5">Previous Treatments</span>
-                          <span className="text-sm font-light text-foreground">{currentSymptoms.previousTreatments}</span>
-                        </div>
-                      )}
-                    </div>
-                  </motion.section>
-                )}
-
-                {/* Identity Verification Section */}
-                <motion.section
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm"
-                >
-                  <div className="flex items-center justify-between px-6 py-5 border-b border-border bg-muted/20">
-                    <div className="flex items-center gap-3">
-                      <ScanLine size={18} className="text-brand-secondary" aria-hidden="true" />
-                      <h2
-                        className="text-lg font-light text-foreground"
-                        style={{ fontFamily: "var(--font-heading)" }}
-                      >
-                        Identity Verification
-                      </h2>
-                    </div>
-                    <Link
-                      href="/intake/id-verification"
-                      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-brand-secondary transition-colors"
-                    >
-                      <Pencil size={14} aria-hidden="true" />
-                      Edit
-                    </Link>
-                  </div>
-                  <div className="divide-y divide-border/50">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 px-6 py-4">
-                      <span className="text-xs font-medium tracking-wider text-muted-foreground uppercase sm:w-40 sm:flex-shrink-0">Status</span>
-                      <div className="flex items-center gap-2">
-                        {resolvedData.idVerified ? (
-                          <>
-                            <CheckCircle2 size={16} className="text-green-500" />
-                            <span className="text-sm font-light text-foreground">Verified via Stripe Identity</span>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                            <span className="text-sm font-light text-foreground">Pending verification</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </motion.section>
-
-                {/* HIPAA notice */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-6 bg-[#7C3AED]/[0.02] border border-[#7C3AED]/20 rounded-2xl text-center sm:text-left"
-                >
-                  <div className="w-10 h-10 rounded-full bg-[#7C3AED]/10 flex items-center justify-center text-[#7C3AED] flex-shrink-0">
-                    <ShieldCheck size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-foreground mb-1">
-                      HIPAA-Compliant Submission
-                    </h3>
-                    <p className="text-xs text-muted-foreground font-light leading-relaxed">
-                      Your health information is protected under HIPAA. All data is encrypted in transit and at rest. Only your assigned provider will have access to your intake information.
-                    </p>
-                  </div>
-                </motion.div>
-
-                {/* Final Consent */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="bg-card border border-border rounded-2xl p-6 shadow-sm"
-                >
-                  <div
-                    className="group relative flex items-start gap-4 cursor-pointer"
-                    onClick={() => setFinalConsent(!finalConsent)}
-                  >
-                    <div className="mt-0.5 flex-shrink-0">
-                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${finalConsent ? "border-brand-secondary bg-brand-secondary" : "border-muted-foreground/30 bg-background"}`}>
-                        <CheckCircle2 size={14} className={`text-white transition-opacity ${finalConsent ? "opacity-100" : "opacity-0"}`} />
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground font-light leading-relaxed select-none">
-                      I certify that the information provided is accurate and complete to the best of my knowledge. I consent to receiving telehealth services from a licensed healthcare provider. I understand that telehealth is not a substitute for emergency care. I have reviewed and agree to the{" "}
-                      <Link
-                        href="/terms"
-                        className="text-brand-secondary hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Terms of Service
-                      </Link>{" "}
-                      and{" "}
-                      <Link
-                        href="/hipaa"
-                        className="text-brand-secondary hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        HIPAA Notice of Privacy Practices
-                      </Link>
-                      .
-                    </p>
-                  </div>
-                </motion.div>
-
-                {/* Navigation Actions */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
-                  className="flex flex-col-reverse sm:flex-row justify-between items-center gap-4 pt-8"
-                >
-                  <button
-                    onClick={() => router.push("/intake/payment")}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 border border-border text-foreground text-xs tracking-wider uppercase font-light hover:bg-muted transition-colors rounded-xl"
-                  >
-                    <ArrowLeft size={16} aria-hidden="true" />
-                    Back
-                  </button>
-
-                  <button
-                    onClick={handleSubmit}
-                    disabled={!finalConsent || isSubmitting}
-                    className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 text-xs tracking-wider uppercase font-light rounded-xl transition-all duration-300 ${finalConsent
-                      ? "bg-foreground text-background hover:bg-foreground/90 shadow-xl shadow-foreground/10"
-                      : "bg-muted text-muted-foreground cursor-not-allowed border border-border"
-                      }`}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        Submitting...
-                      </>
-                    ) : (
-                      <>
-                        Submit Intake
-                        <ArrowRight size={16} aria-hidden="true" />
-                      </>
-                    )}
-                  </button>
-                </motion.div>
-
+          {/* Symptoms */}
+          {currentSymptoms && (
+            <div className="glass-card mb-4">
+              <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Stethoscope className="w-4 h-4 text-brand-secondary" />
+                  <span className="text-sm font-medium text-foreground">Symptoms</span>
+                </div>
+                <Link href="/intake/symptoms" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand-secondary transition-colors">
+                  <Pencil className="w-3 h-3" /> Edit
+                </Link>
               </div>
+              <div className="space-y-2">
+                {[
+                  { label: "Chief Concern", value: currentSymptoms.chiefComplaint },
+                  currentSymptoms.duration && { label: "Duration", value: currentSymptoms.duration },
+                  currentSymptoms.severity && { label: "Severity", value: `${currentSymptoms.severity} / 10` },
+                  currentSymptoms.relatedSymptoms?.length > 0 && { label: "Related", value: currentSymptoms.relatedSymptoms.join(", ") },
+                  currentSymptoms.previousTreatments && { label: "Treatments", value: currentSymptoms.previousTreatments },
+                ].filter(Boolean).map((row: any) => (
+                  <div key={row.label} className="flex gap-3">
+                    <span className="eyebrow text-muted-foreground w-28 shrink-0 pt-0.5">{row.label}</span>
+                    <span className="text-sm text-foreground">{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Identity */}
+          <div className="glass-card mb-4">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <ScanLine className="w-4 h-4 text-brand-secondary" />
+                <span className="text-sm font-medium text-foreground">Identity Verification</span>
+              </div>
+              <Link href="/intake/id-verification" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-brand-secondary transition-colors">
+                <Pencil className="w-3 h-3" /> Edit
+              </Link>
+            </div>
+            <div className="flex items-center gap-2">
+              {idVerified ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span className="text-sm text-foreground">Verified via Stripe Identity</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-warning" />
+                  <span className="text-sm text-foreground">Pending verification</span>
+                </>
+              )}
             </div>
           </div>
+
+          {/* HIPAA notice */}
+          <div className="flex gap-3 p-4 rounded-xl bg-brand-secondary/[0.04] border border-brand-secondary/15 mb-5">
+            <ShieldCheck className="w-4 h-4 text-brand-secondary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-medium text-foreground mb-0.5">HIPAA-Compliant Submission</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Your health information is protected under HIPAA. All data is encrypted in transit and at rest. Only your assigned provider will have access to your intake.
+              </p>
+            </div>
+          </div>
+
+          {/* Consent */}
+          <div className="glass-card mb-5">
+            <div className="flex gap-3 cursor-pointer" onClick={() => setFinalConsent(!finalConsent)}>
+              <div className={["w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-colors", finalConsent ? "border-brand-secondary bg-brand-secondary" : "border-muted-foreground/30 bg-background"].join(" ")}>
+                {finalConsent && <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed select-none">
+                I certify that the information provided is accurate. I consent to receiving telehealth services from a licensed healthcare provider. I agree to the{" "}
+                <Link href="/terms" className="text-brand-secondary hover:underline" onClick={e => e.stopPropagation()}>Terms of Service</Link>
+                {" "}and{" "}
+                <Link href="/hipaa" className="text-brand-secondary hover:underline" onClick={e => e.stopPropagation()}>HIPAA Notice of Privacy Practices</Link>.
+              </p>
+            </div>
+          </div>
+
+          <button onClick={handleSubmit} disabled={!finalConsent || isSubmitting}
+            className={["btn-gradient w-full py-3.5 text-sm font-medium relative z-10 flex items-center justify-center gap-2", (!finalConsent || isSubmitting) && "opacity-40 cursor-not-allowed"].join(" ")}>
+            {isSubmitting ? <><span className="spinner" /> Submitting...</> : "Submit Intake"}
+          </button>
+
+          <p className="text-center mt-5 text-[11px] text-muted-foreground leading-relaxed">
+            Your information is protected under HIPAA and encrypted in transit.
+          </p>
         </div>
       </main>
-    </AppShell>
+    </div>
   );
 }

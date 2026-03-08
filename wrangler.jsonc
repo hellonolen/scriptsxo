@@ -9,7 +9,7 @@
 	// Cloudflare's tool outputs here. We do NOT use or deploy to Vercel.
 	"pages_build_output_dir": ".vercel/output/static",
 	"vars": {
-		"NEXT_PUBLIC_CONVEX_URL": "https://striped-caribou-797.convex.cloud",
+		"NEXT_PUBLIC_API_URL": "https://scriptsxo-api.hellonolen.workers.dev",
 		"CLOUDFLARE_PAGES": "true"
 	},
 	"r2_buckets": [

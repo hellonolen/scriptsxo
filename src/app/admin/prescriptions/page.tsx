@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useAction } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { useState, useEffect } from "react";
+import { prescriptions as prescriptionsApi, fax } from "@/lib/api";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,6 @@ import {
   Search,
   FileDown,
   Send,
-  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -32,19 +30,22 @@ function rxStatusVariant(status: string) {
 }
 
 export default function AdminPrescriptionsPage() {
-  const prescriptions = useQuery(api.prescriptions.listAll, {});
-  const generatePdf = useAction(api.actions.generatePrescriptionPdf.generate);
-  const sendFax = useAction(api.actions.sendFax.send);
-
+  const [rxList, setRxList] = useState<any[] | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
   const [sendingFax, setSendingFax] = useState<string | null>(null);
 
-  const filtered = (prescriptions ?? []).filter((rx) => {
+  useEffect(() => {
+    prescriptionsApi.getByProvider("all")
+      .then((data) => setRxList(Array.isArray(data) ? data : []))
+      .catch(() => setRxList([]));
+  }, []);
+
+  const filtered = (rxList ?? []).filter((rx: any) => {
     const matchesSearch =
       !searchTerm ||
-      rx.medicationName.toLowerCase().includes(searchTerm.toLowerCase());
+      (rx.medicationName ?? "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || rx.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -52,26 +53,35 @@ export default function AdminPrescriptionsPage() {
   const handleGeneratePdf = async (prescriptionId: string) => {
     setGeneratingPdf(prescriptionId);
     try {
-      const result = await generatePdf({ prescriptionId: prescriptionId as any });
-      if (result.url) {
-        window.open(result.url, "_blank");
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+      const token = document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/)?.[1];
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${decodeURIComponent(token)}`;
+
+      const res = await fetch(`${API_BASE}/prescriptions/${prescriptionId}/pdf`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: "{}",
+      });
+      const json = await res.json() as { success: boolean; data?: { url?: string } };
+      if (json.data?.url) {
+        window.open(json.data.url, "_blank");
       }
-    } catch (err) {
-      console.error("PDF generation failed:", err);
+    } catch {
+      // silently fail
     } finally {
       setGeneratingPdf(null);
     }
   };
 
-  const handleSendFax = async (prescriptionId: string, pharmacyId: string) => {
+  const handleSendFax = async (prescriptionId: string, pharmacyId: string, pharmacyFaxNumber: string) => {
     setSendingFax(prescriptionId);
     try {
-      await sendFax({
-        prescriptionId: prescriptionId as any,
-        pharmacyId: pharmacyId as any,
-      });
-    } catch (err) {
-      console.error("Fax send failed:", err);
+      await fax.send(prescriptionId, pharmacyId, pharmacyFaxNumber, "");
+    } catch {
+      // silently fail
     } finally {
       setSendingFax(null);
     }
@@ -95,7 +105,7 @@ export default function AdminPrescriptionsPage() {
                 Prescriptions
               </h1>
               <p className="text-sm text-muted-foreground font-light">
-                {prescriptions?.length ?? 0} total prescriptions
+                {rxList?.length ?? 0} total prescriptions
               </p>
             </div>
           </div>
@@ -142,20 +152,20 @@ export default function AdminPrescriptionsPage() {
             <span>Actions</span>
           </div>
 
-          {!prescriptions && (
+          {!rxList && (
             <div className="p-12 text-left text-muted-foreground font-light">
               Loading prescriptions...
             </div>
           )}
 
-          {prescriptions && filtered.length === 0 && (
+          {rxList && filtered.length === 0 && (
             <div className="p-12 text-left text-muted-foreground font-light">
               No prescriptions found.
             </div>
           )}
 
           <div className="divide-y divide-border">
-            {filtered.map((rx) => (
+            {filtered.map((rx: any) => (
               <div
                 key={rx._id}
                 className="grid grid-cols-1 md:grid-cols-[1fr_100px_100px_80px_100px_140px] gap-2 md:gap-4 items-center px-6 py-4 hover:bg-muted/20 transition-colors"
@@ -186,7 +196,7 @@ export default function AdminPrescriptionsPage() {
                   </button>
                   {rx.pharmacyId && rx.status === "signed" && (
                     <button
-                      onClick={() => handleSendFax(rx._id, rx.pharmacyId!)}
+                      onClick={() => handleSendFax(rx._id, rx.pharmacyId, rx.pharmacyFaxNumber ?? "")}
                       disabled={sendingFax === rx._id}
                       className="p-1.5 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                       title="Send Fax to Pharmacy"
@@ -200,10 +210,10 @@ export default function AdminPrescriptionsPage() {
           </div>
         </div>
 
-        {/* Date info */}
+        {/* Count info */}
         {filtered.length > 0 && (
           <p className="text-[11px] text-muted-foreground mt-4 font-light">
-            Showing {filtered.length} of {prescriptions?.length ?? 0} prescriptions
+            Showing {filtered.length} of {rxList?.length ?? 0} prescriptions
           </p>
         )}
       </div>

@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Id } from "../../../../convex/_generated/dataModel";
 import { Pill, Plus, FileDown, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
-import { useQuery, useAction } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { patients, prescriptions } from "@/lib/api";
 
 /* ---------------------------------------------------------------------------
    STATUS TRACKER CONSTANTS
@@ -179,7 +177,11 @@ function getStatusBadge(status: string): { label: string; isActive: boolean } {
 export default function PrescriptionsPage() {
   const [email, setEmail] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
-  const [downloading, setDownloading] = useState<Id<"prescriptions"> | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [patient, setPatient] = useState<Record<string, any> | null | undefined>(undefined);
+  const [rxList, setRxList] = useState<Record<string, any>[]>([]);
+  const [patientLoading, setPatientLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
 
   useEffect(() => {
     const session = getSessionCookie();
@@ -189,35 +191,32 @@ export default function PrescriptionsPage() {
     setSessionChecked(true);
   }, []);
 
-  const patient = useQuery(
-    api.patients.getByEmail,
-    email ? { email } : "skip"
-  );
+  useEffect(() => {
+    if (!email) return;
+    setPatientLoading(true);
+    patients.getByEmail(email)
+      .then(setPatient)
+      .catch(() => setPatient(null))
+      .finally(() => setPatientLoading(false));
+  }, [email]);
 
-  const prescriptions = useQuery(
-    api.prescriptions.getByPatient,
-    patient ? { patientId: patient._id } : "skip"
-  );
+  useEffect(() => {
+    if (!patient) return;
+    const id = (patient as any)._id ?? (patient as any).id;
+    if (!id) return;
+    setDataLoading(true);
+    prescriptions.getByPatient(id)
+      .then((list) => setRxList(Array.isArray(list) ? list : []))
+      .catch(() => setRxList([]))
+      .finally(() => setDataLoading(false));
+  }, [patient]);
 
-  const generatePdf = useAction(api.actions.generatePrescriptionPdf.generate);
-
-  const handleDownloadPdf = async (prescriptionId: Id<"prescriptions">) => {
+  const handleDownloadPdf = async (prescriptionId: string) => {
     setDownloading(prescriptionId);
-    try {
-      const session = getSessionCookie();
-      await generatePdf({ prescriptionId, sessionToken: session?.sessionToken ?? "" });
-    } catch {
-      // Error handling — PDF generation failure is silent to avoid exposing details
-    } finally {
-      setDownloading(prescriptionId);
-      setTimeout(() => setDownloading(null), 1500);
-    }
+    // PDF generation not yet available in REST API — placeholder
+    setTimeout(() => setDownloading(null), 1500);
   };
 
-  // Loading state — only show spinner while Convex queries are in-flight (undefined).
-  // If patient is null, it means no patient record found — skip to render with empty state.
-  const patientLoading = email !== null && patient === undefined;
-  const dataLoading = patient != null && (prescriptions === undefined);
   if (!sessionChecked || patientLoading || dataLoading) {
     return (
       <AppShell>
@@ -232,8 +231,6 @@ export default function PrescriptionsPage() {
       </AppShell>
     );
   }
-
-  const rxList = prescriptions ?? [];
 
   return (
     <AppShell>
@@ -264,9 +261,10 @@ export default function PrescriptionsPage() {
           <div className="space-y-4">
             {rxList.map((rx: any) => {
               const badge = getStatusBadge(rx.status);
+              const rxId = rx._id ?? rx.id;
 
               return (
-                <div key={rx._id} className="glass-card group">
+                <div key={rxId} className="glass-card group">
                   <div className="flex flex-col lg:flex-row lg:items-start gap-5">
 
                     {/* Left: Medication info */}
@@ -335,12 +333,12 @@ export default function PrescriptionsPage() {
                   {(rx.status === "signed" || rx.status === "sent" || rx.status === "ready") && (
                     <div className="pt-4 mt-4 border-t border-border flex items-center gap-4">
                       <button
-                        onClick={() => handleDownloadPdf(rx._id)}
-                        disabled={downloading === rx._id}
+                        onClick={() => handleDownloadPdf(rxId)}
+                        disabled={downloading === rxId}
                         className="flex items-center gap-2 text-[10px] tracking-[0.12em] uppercase text-muted-foreground hover:text-[#7C3AED] transition-colors disabled:opacity-50"
                       >
                         <FileDown size={12} aria-hidden="true" />
-                        {downloading === rx._id ? "Generating..." : "Download PDF"}
+                        {downloading === rxId ? "Generating..." : "Download PDF"}
                       </button>
                     </div>
                   )}

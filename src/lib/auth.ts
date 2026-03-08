@@ -10,8 +10,8 @@
 
 import { SITECONFIG } from "@/lib/config";
 
-// Cookie names (must match middleware.ts)
-const SESSIONCOOKIE = "app_session";
+// Cookie names (must match middleware.ts and workers/api)
+const SESSIONCOOKIE = "scriptsxo_session";
 const ADMINCOOKIE = "app_admin";
 
 // Cookie options

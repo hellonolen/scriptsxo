@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import {
   Users,
   Pill,
@@ -13,6 +11,7 @@ import {
   CalendarCheck,
   ClipboardList,
   Loader2,
+  FileClock,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +20,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { NavCard } from "@/components/ui/nav-card";
 import { term } from "@/lib/config";
 import { getSessionCookie } from "@/lib/auth";
+import { consultations, prescriptions } from "@/lib/api";
 
 const URGENCY_VARIANT: Record<string, "warning" | "info" | "success"> = {
   urgent: "warning",
@@ -28,7 +28,7 @@ const URGENCY_VARIANT: Record<string, "warning" | "info" | "success"> = {
   routine: "success",
 };
 
-const NAV_CARDS = [
+const STATIC_NAV_CARDS = [
   {
     icon: Users,
     title: `My ${term("titlePlural")}`,
@@ -57,6 +57,9 @@ export default function ProviderDashboard() {
   const [providerName, setProviderName] = useState<string>("Provider");
   const [sessionReady, setSessionReady] = useState(false);
 
+  const [queue, setQueue] = useState<any[] | undefined>(undefined);
+  const [pendingRx, setPendingRx] = useState<any[] | undefined>(undefined);
+
   useEffect(() => {
     const session = getSessionCookie();
     if (session?.email) {
@@ -66,10 +69,17 @@ export default function ProviderDashboard() {
     setSessionReady(true);
   }, []);
 
-  const queue = useQuery(
-    api.consultations.getProviderQueue,
-    providerEmail ? { providerEmail } : "skip"
-  );
+  useEffect(() => {
+    if (!sessionReady || !providerEmail) return;
+
+    consultations.getQueue()
+      .then((data) => setQueue(Array.isArray(data) ? data : []))
+      .catch(() => setQueue([]));
+
+    prescriptions.getByProvider(providerEmail)
+      .then((data) => setPendingRx(Array.isArray(data) ? (data as any[]).filter((rx: any) => rx.status === "draft") : []))
+      .catch(() => setPendingRx([]));
+  }, [sessionReady, providerEmail]);
 
   const queueList = queue ?? [];
   const waitingQueue = queueList.filter(
@@ -80,11 +90,6 @@ export default function ProviderDashboard() {
   todayStart.setHours(0, 0, 0, 0);
   const todayVisits = queueList.filter(
     (c: any) => c.status === "completed" && c.endedAt && c.endedAt >= todayStart.getTime()
-  );
-
-  const pendingRx = useQuery(
-    api.prescriptions.listAll,
-    { status: "draft" }
   );
 
   return (
@@ -210,7 +215,7 @@ export default function ProviderDashboard() {
 
         {/* Navigation Cards */}
         <div className="grid sm:grid-cols-3 gap-5">
-          {NAV_CARDS.map((card) => (
+          {STATIC_NAV_CARDS.map((card) => (
             <NavCard
               key={card.title}
               href={card.href}
@@ -220,6 +225,17 @@ export default function ProviderDashboard() {
               stat={card.stat}
             />
           ))}
+          <NavCard
+            href="/provider/video-review"
+            icon={FileClock}
+            title="Video Reviews"
+            description="Review AI-analyzed async patient video submissions."
+            rightSlot={
+              <span className="text-xs tracking-[0.1em] text-brand-secondary uppercase font-light">
+                View All
+              </span>
+            }
+          />
         </div>
       </div>
     </AppShell>

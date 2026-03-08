@@ -9,7 +9,7 @@ const MODES = [
     id: "client",
     label: "Client",
     plural: "Clients",
-    description: "Default for ScriptsXO. People are clients — a modern, non-clinical framing suited to concierge and direct-to-consumer health.",
+    description: "Default for ScriptsXO. People are clients — a modern, non-practiceal framing suited to concierge and direct-to-consumer health.",
     examples: ["Client portal", "My clients", "New client intake"],
     recommended: true,
   },
@@ -17,7 +17,7 @@ const MODES = [
     id: "patient",
     label: "Patient",
     plural: "Patients",
-    description: "For licensed clinics, hospitals, and medical organizations that use clinical terminology and may have regulatory requirements around the term \"patient\".",
+    description: "For licensed practices, hospitals, and medical organizations that use practiceal terminology and may have regulatory requirements around the term \"patient\".",
     examples: ["Patient chart", "My patients", "New patient intake"],
     recommended: false,
   },
@@ -98,14 +98,14 @@ export default function TerminologySettingsPage() {
         <section>
           <h2 className="text-sm font-medium text-foreground mb-1">Per-organization override</h2>
           <p className="text-sm text-muted-foreground mb-5">
-            When you onboard a clinic or hospital under a separate organization record, set{" "}
+            When you onboard a practice or hospital under a separate organization record, set{" "}
             <code className="text-xs bg-muted px-1.5 py-0.5 rounded">terminologyMode</code> on
             that organization to <code className="text-xs bg-muted px-1.5 py-0.5 rounded">"patient"</code>.
             The platform default (<strong>client</strong>) applies everywhere else.
           </p>
 
           <div className="glass-card p-5 text-sm text-muted-foreground space-y-3">
-            <p className="font-medium text-foreground text-xs uppercase tracking-wide">How to configure a clinical org</p>
+            <p className="font-medium text-foreground text-xs uppercase tracking-wide">How to configure a practiceal org</p>
             <ol className="list-decimal list-inside space-y-2 leading-relaxed">
               <li>
                 Go to <Link href="/admin/integrations" className="text-violet-600 hover:underline">Admin → Organizations</Link> and open the org record.

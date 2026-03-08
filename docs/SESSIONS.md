@@ -460,3 +460,31 @@ Three-screen consultation flow to build (front end first):
 
 ### Open Items After This Session
 - Same as previous session plus: test capability gate with real verified/unverified accounts end-to-end
+
+---
+
+## Session: 2026-03-08 (Backend Migration: Convex -> Cloudflare D1/Workers/R2)
+
+### Work Completed
+- Migrated entire backend from Convex to Cloudflare D1 + Workers + R2
+- Created D1 database `scriptsxo` (ID: aca066e4-23f5-4135-9036-92c9c6516e95) with 36 tables
+- Built `scriptsxo-api` Cloudflare Worker (Hono router) at https://scriptsxo-api.hellonolen.workers.dev
+- Routes: /auth, /members, /patients, /providers, /consultations, /prescriptions, /pharmacies, /fax, /storage, /intakes, /billing, /notifications, /messages, /video-reviews, /ai
+- Created src/lib/api.ts -- frontend API client replacing all Convex calls
+- Migrated all 40+ frontend pages to use api.ts instead of useQuery/useMutation
+- Session cookie renamed from app_session to scriptsxo_session
+- R2 bucket scriptsxo-assets bound to Worker for file storage
+- Removed NEXT_PUBLIC_CONVEX_URL from wrangler.jsonc, replaced with NEXT_PUBLIC_API_URL
+- Set Worker secrets: ADMIN_EMAILS, VPS_FAX_URL, VPS_FAX_SECRET via wrangler secret put
+
+### Architecture After Migration
+- Frontend: Next.js on Cloudflare Pages (unchanged)
+- Database: Cloudflare D1 (SQLite) -- 36 tables
+- API: Cloudflare Worker (Hono) -- scriptsxo-api
+- Storage: Cloudflare R2 -- scriptsxo-assets
+- Fax: VPS 144.202.25.33 (Asterisk) triggered via Worker API
+
+### Decisions Made
+- ADR-035: Migrate from Convex to Cloudflare D1/Workers -- full Cloudflare-native stack
+- ADR-036: Hono as Workers router -- lightweight, edge-optimized
+- ADR-037: Session cookie renamed scriptsxo_session for clarity

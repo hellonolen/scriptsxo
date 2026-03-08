@@ -4,37 +4,20 @@ import { useState, useEffect } from "react";
 import { CreditCard, Receipt, Download, DollarSign, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
-import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 import { formatPrice } from "@/lib/config";
 
 export default function BillingPage() {
-  const [email, setEmail] = useState<string | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
-    const session = getSessionCookie();
-    if (session?.email) {
-      setEmail(session.email);
-    }
+    getSessionCookie();
     setSessionChecked(true);
   }, []);
 
-  const patient = useQuery(
-    api.patients.getByEmail,
-    email ? { email } : "skip"
-  );
+  // Billing API not yet available in REST API — render empty state gracefully
+  const billList: Record<string, any>[] = [];
 
-  const billingRecords = useQuery(
-    api.billing.getByPatient,
-    patient ? { patientId: patient._id } : "skip"
-  );
-
-  // Loading state — only show spinner while queries are in-flight.
-  // patient === null means no record found — proceed to render.
-  const patientLoading = email !== null && patient === undefined;
-  const dataLoading = patient != null && billingRecords === undefined;
-  if (!sessionChecked || patientLoading || dataLoading) {
+  if (!sessionChecked) {
     return (
       <AppShell>
         <div className="p-6 lg:p-10 max-w-[1200px]">
@@ -48,8 +31,6 @@ export default function BillingPage() {
       </AppShell>
     );
   }
-
-  const billList = billingRecords ?? [];
 
   return (
     <AppShell>
@@ -100,7 +81,7 @@ export default function BillingPage() {
             <div className="glass-card p-0 divide-y divide-border">
               {billList.map((payment: any) => (
                 <div
-                  key={payment._id}
+                  key={payment._id ?? payment.id}
                   className="flex items-center justify-between px-6 py-4"
                 >
                   <div className="flex items-center gap-4">

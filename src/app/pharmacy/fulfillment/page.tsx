@@ -8,9 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { shouldShowDemoData } from "@/lib/demo";
 import { SEED_FULFILLMENT_ORDERS } from "@/lib/seed-data";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
-import { getSessionCookie } from "@/lib/auth";
+import { prescriptions as prescriptionsApi } from "@/lib/api";
 
 const STATUS_MAP = {
   filling:  { label: "Filling",  variant: "warning"  as const },
@@ -32,37 +30,56 @@ type FulfillmentOrder = {
 
 export default function FulfillmentPage() {
   const [showDemo, setShowDemo]   = useState(false);
-  const [sessionToken, setToken]  = useState<string | null>(null);
+  const [orders, setOrders] = useState<FulfillmentOrder[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    setShowDemo(shouldShowDemoData());
-    const session = getSessionCookie();
-    if (session?.sessionToken) setToken(session.sessionToken);
+    const demo = shouldShowDemoData();
+    setShowDemo(demo);
+
+    if (!demo) {
+      setIsLoading(true);
+      prescriptionsApi.getByProvider("all")
+        .then((data) => {
+          const all = Array.isArray(data) ? data as any[] : [];
+          const mapped: FulfillmentOrder[] = [
+            ...all.filter((rx) => rx.status === "filling").map((rx) => ({
+              id: rx._id, _id: rx._id,
+              patient: rx.patientEmail ?? "Patient",
+              medication: rx.medicationName + (rx.dosage ? ` ${rx.dosage}` : ""),
+              status: "filling" as const,
+              eta: "In queue",
+            })),
+            ...all.filter((rx) => rx.status === "ready").map((rx) => ({
+              id: rx._id, _id: rx._id,
+              patient: rx.patientEmail ?? "Patient",
+              medication: rx.medicationName + (rx.dosage ? ` ${rx.dosage}` : ""),
+              status: "ready" as const,
+              eta: "Pickup",
+            })),
+            ...all.filter((rx) => rx.status === "shipped").map((rx) => ({
+              id: rx._id, _id: rx._id,
+              patient: rx.patientEmail ?? "Patient",
+              medication: rx.medicationName + (rx.dosage ? ` ${rx.dosage}` : ""),
+              status: "shipped" as const,
+              tracking: rx.trackingNumber,
+            })),
+          ];
+          setOrders(mapped);
+        })
+        .catch(() => setOrders([]))
+        .finally(() => setIsLoading(false));
+    }
   }, []);
 
-  // Fetch prescriptions in fulfillment statuses
-  const fillingRx = useQuery(
-    api.prescriptions.listAll,
-    !showDemo ? { status: "filling" } : "skip"
-  );
-  const readyRx = useQuery(
-    api.prescriptions.listAll,
-    !showDemo ? { status: "ready" } : "skip"
-  );
-  const shippedRx = useQuery(
-    api.prescriptions.listAll,
-    !showDemo ? { status: "shipped" } : "skip"
-  );
-
-  const updateStatus = useMutation(api.prescriptions.updateStatus);
-
-  const isLoading = !showDemo && (
-    fillingRx === undefined || readyRx === undefined || shippedRx === undefined
-  );
-
   async function handleStatusChange(rxId: string, newStatus: string) {
-    if (!sessionToken) return;
-    await updateStatus({ sessionToken, prescriptionId: rxId as any, status: newStatus });
+    try {
+      await prescriptionsApi.updateStatus(rxId, newStatus);
+      // Optimistically remove/update in list
+      setOrders((prev) => prev.filter((o) => o._id !== rxId));
+    } catch {
+      // silently fail
+    }
   }
 
   if (isLoading) {
@@ -78,34 +95,7 @@ export default function FulfillmentPage() {
     );
   }
 
-  const orders: FulfillmentOrder[] = showDemo
-    ? SEED_FULFILLMENT_ORDERS
-    : [
-        ...(fillingRx ?? []).map((rx: any) => ({
-          id:         rx._id,
-          _id:        rx._id,
-          patient:    rx.patientEmail ?? "Patient",
-          medication: rx.medicationName + (rx.dosage ? ` ${rx.dosage}` : ""),
-          status:     "filling" as const,
-          eta:        "In queue",
-        })),
-        ...(readyRx ?? []).map((rx: any) => ({
-          id:         rx._id,
-          _id:        rx._id,
-          patient:    rx.patientEmail ?? "Patient",
-          medication: rx.medicationName + (rx.dosage ? ` ${rx.dosage}` : ""),
-          status:     "ready" as const,
-          eta:        "Pickup",
-        })),
-        ...(shippedRx ?? []).map((rx: any) => ({
-          id:         rx._id,
-          _id:        rx._id,
-          patient:    rx.patientEmail ?? "Patient",
-          medication: rx.medicationName + (rx.dosage ? ` ${rx.dosage}` : ""),
-          status:     "shipped" as const,
-          tracking:   rx.trackingNumber,
-        })),
-      ];
+  const displayOrders: FulfillmentOrder[] = showDemo ? SEED_FULFILLMENT_ORDERS : orders;
 
   return (
     <AppShell>
@@ -117,7 +107,7 @@ export default function FulfillmentPage() {
           backHref="/pharmacy"
         />
 
-        {orders.length === 0 ? (
+        {displayOrders.length === 0 ? (
           <EmptyState
             icon={Package}
             title="No active fulfillment orders"
@@ -126,7 +116,7 @@ export default function FulfillmentPage() {
           />
         ) : (
           <div className="space-y-4">
-            {orders.map((order) => {
+            {displayOrders.map((order) => {
               const statusInfo = STATUS_MAP[order.status] ?? { label: order.status, variant: "secondary" as const };
               return (
                 <div key={order.id} className="glass-card" style={{ padding: "24px" }}>
@@ -161,7 +151,6 @@ export default function FulfillmentPage() {
                         : `ETA: ${order.eta ?? "—"}`}
                     </span>
 
-                    {/* Real-data status actions (no-ops in demo) */}
                     {order.status === "filling" && order._id && (
                       <button
                         onClick={() => handleStatusChange(order._id!, "ready")}

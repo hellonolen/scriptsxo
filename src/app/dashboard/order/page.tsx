@@ -4,8 +4,6 @@ import { useState, useEffect } from "react";
 import { Search, MapPin, ChevronRight, Pill, AlertCircle, CheckCircle2, Loader2, Package, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionCookie } from "@/lib/auth";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
 import { useRouter } from "next/navigation";
 
 const COMMON_MEDICATIONS = [
@@ -34,7 +32,7 @@ export default function DashboardOrderPage() {
   const [customMed, setCustomMed] = useState("");
   const [dosageNotes, setDosageNotes] = useState("");
   const [selectedPharmacy, setSelectedPharmacy] = useState<typeof PHARMACIES[0] | null>(null);
-  const [clinicalNotes, setClinicalNotes] = useState("");
+  const [practicealNotes, setPracticealNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
 
@@ -73,7 +71,7 @@ export default function DashboardOrderPage() {
               <button onClick={() => router.push("/dashboard/prescriptions")} className="px-5 py-2.5 text-sm font-medium text-white rounded-lg" style={{ background: "#5B21B6" }}>
                 Track Order
               </button>
-              <button onClick={() => { setStep("medication"); setSelectedMed(null); setCustomMed(""); setSelectedPharmacy(null); setClinicalNotes(""); }} className="px-5 py-2.5 text-sm border border-border rounded-lg text-foreground hover:bg-muted transition-colors">
+              <button onClick={() => { setStep("medication"); setSelectedMed(null); setCustomMed(""); setSelectedPharmacy(null); setPracticealNotes(""); }} className="px-5 py-2.5 text-sm border border-border rounded-lg text-foreground hover:bg-muted transition-colors">
                 New Order
               </button>
             </div>
@@ -164,7 +162,7 @@ export default function DashboardOrderPage() {
               </div>
             </div>
 
-            {/* Dosage / Clinical notes */}
+            {/* Dosage / Practiceal notes */}
             {(selectedMed || customMed.trim()) && (
               <div className="bg-card border border-border rounded-xl p-5">
                 <p className="text-[10px] tracking-[0.2em] font-medium uppercase text-muted-foreground mb-3">Additional Notes for Provider</p>
@@ -263,10 +261,10 @@ export default function DashboardOrderPage() {
               )}
 
               <div className="border-t border-border pt-4">
-                <p className="text-[10px] tracking-[0.2em] font-medium uppercase text-muted-foreground mb-3">Additional Clinical Context (optional)</p>
+                <p className="text-[10px] tracking-[0.2em] font-medium uppercase text-muted-foreground mb-3">Additional Practiceal Context (optional)</p>
                 <textarea
-                  value={clinicalNotes}
-                  onChange={e => setClinicalNotes(e.target.value)}
+                  value={practicealNotes}
+                  onChange={e => setPracticealNotes(e.target.value)}
                   placeholder="Anything else your provider should know..."
                   rows={2}
                   className="w-full px-3 py-2.5 bg-background border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-[#5B21B6] transition-colors resize-none"

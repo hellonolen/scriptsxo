@@ -1,642 +1,601 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowRight,
-  ArrowLeft,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  ShieldCheck,
-  FileSearch,
-  ClipboardCheck,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { getSessionCookie, setSessionCookie } from "@/lib/auth";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { Check, ArrowLeft, ArrowRight, Upload, Clock } from "lucide-react";
 import { SITECONFIG } from "@/lib/config";
 
-type OnboardStep = "npi" | "license" | "dea" | "review" | "complete" | "rejected";
+type Step = 1 | 2 | 3 | 4 | 5;
 
 const STEPS = [
-  { id: "npi", label: "NPI Lookup" },
-  { id: "license", label: "License" },
-  { id: "dea", label: "DEA" },
-  { id: "review", label: "Review" },
+  { id: 1, label: "Account" },
+  { id: 2, label: "Credentials" },
+  { id: 3, label: "Verification" },
+  { id: 4, label: "Availability" },
+  { id: 5, label: "Ready" },
 ] as const;
+
+const US_STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+  "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
+  "VA","WA","WV","WI","WY",
+];
+
+function StepIndicator({ current, total }: { current: Step; total: number }) {
+  return (
+    <div className="flex items-center gap-0">
+      {STEPS.map((s, idx) => {
+        const isComplete = s.id < current;
+        const isActive = s.id === current;
+        return (
+          <div key={s.id} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className="w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300"
+                style={{
+                  borderColor: isComplete
+                    ? "var(--brand)"
+                    : isActive
+                    ? "var(--brand-secondary)"
+                    : "var(--border)",
+                  background: isComplete
+                    ? "var(--brand)"
+                    : isActive
+                    ? "var(--brand-secondary-muted)"
+                    : "transparent",
+                }}
+              >
+                {isComplete ? (
+                  <Check size={13} style={{ color: "white", strokeWidth: 2.5 }} />
+                ) : (
+                  <span
+                    className="text-[11px] font-medium"
+                    style={{
+                      color: isActive
+                        ? "var(--brand-secondary)"
+                        : "var(--muted-foreground)",
+                    }}
+                  >
+                    {s.id}
+                  </span>
+                )}
+              </div>
+              <span
+                className="text-[10px] tracking-wide uppercase font-light hidden sm:block"
+                style={{
+                  color: isActive ? "var(--brand-secondary)" : "var(--muted-foreground)",
+                }}
+              >
+                {s.label}
+              </span>
+            </div>
+            {idx < STEPS.length - 1 && (
+              <div
+                className="flex-1 h-px mx-3 mb-5 sm:mb-0 transition-all duration-300"
+                style={{
+                  background: isComplete ? "var(--brand)" : "var(--border)",
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function ProviderOnboardPage() {
   const router = useRouter();
-  const [step, setStep] = useState<OnboardStep>("npi");
+  const [step, setStep] = useState<Step>(1);
+
+  // Step 1 — Account
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [npiNumber, setNpiNumber] = useState("");
   const [deaNumber, setDeaNumber] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [verificationId, setVerificationId] = useState<string | null>(null);
-  const [npiResult, setNpiResult] = useState<any>(null);
-  const [isDev, setIsDev] = useState(false);
-  const [session, setSession] = useState<any>(null);
-  const [memberId, setMemberId] = useState<string | null>(null);
 
-  // Convex actions
-  const initVerification = useAction(
-    api.actions.credentialVerificationOrchestrator.initializeVerification
-  );
-  const verifyNpi = useAction(
-    api.agents.credentialVerificationAgent.verifyProviderNpi
-  );
-  const processLicense = useAction(
-    api.agents.credentialVerificationAgent.processProviderLicense
-  );
-  const processDea = useAction(
-    api.agents.credentialVerificationAgent.processProviderDea
-  );
-  const finalizeVerification = useAction(
-    api.actions.credentialVerificationOrchestrator.finalizeVerification
-  );
-  useEffect(() => {
-    const dev =
-      typeof window !== "undefined" &&
-      (window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1");
-    setIsDev(dev);
+  // Step 2 — Credentials
+  const [licensedStates, setLicensedStates] = useState<string[]>([]);
+  const [specialties, setSpecialties] = useState("");
 
-    const sessionData = getSessionCookie();
-    if (!sessionData) {
-      router.push("/");
-      return;
-    }
-    setSession(sessionData);
-  }, [router]);
+  // Step 4 — Availability
+  const [maxDailyReviews, setMaxDailyReviews] = useState(20);
+  const [consultationRate, setConsultationRate] = useState("");
 
-  // Get member record for memberId
-  const member = useQuery(
-    api.members.getByEmail,
-    session?.email ? { email: session.email } : "skip"
-  );
-
-  useEffect(() => {
-    if (member?._id) {
-      setMemberId(member._id);
-    }
-  }, [member]);
-
-  /** Initialize verification on first NPI submit */
-  async function handleNpiSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!npiNumber.trim() || npiNumber.replace(/\D/g, "").length !== 10) {
-      setError("Please enter a valid 10-digit NPI number.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      // Dev mode: simulate NPI lookup
-      if (isDev) {
-        const fakeNpi = {
-          verified: true,
-          npiNumber: npiNumber,
-          firstName: session?.name?.split(" ")[0] || "Provider",
-          lastName: session?.name?.split(" ")[1] || "User",
-          credential: "MD",
-          taxonomy: "207Q00000X",
-          taxonomyDescription: "Family Medicine",
-          state: "FL",
-          status: "A",
-          organizationName: null,
-          address: "123 Medical Way, Tampa, FL 33601",
-          phone: "813-555-0199",
-          issues: [],
-        };
-        setNpiResult(fakeNpi);
-        setStep("license");
-        setLoading(false);
-        return;
-      }
-
-      // Initialize the verification record if not done yet
-      if (!verificationId && memberId) {
-        const result = await initVerification({
-          memberId,
-          email: session.email,
-          selectedRole: "provider",
-        });
-        setVerificationId(result.verificationId);
-
-        // Run NPI verification
-        const npiRes = await verifyNpi({
-          verificationId: result.verificationId,
-          npiNumber: npiNumber.replace(/\D/g, ""),
-          expectedFirstName: session?.name?.split(" ")[0],
-          expectedLastName: session?.name?.split(" ").slice(1).join(" "),
-        });
-
-        setNpiResult(npiRes.npiResult);
-
-        if (npiRes.verified) {
-          setStep("license");
-        } else {
-          setError(
-            `NPI verification failed: ${npiRes.npiResult.issues?.join("; ") || "Unknown error"}`
-          );
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "NPI verification failed");
-    } finally {
-      setLoading(false);
-    }
+  function toggleState(s: string) {
+    setLicensedStates((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
   }
 
-  /** Skip license upload for now (can be required later) */
-  async function handleLicenseContinue() {
-    setLoading(true);
-    try {
-      if (!isDev && verificationId) {
-        // In production, advance past license step
-        // (In a full implementation, this would include file upload + OCR)
-        await processLicense({
-          verificationId,
-          licenseScanResult: {
-            name: `${npiResult?.firstName} ${npiResult?.lastName}`,
-            state: npiResult?.state || "FL",
-            verified: true,
-            note: "License verification pending document upload",
-          },
-          npiFirstName: npiResult?.firstName,
-          npiLastName: npiResult?.lastName,
-        });
-      }
-      setStep("dea");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "License step failed");
-    } finally {
-      setLoading(false);
-    }
+  function goNext() {
+    if (step < 5) setStep((step + 1) as Step);
   }
 
-  /** Handle DEA entry (optional) */
-  async function handleDeaSubmit(skip = false) {
-    setLoading(true);
-    setError("");
-
-    try {
-      if (!isDev && verificationId) {
-        await processDea({
-          verificationId,
-          deaNumber: skip ? undefined : deaNumber || undefined,
-          skipDea: skip,
-        });
-      }
-      setStep("review");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "DEA step failed");
-    } finally {
-      setLoading(false);
-    }
+  function goBack() {
+    if (step > 1) setStep((step - 1) as Step);
   }
 
-  /** Finalize and assign role */
-  async function handleFinalize() {
-    setLoading(true);
-    setError("");
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "10px 14px",
+    borderRadius: "var(--radius)",
+    border: "1px solid var(--border)",
+    background: "var(--background)",
+    fontSize: 14,
+    color: "var(--foreground)",
+    outline: "none",
+    fontFamily: "var(--font-sans)",
+    boxSizing: "border-box",
+    transition: "border-color 0.2s ease",
+  };
 
-    try {
-      if (!verificationId || !memberId) {
-        // In dev without a real verification, just set role and navigate
-        if (isDev) {
-          const updatedSession = { ...session, role: "provider" };
-          setSessionCookie(updatedSession);
-          setStep("complete");
-          return;
-        }
-        setError("Missing verification data. Please restart the flow.");
-        return;
-      }
-
-      const result = await finalizeVerification({
-        verificationId,
-        memberId,
-      });
-
-      if (result.success) {
-        const updatedSession = { ...session, role: result.role };
-        setSessionCookie(updatedSession);
-        setStep("complete");
-      } else {
-        setStep("rejected");
-        setError("Credential verification was not approved. Please contact support.");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Verification failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleGoToDashboard() {
-    router.push("/provider");
-  }
-
-  const currentStepIdx = STEPS.findIndex((s) => s.id === step);
+  const labelStyle: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 500,
+    color: "var(--foreground)",
+    marginBottom: 6,
+    display: "block",
+    letterSpacing: "0.01em",
+  };
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen" style={{ background: "var(--background)" }}>
       {/* Top bar */}
-      <div className="h-14 border-b border-border flex items-center px-6 bg-background">
-        <span className="text-[11px] tracking-[0.25em] text-foreground font-light uppercase">
+      <div
+        className="h-14 flex items-center px-6"
+        style={{ borderBottom: "1px solid var(--border)", background: "var(--sidebar-background)" }}
+      >
+        <span className="eyebrow" style={{ color: "rgba(167,139,250,0.7)" }}>
           {SITECONFIG.brand.name}
         </span>
-        <span className="mx-4 text-border">|</span>
-        <span className="text-[11px] tracking-[0.15em] text-muted-foreground uppercase font-light">
-          Provider Verification
+        <span className="mx-4 text-white/10">|</span>
+        <span
+          className="text-[11px] tracking-widest uppercase font-light"
+          style={{ color: "rgba(255,255,255,0.35)" }}
+        >
+          Provider Onboarding
         </span>
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-12">
-        {/* Progress steps */}
-        {step !== "complete" && step !== "rejected" && (
-          <div className="flex items-center gap-0 mb-12">
-            {STEPS.map((s, idx) => {
-              const isActive = s.id === step;
-              const isComplete = idx < currentStepIdx;
-              return (
-                <div key={s.id} className="flex items-center flex-1 last:flex-0">
-                  <div className="flex flex-col items-center gap-2">
-                    <div
-                      className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-[11px] font-medium transition-all ${
-                        isComplete
-                          ? "border-[#2DD4BF] bg-[#2DD4BF] text-white"
-                          : isActive
-                            ? "border-[#7C3AED] bg-[#7C3AED]/10 text-[#7C3AED]"
-                            : "border-border text-muted-foreground"
-                      }`}
-                    >
-                      {isComplete ? (
-                        <CheckCircle2 size={14} />
-                      ) : (
-                        idx + 1
-                      )}
-                    </div>
-                    <span
-                      className={`text-[10px] tracking-[0.1em] uppercase font-light hidden sm:block ${
-                        isActive ? "text-[#7C3AED]" : "text-muted-foreground"
-                      }`}
-                    >
-                      {s.label}
-                    </span>
-                  </div>
-                  {idx < STEPS.length - 1 && (
-                    <div
-                      className={`flex-1 h-px mx-3 mb-5 sm:mb-0 ${
-                        isComplete ? "bg-[#2DD4BF]" : "bg-border"
-                      }`}
+        {/* Step indicator */}
+        {step !== 5 && (
+          <div className="mb-10">
+            <StepIndicator current={step} total={5} />
+          </div>
+        )}
+
+        {/* Step 1: Account */}
+        {step === 1 && (
+          <div className="glass-card animate-fade-in-up">
+            <div style={{ padding: "2rem" }}>
+              <span className="eyebrow" style={{ color: "var(--brand-secondary)" }}>Step 1</span>
+              <h2
+                className="text-2xl font-light mt-2 mb-1"
+                style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.02em" }}
+              >
+                Account Details
+              </h2>
+              <p className="text-sm font-light text-muted-foreground mb-8">
+                Your professional contact information.
+              </p>
+
+              <div className="space-y-5">
+                <div>
+                  <label style={labelStyle}>Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="provider@practice.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Full Name</label>
+                  <input
+                    type="text"
+                    placeholder="Dr. Sarah Johnson"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label style={labelStyle}>NPI Number</label>
+                    <input
+                      type="text"
+                      placeholder="1234567890"
+                      value={npiNumber}
+                      onChange={(e) =>
+                        setNpiNumber(e.target.value.replace(/\D/g, "").slice(0, 10))
+                      }
+                      maxLength={10}
+                      style={inputStyle}
                     />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {isDev && step !== "complete" && (
-          <div className="mb-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] text-xs font-medium">
-            DEV MODE
-          </div>
-        )}
-
-        {/* STEP: NPI Entry */}
-        {step === "npi" && (
-          <div className="space-y-8">
-            <div>
-              <h1
-                className="text-3xl font-light text-foreground mb-3"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                NPI Verification
-              </h1>
-              <p className="text-muted-foreground font-light text-sm">
-                Enter your National Provider Identifier. We will verify it against the NPPES registry in real time.
-              </p>
-            </div>
-
-            {error && (
-              <div className="flex items-start gap-3 p-4 bg-destructive/5 border border-destructive/20 rounded-md">
-                <XCircle size={16} className="text-destructive mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-destructive font-light">{error}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleNpiSubmit} className="space-y-6">
-              <Input
-                label="NPI Number"
-                placeholder="1234567890"
-                value={npiNumber}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, 10);
-                  setNpiNumber(val);
-                  setError("");
-                }}
-                maxLength={10}
-                required
-                autoFocus
-              />
-
-              <div className="flex items-start gap-4 p-4 bg-card border border-border rounded-md">
-                <FileSearch size={16} className="text-[#2DD4BF] mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-muted-foreground font-light">
-                  We query the CMS NPPES NPI Registry (npiregistry.cms.hhs.gov) to verify your identity, specialty, prescribing authority, and license status.
-                </p>
-              </div>
-
-              <Button type="submit" className="w-full" size="lg" disabled={loading || npiNumber.length !== 10}>
-                {loading ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <ShieldCheck size={16} />
-                )}
-                {loading ? "Verifying NPI..." : "Verify NPI"}
-              </Button>
-            </form>
-
-            <button
-              onClick={() => router.push("/onboard")}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors font-light flex items-center gap-2"
-            >
-              <ArrowLeft size={13} />
-              Choose a different role
-            </button>
-          </div>
-        )}
-
-        {/* STEP: License Upload */}
-        {step === "license" && (
-          <div className="space-y-8">
-            <div>
-              <h1
-                className="text-3xl font-light text-foreground mb-3"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                License Verification
-              </h1>
-              <p className="text-muted-foreground font-light text-sm">
-                Your NPI was verified successfully. Please confirm the details below.
-              </p>
-            </div>
-
-            {/* NPI result card */}
-            {npiResult && (
-              <div className="p-6 border border-[#2DD4BF]/30 rounded-xl bg-[#2DD4BF]/5">
-                <div className="flex items-center gap-3 mb-4">
-                  <CheckCircle2 size={18} className="text-[#2DD4BF]" />
-                  <span className="text-sm font-medium text-foreground">NPI Verified</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-[10px] tracking-wider text-muted-foreground uppercase mb-1">Name</p>
-                    <p className="text-foreground font-light">
-                      {npiResult.firstName} {npiResult.lastName}
-                      {npiResult.credential && `, ${npiResult.credential}`}
-                    </p>
                   </div>
                   <div>
-                    <p className="text-[10px] tracking-wider text-muted-foreground uppercase mb-1">NPI</p>
-                    <p className="text-foreground font-light font-mono">{npiResult.npiNumber}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] tracking-wider text-muted-foreground uppercase mb-1">Specialty</p>
-                    <p className="text-foreground font-light">{npiResult.taxonomyDescription || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] tracking-wider text-muted-foreground uppercase mb-1">State</p>
-                    <p className="text-foreground font-light">{npiResult.state || "N/A"}</p>
+                    <label style={labelStyle}>DEA Number</label>
+                    <input
+                      type="text"
+                      placeholder="AB1234567 (optional)"
+                      value={deaNumber}
+                      onChange={(e) =>
+                        setDeaNumber(e.target.value.toUpperCase().slice(0, 9))
+                      }
+                      maxLength={9}
+                      style={inputStyle}
+                    />
                   </div>
                 </div>
               </div>
-            )}
 
-            <div className="flex items-start gap-4 p-4 bg-card border border-border rounded-md">
-              <ClipboardCheck size={16} className="text-[#7C3AED] mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-foreground font-light">License document upload</p>
-                <p className="text-xs text-muted-foreground font-light mt-1">
-                  In a future update, you will be able to upload a photo of your medical license for automated verification. For now, your NPI verification serves as the primary credential check.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-between pt-4">
-              <button
-                onClick={() => setStep("npi")}
-                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
+              <div
+                className="flex justify-end mt-8 pt-6"
+                style={{ borderTop: "1px solid var(--border)" }}
               >
-                <ArrowLeft size={14} />
-                Back
-              </button>
-              <Button onClick={handleLicenseContinue} size="lg" disabled={loading}>
-                {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-                Continue
-                <ArrowRight size={14} />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP: DEA Number (Optional) */}
-        {step === "dea" && (
-          <div className="space-y-8">
-            <div>
-              <h1
-                className="text-3xl font-light text-foreground mb-3"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                DEA Registration
-              </h1>
-              <p className="text-muted-foreground font-light text-sm">
-                If you prescribe controlled substances, enter your DEA number. This is optional and can be added later.
-              </p>
-            </div>
-
-            {error && (
-              <div className="flex items-start gap-3 p-4 bg-destructive/5 border border-destructive/20 rounded-md">
-                <XCircle size={16} className="text-destructive mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-destructive font-light">{error}</p>
-              </div>
-            )}
-
-            <Input
-              label="DEA Number (Optional)"
-              placeholder="AB1234567"
-              value={deaNumber}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setDeaNumber(e.target.value.toUpperCase().slice(0, 9));
-                setError("");
-              }}
-              maxLength={9}
-            />
-
-            <div className="flex justify-between pt-4">
-              <button
-                onClick={() => setStep("license")}
-                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
-              >
-                <ArrowLeft size={14} />
-                Back
-              </button>
-              <div className="flex gap-3">
                 <button
-                  onClick={() => handleDeaSubmit(true)}
-                  disabled={loading}
-                  className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
+                  onClick={goNext}
+                  className="btn-gradient inline-flex items-center gap-2"
+                  style={{ position: "relative", zIndex: 0 }}
                 >
-                  Skip for Now
-                </button>
-                <Button
-                  onClick={() => handleDeaSubmit(false)}
-                  size="lg"
-                  disabled={loading || !deaNumber}
-                >
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : null}
                   Continue
                   <ArrowRight size={14} />
-                </Button>
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* STEP: Review */}
-        {step === "review" && (
-          <div className="space-y-8">
-            <div>
-              <h1
-                className="text-3xl font-light text-foreground mb-3"
-                style={{ fontFamily: "var(--font-heading)" }}
+        {/* Step 2: Credentials */}
+        {step === 2 && (
+          <div className="glass-card animate-fade-in-up">
+            <div style={{ padding: "2rem" }}>
+              <span className="eyebrow" style={{ color: "var(--brand-secondary)" }}>Step 2</span>
+              <h2
+                className="text-2xl font-light mt-2 mb-1"
+                style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.02em" }}
               >
-                Verification Review
-              </h1>
-              <p className="text-muted-foreground font-light text-sm">
-                Our AI compliance agent will review your credentials. This typically takes a few seconds.
+                Credentials
+              </h2>
+              <p className="text-sm font-light text-muted-foreground mb-8">
+                Select the states where you hold an active license.{" "}
+                {licensedStates.length > 0 && (
+                  <span style={{ color: "var(--brand-secondary)" }}>
+                    {licensedStates.length} selected
+                  </span>
+                )}
               </p>
-            </div>
 
-            {error && (
-              <div className="flex items-start gap-3 p-4 bg-destructive/5 border border-destructive/20 rounded-md">
-                <XCircle size={16} className="text-destructive mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-destructive font-light">{error}</p>
+              {/* State multi-select */}
+              <div
+                className="rounded-xl overflow-y-auto mb-6"
+                style={{
+                  border: "1px solid var(--border)",
+                  maxHeight: 260,
+                  background: "var(--background)",
+                }}
+              >
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-1 p-3">
+                  {US_STATES.map((s) => {
+                    const selected = licensedStates.includes(s);
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => toggleState(s)}
+                        className="text-[12px] font-medium py-1.5 px-2 rounded-md transition-all duration-150"
+                        style={{
+                          background: selected
+                            ? "var(--brand-secondary)"
+                            : "var(--brand-muted)",
+                          color: selected ? "white" : "var(--foreground)",
+                          border: selected
+                            ? "1px solid var(--brand-secondary)"
+                            : "1px solid transparent",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            )}
 
-            {/* Summary */}
-            <div className="space-y-4">
-              <div className="p-5 border border-border rounded-xl">
-                <p className="text-[10px] tracking-wider text-muted-foreground uppercase mb-2">Provider</p>
-                <p className="text-foreground font-light">
-                  {npiResult?.firstName} {npiResult?.lastName}, {npiResult?.credential || "MD"}
+              <div>
+                <label style={labelStyle}>Specialties</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Family Medicine, Dermatology, Urgent Care"
+                  value={specialties}
+                  onChange={(e) => setSpecialties(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div
+                className="flex justify-between mt-8 pt-6"
+                style={{ borderTop: "1px solid var(--border)" }}
+              >
+                <button
+                  onClick={goBack}
+                  className="inline-flex items-center gap-2 text-sm font-light text-muted-foreground hover:text-foreground transition-colors"
+                  style={{
+                    padding: "10px 20px",
+                    borderRadius: "var(--radius)",
+                    border: "1px solid var(--border)",
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  <ArrowLeft size={13} />
+                  Back
+                </button>
+                <button
+                  onClick={goNext}
+                  className="btn-gradient inline-flex items-center gap-2"
+                  style={{ position: "relative", zIndex: 0 }}
+                >
+                  Continue
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Verification */}
+        {step === 3 && (
+          <div className="glass-card animate-fade-in-up">
+            <div style={{ padding: "2rem" }}>
+              <span className="eyebrow" style={{ color: "var(--brand-secondary)" }}>Step 3</span>
+              <h2
+                className="text-2xl font-light mt-2 mb-1"
+                style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.02em" }}
+              >
+                License Upload
+              </h2>
+              <p className="text-sm font-light text-muted-foreground mb-8">
+                Upload a copy of your state medical license for verification.
+              </p>
+
+              {/* Upload placeholder */}
+              <div
+                className="rounded-xl flex flex-col items-center justify-center gap-4 mb-6"
+                style={{
+                  border: "2px dashed var(--border)",
+                  background: "var(--brand-muted)",
+                  padding: "3rem 2rem",
+                  cursor: "pointer",
+                  transition: "border-color 0.2s ease",
+                }}
+              >
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center"
+                  style={{ background: "var(--brand-secondary-muted)" }}
+                >
+                  <Upload size={20} style={{ color: "var(--brand-secondary)" }} />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-foreground">Drop your license here</p>
+                  <p className="text-xs font-light text-muted-foreground mt-1">
+                    PDF, JPG, or PNG — max 10 MB
+                  </p>
+                </div>
+                <span
+                  className="text-xs font-medium px-4 py-2 rounded-lg"
+                  style={{
+                    background: "var(--brand-secondary-muted)",
+                    color: "var(--brand-secondary)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  Choose File
+                </span>
+              </div>
+
+              <div
+                className="rounded-xl p-4 flex items-start gap-3"
+                style={{
+                  background: "var(--brand-muted)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <Clock size={15} style={{ color: "var(--brand-secondary)", flexShrink: 0, marginTop: 1 }} />
+                <p className="text-xs font-light text-muted-foreground leading-relaxed">
+                  Document upload is optional at this stage. Your NPI verification serves as the primary credential check. License documents can be added later in your provider settings.
                 </p>
               </div>
-              <div className="p-5 border border-border rounded-xl">
-                <p className="text-[10px] tracking-wider text-muted-foreground uppercase mb-2">NPI</p>
-                <p className="text-foreground font-light font-mono">{npiNumber}</p>
+
+              <div
+                className="flex justify-between mt-8 pt-6"
+                style={{ borderTop: "1px solid var(--border)" }}
+              >
+                <button
+                  onClick={goBack}
+                  className="inline-flex items-center gap-2 text-sm font-light text-muted-foreground hover:text-foreground transition-colors"
+                  style={{
+                    padding: "10px 20px",
+                    borderRadius: "var(--radius)",
+                    border: "1px solid var(--border)",
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  <ArrowLeft size={13} />
+                  Back
+                </button>
+                <button
+                  onClick={goNext}
+                  className="btn-gradient inline-flex items-center gap-2"
+                  style={{ position: "relative", zIndex: 0 }}
+                >
+                  Continue
+                  <ArrowRight size={14} />
+                </button>
               </div>
-              <div className="p-5 border border-border rounded-xl">
-                <p className="text-[10px] tracking-wider text-muted-foreground uppercase mb-2">Specialty</p>
-                <p className="text-foreground font-light">{npiResult?.taxonomyDescription || "N/A"}</p>
-              </div>
-              {deaNumber && (
-                <div className="p-5 border border-border rounded-xl">
-                  <p className="text-[10px] tracking-wider text-muted-foreground uppercase mb-2">DEA</p>
-                  <p className="text-foreground font-light font-mono">{deaNumber}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Availability */}
+        {step === 4 && (
+          <div className="glass-card animate-fade-in-up">
+            <div style={{ padding: "2rem" }}>
+              <span className="eyebrow" style={{ color: "var(--brand-secondary)" }}>Step 4</span>
+              <h2
+                className="text-2xl font-light mt-2 mb-1"
+                style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.02em" }}
+              >
+                Availability
+              </h2>
+              <p className="text-sm font-light text-muted-foreground mb-8">
+                Set your daily capacity and consultation rate.
+              </p>
+
+              <div className="space-y-8">
+                {/* Slider */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label style={labelStyle}>Max Daily Reviews</label>
+                    <span
+                      className="text-lg font-light tabular-nums"
+                      style={{ fontFamily: "var(--font-heading)", color: "var(--brand-secondary)" }}
+                    >
+                      {maxDailyReviews}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={5}
+                    max={50}
+                    step={5}
+                    value={maxDailyReviews}
+                    onChange={(e) => setMaxDailyReviews(Number(e.target.value))}
+                    style={{
+                      width: "100%",
+                      accentColor: "var(--brand-secondary)",
+                      cursor: "pointer",
+                    }}
+                  />
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-muted-foreground">5</span>
+                    <span className="text-[10px] text-muted-foreground">50</span>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            <Button
-              onClick={handleFinalize}
-              className="w-full"
-              size="lg"
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <ShieldCheck size={16} />
-              )}
-              {loading ? "AI Agent Reviewing..." : "Complete Verification"}
-            </Button>
+                {/* Rate */}
+                <div>
+                  <label style={labelStyle}>Consultation Rate (optional)</label>
+                  <div className="relative">
+                    <span
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground"
+                      style={{ pointerEvents: "none" }}
+                    >
+                      $
+                    </span>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={consultationRate}
+                      onChange={(e) => setConsultationRate(e.target.value)}
+                      style={{ ...inputStyle, paddingLeft: 28 }}
+                      min={0}
+                    />
+                  </div>
+                  <p className="text-xs font-light text-muted-foreground mt-2">
+                    Per consultation. Leave blank to use platform default.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className="flex justify-between mt-8 pt-6"
+                style={{ borderTop: "1px solid var(--border)" }}
+              >
+                <button
+                  onClick={goBack}
+                  className="inline-flex items-center gap-2 text-sm font-light text-muted-foreground hover:text-foreground transition-colors"
+                  style={{
+                    padding: "10px 20px",
+                    borderRadius: "var(--radius)",
+                    border: "1px solid var(--border)",
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  <ArrowLeft size={13} />
+                  Back
+                </button>
+                <button
+                  onClick={goNext}
+                  className="btn-gradient inline-flex items-center gap-2"
+                  style={{ position: "relative", zIndex: 0 }}
+                >
+                  Submit Application
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* STEP: Complete */}
-        {step === "complete" && (
-          <div className="text-center py-12 space-y-8">
+        {/* Step 5: Pending Review */}
+        {step === 5 && (
+          <div className="animate-fade-in-up text-center py-12">
             <div
-              className="w-16 h-16 rounded-full mx-auto flex items-center justify-center"
-              style={{ background: "#5B21B6" }}
+              className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-6"
+              style={{ background: "var(--brand)" }}
             >
-              <CheckCircle2 size={28} className="text-white" />
+              <Clock size={28} style={{ color: "white" }} />
             </div>
-            <div>
-              <h1
-                className="text-3xl font-light text-foreground mb-3"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Verification Complete
-              </h1>
-              <p className="text-muted-foreground font-light text-sm max-w-sm mx-auto">
-                Your provider credentials have been verified. You now have full access to the provider portal.
-              </p>
-            </div>
-            <Button onClick={handleGoToDashboard} size="lg">
-              Go to Provider Portal
-              <ArrowRight size={14} />
-            </Button>
-          </div>
-        )}
+            <h1
+              className="text-3xl font-light text-foreground mb-3"
+              style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.025em" }}
+            >
+              Application submitted.
+            </h1>
+            <p className="text-sm font-light text-muted-foreground max-w-xs mx-auto leading-relaxed">
+              Your credentials are under review. You will receive an email at{" "}
+              <strong className="font-medium">{email || "your address"}</strong> within 24 hours with your access status.
+            </p>
 
-        {/* STEP: Rejected */}
-        {step === "rejected" && (
-          <div className="text-center py-12 space-y-8">
-            <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center bg-destructive/10">
-              <XCircle size={28} className="text-destructive" />
+            <div
+              className="mt-8 mx-auto max-w-xs rounded-xl p-5 text-left"
+              style={{
+                background: "var(--brand-muted)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <p className="text-xs font-medium text-foreground mb-2">What happens next?</p>
+              <ul className="space-y-1.5">
+                {[
+                  "NPI verified against NPPES registry",
+                  "License documents reviewed",
+                  "Access granted or follow-up sent",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <Check
+                      size={11}
+                      style={{ color: "var(--brand-secondary)", flexShrink: 0, marginTop: 3, strokeWidth: 2.5 }}
+                    />
+                    <span className="text-xs font-light text-muted-foreground">{item}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div>
-              <h1
-                className="text-3xl font-light text-foreground mb-3"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Verification Not Approved
-              </h1>
-              <p className="text-muted-foreground font-light text-sm max-w-sm mx-auto">
-                {error || "Your credentials could not be verified at this time. Please contact support for assistance."}
-              </p>
-            </div>
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={() => {
-                  setStep("npi");
-                  setError("");
-                  setNpiNumber("");
-                  setVerificationId(null);
-                }}
-                className="inline-flex items-center gap-2 px-6 py-3 border border-border text-foreground text-sm font-light hover:bg-muted transition-colors rounded-md"
-              >
-                Try Again
-              </button>
-              <Button
-                onClick={() => {
-                  window.location.href = `mailto:${SITECONFIG.brand.supportEmail}?subject=Provider Verification Issue`;
-                }}
-                variant="outline"
-              >
-                Contact Support
-              </Button>
-            </div>
+
+            <button
+              onClick={() => router.push("/")}
+              className="inline-flex items-center gap-2 mt-8 text-sm font-light text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Return to home
+            </button>
           </div>
         )}
       </div>

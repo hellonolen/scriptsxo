@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { useState, useEffect } from "react";
+import { fax } from "@/lib/api";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,6 +12,18 @@ import {
   Phone,
 } from "lucide-react";
 import Link from "next/link";
+
+type FaxLog = {
+  _id: string;
+  prescriptionId: string;
+  pharmacyId: string;
+  faxNumber: string;
+  phaxioFaxId?: string;
+  status: string;
+  attempts: number;
+  createdAt: number;
+  errorMessage?: string;
+};
 
 function faxStatusVariant(status: string) {
   switch (status) {
@@ -26,25 +37,35 @@ function faxStatusVariant(status: string) {
 }
 
 export default function AdminFaxLogsPage() {
-  const faxLogs = useQuery(api.faxLogs.list, {});
-  const sendFax = useAction(api.actions.sendFax.send);
-
+  const [faxLogs, setFaxLogs] = useState<FaxLog[] | undefined>(undefined);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [retrying, setRetrying] = useState<string | null>(null);
+
+  useEffect(() => {
+    const API_BASE =
+      process.env.NEXT_PUBLIC_API_URL ?? "https://scriptsxo-api.hellonolen.workers.dev";
+    const token = document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/)?.[1];
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${decodeURIComponent(token)}`;
+
+    fetch(`${API_BASE}/fax/logs`, { headers, credentials: "include" })
+      .then((res) => res.json())
+      .then((json: { success: boolean; data?: FaxLog[] }) => {
+        setFaxLogs(Array.isArray(json.data) ? json.data : []);
+      })
+      .catch(() => setFaxLogs([]));
+  }, []);
 
   const filtered = (faxLogs ?? []).filter((log) => {
     return statusFilter === "all" || log.status === statusFilter;
   });
 
-  const handleRetry = async (log: { prescriptionId: string; pharmacyId: string; _id: string }) => {
+  const handleRetry = async (log: FaxLog) => {
     setRetrying(log._id);
     try {
-      await sendFax({
-        prescriptionId: log.prescriptionId as any,
-        pharmacyId: log.pharmacyId as any,
-      });
-    } catch (err) {
-      console.error("Fax retry failed:", err);
+      await fax.send(log.prescriptionId, log.pharmacyId, log.faxNumber, "");
+    } catch {
+      // silently fail
     } finally {
       setRetrying(null);
     }
@@ -135,7 +156,7 @@ export default function AdminFaxLogsPage() {
                 <div>
                   {log.status === "failed" && (
                     <button
-                      onClick={() => handleRetry(log as any)}
+                      onClick={() => handleRetry(log)}
                       disabled={retrying === log._id}
                       className="inline-flex items-center gap-1 text-[10px] tracking-[0.1em] uppercase text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                     >
