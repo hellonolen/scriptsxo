@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { getSessionCookie } from "@/lib/auth";
 import { prescriptions as prescriptionsApi } from "@/lib/api";
 import {
@@ -11,9 +12,25 @@ import {
   RefreshCw,
   Send,
   Loader2,
+  Plus,
+  X,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ??
+  "https://scriptsxo-api.hellonolen.workers.dev";
+
+function getAuthHeaders(): Record<string, string> {
+  if (typeof document === "undefined") return { "Content-Type": "application/json" };
+  const match = document.cookie.match(/(?:^|;\s*)scriptsxo_session=([^;]+)/);
+  const token = match ? decodeURIComponent(match[1]) : null;
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
 /* ---------------------------------------------------------------------------
    Types & constants
@@ -75,9 +92,17 @@ function formatDate(ts: number): string {
    Page
    --------------------------------------------------------------------------- */
 
-export default function ProviderPrescriptionsPage() {
+// Send-to-pharmacy modal state
+interface SendModalState {
+  rxId: string;
+  pharmacyId: string;
+  channel: "email" | "sms" | "fax";
+}
+
+function ProviderPrescriptionsContent() {
   const session = getSessionCookie();
   const providerEmail = session?.email;
+  const searchParams = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<FilterTab>("All");
   const [signingId, setSigningId] = useState<string | null>(null);
@@ -85,12 +110,29 @@ export default function ProviderPrescriptionsPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [rxList, setRxList] = useState<any[] | undefined>(undefined);
+  const [sendModal, setSendModal] = useState<SendModalState | null>(null);
+  const [snsSentIds, setSnsSentIds] = useState<Set<string>>(new Set());
+
+  // Show success toast if redirected from new Rx form
+  useEffect(() => {
+    if (searchParams.get("created") === "1") {
+      setSuccessMsg("Prescription saved as draft.");
+    }
+  }, [searchParams]);
+
+  async function loadRxList() {
+    if (!providerEmail) return;
+    try {
+      const data = await prescriptionsApi.getByProvider(providerEmail);
+      setRxList(Array.isArray(data) ? data : []);
+    } catch {
+      setRxList([]);
+    }
+  }
 
   useEffect(() => {
-    if (!providerEmail) return;
-    prescriptionsApi.getByProvider(providerEmail)
-      .then((data) => setRxList(Array.isArray(data) ? data : []))
-      .catch(() => setRxList([]));
+    loadRxList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providerEmail]);
 
   // Filter prescriptions by tab
@@ -140,13 +182,40 @@ export default function ProviderPrescriptionsPage() {
     try {
       await prescriptionsApi.sign(prescriptionId, providerEmail);
       setSuccessMsg("Prescription signed successfully.");
-      // Refresh list
-      const updated = await prescriptionsApi.getByProvider(providerEmail);
-      setRxList(Array.isArray(updated) ? updated : []);
+      await loadRxList();
     } catch (err: any) {
       setErrorMsg(err?.message ?? "Failed to sign prescription.");
     } finally {
       setSigningId(null);
+    }
+  }
+
+  async function handleSendToPharmacy() {
+    if (!sendModal) return;
+    setSendingId(sendModal.rxId);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      // Use SNS delivery endpoint
+      const res = await fetch(`${API_BASE}/sns/send`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          prescriptionId: sendModal.rxId,
+          pharmacyId: sendModal.pharmacyId || undefined,
+          channel: sendModal.channel,
+        }),
+      });
+      const json = await res.json() as { success: boolean; error?: string };
+      if (!json.success) throw new Error(json.error ?? "Failed to send.");
+      setSnsSentIds((prev) => new Set(prev).add(sendModal.rxId));
+      setSuccessMsg("Prescription sent to pharmacy via SNS.");
+      setSendModal(null);
+      await loadRxList();
+    } catch (err: any) {
+      setErrorMsg(err?.message ?? "Failed to send to pharmacy.");
+    } finally {
+      setSendingId(null);
     }
   }
 
@@ -156,22 +225,31 @@ export default function ProviderPrescriptionsPage() {
     <AppShell>
       <div className="p-6 lg:p-10 max-w-[1200px]">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-2">
-          <Link
-            href="/provider"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft size={20} aria-hidden="true" />
-          </Link>
-          <div>
-            <p className="eyebrow mb-0.5">PROVIDER PORTAL</p>
-            <h1
-              className="text-2xl lg:text-3xl font-light text-foreground tracking-[-0.02em]"
-              style={{ fontFamily: "var(--font-heading)" }}
+        <div className="flex items-start justify-between gap-4 mb-2">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/provider"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              Prescriptions
-            </h1>
+              <ArrowLeft size={20} aria-hidden="true" />
+            </Link>
+            <div>
+              <p className="eyebrow mb-0.5">PROVIDER PORTAL</p>
+              <h1
+                className="text-2xl lg:text-3xl font-light text-foreground tracking-[-0.02em]"
+                style={{ fontFamily: "var(--font-heading)" }}
+              >
+                Prescriptions
+              </h1>
+            </div>
           </div>
+          <Link
+            href="/provider/rx/new"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors shrink-0"
+          >
+            <Plus size={12} aria-hidden="true" />
+            Write New Rx
+          </Link>
         </div>
         <p className="text-muted-foreground font-light mb-8 ml-8">
           Review, sign, and manage prescription requests.
@@ -277,13 +355,18 @@ export default function ProviderPrescriptionsPage() {
                       {rx.dosage}
                     </td>
                     <td>
-                      <Badge
-                        variant={
-                          STATUS_VARIANT[rx.status as RxStatus] ?? "default"
-                        }
-                      >
-                        {STATUS_LABEL[rx.status as RxStatus] ?? rx.status}
-                      </Badge>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge
+                          variant={
+                            STATUS_VARIANT[rx.status as RxStatus] ?? "default"
+                          }
+                        >
+                          {STATUS_LABEL[rx.status as RxStatus] ?? rx.status}
+                        </Badge>
+                        {snsSentIds.has(rx._id) && (
+                          <Badge variant="info">SNS Sent</Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="text-sm font-light text-muted-foreground">
                       {formatDate(rx.createdAt)}
@@ -318,6 +401,13 @@ export default function ProviderPrescriptionsPage() {
                         )}
                         {rx.status === "signed" && (
                           <button
+                            onClick={() =>
+                              setSendModal({
+                                rxId: rx._id,
+                                pharmacyId: rx.pharmacyId ?? "",
+                                channel: "email",
+                              })
+                            }
                             disabled={sendingId === rx._id}
                             className="inline-flex items-center gap-1.5 px-4 py-2 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                           >
@@ -329,10 +419,13 @@ export default function ProviderPrescriptionsPage() {
                             Send to Pharmacy
                           </button>
                         )}
-                        <button className="inline-flex items-center gap-1.5 px-4 py-2 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors">
+                        <Link
+                          href={`/provider/rx/${rx._id}`}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors"
+                        >
                           <Eye size={12} aria-hidden="true" />
                           View
-                        </button>
+                        </Link>
                       </div>
                     </td>
                   </tr>
@@ -342,6 +435,116 @@ export default function ProviderPrescriptionsPage() {
           </table>
         </div>
       </div>
+
+      {/* Send to Pharmacy Modal */}
+      {sendModal && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+            onClick={() => setSendModal(null)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-md p-6 w-full max-w-sm shadow-xl">
+              <div className="flex items-center justify-between mb-5">
+                <h2
+                  className="text-base font-medium text-foreground"
+                  style={{ fontFamily: "var(--font-heading)" }}
+                >
+                  Send to Pharmacy
+                </h2>
+                <button
+                  onClick={() => setSendModal(null)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Close"
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="sendChannel"
+                    className="block text-xs tracking-wide text-muted-foreground mb-2 font-medium"
+                  >
+                    Delivery Channel
+                  </label>
+                  <select
+                    id="sendChannel"
+                    value={sendModal.channel}
+                    onChange={(e) =>
+                      setSendModal((prev) =>
+                        prev ? { ...prev, channel: e.target.value as "email" | "sms" | "fax" } : prev
+                      )
+                    }
+                    className="w-full px-4 py-3 bg-white border border-border text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors text-base font-light"
+                  >
+                    <option value="email">Email</option>
+                    <option value="sms">SMS</option>
+                    <option value="fax">Fax</option>
+                  </select>
+                </div>
+
+                {!sendModal.pharmacyId && (
+                  <div>
+                    <label
+                      htmlFor="sendPharmacyId"
+                      className="block text-xs tracking-wide text-muted-foreground mb-2 font-medium"
+                    >
+                      Pharmacy ID
+                    </label>
+                    <input
+                      id="sendPharmacyId"
+                      type="text"
+                      placeholder="Enter pharmacy ID"
+                      value={sendModal.pharmacyId}
+                      onChange={(e) =>
+                        setSendModal((prev) =>
+                          prev ? { ...prev, pharmacyId: e.target.value } : prev
+                        )
+                      }
+                      className="w-full px-4 py-3 bg-white border border-border text-foreground placeholder-muted-foreground/60 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors text-base font-light"
+                    />
+                  </div>
+                )}
+
+                {errorMsg && (
+                  <p className="text-xs text-destructive/70 font-light">{errorMsg}</p>
+                )}
+
+                <div className="flex gap-3 pt-1">
+                  <button
+                    onClick={handleSendToPharmacy}
+                    disabled={sendingId === sendModal.rxId}
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-foreground text-background text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-foreground/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {sendingId === sendModal.rxId ? (
+                      <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Send size={11} aria-hidden="true" />
+                    )}
+                    Send
+                  </button>
+                  <button
+                    onClick={() => setSendModal(null)}
+                    className="flex-1 inline-flex items-center justify-center px-5 py-3 border border-border text-foreground text-[10px] tracking-[0.15em] uppercase font-light rounded-sm hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </AppShell>
+  );
+}
+
+export default function ProviderPrescriptionsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-muted-foreground">Loading...</div>}>
+      <ProviderPrescriptionsContent />
+    </Suspense>
   );
 }

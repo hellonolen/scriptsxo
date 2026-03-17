@@ -14,13 +14,13 @@ import {
   BarChart3,
   ShieldCheck,
   Settings,
-  Menu,
-  X,
   ExternalLink,
   UserCog,
   MapPin,
+  ChevronDown,
+  LogOut,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { SITECONFIG, term } from "@/lib/config";
 import {
   CAP,
@@ -33,6 +33,7 @@ import {
 } from "@/lib/capabilities";
 import { getSessionCookie, isAdmin as checkIsAdmin } from "@/lib/auth";
 import { PageContextTracker } from "@/components/page-context-tracker";
+import { AIConcierge } from "@/components/ai-concierge";
 
 /* -----------------------------------------------------------------------
    Nav item type
@@ -203,7 +204,7 @@ function resolveHref(item: NavItem, primaryRole: Role): string {
 
 interface AppShellProps {
   children: React.ReactNode;
-  /** Optional content rendered below nav links in the sidebar (e.g. step progress) */
+  /** Optional content rendered below the tab nav (e.g. step progress in intake flow) */
   sidebarExtra?: React.ReactNode;
 }
 
@@ -213,8 +214,9 @@ interface AppShellProps {
 
 export function AppShell({ children, sidebarExtra }: AppShellProps) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Use null on first render (matches SSR) then hydrate from cookie on client.
   // This eliminates the React hydration mismatch error.
@@ -225,11 +227,22 @@ export function AppShell({ children, sidebarExtra }: AppShellProps) {
     setMounted(true);
   }, []);
 
+  // Close user menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    if (userMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [userMenuOpen]);
+
   const userName: string = session?.name
     || session?.email?.split("@")[0]
     || "Guest";
-
-  const userEmail: string | null = session?.email || null;
 
   const roles: Role[] = (() => {
     if (!mounted || !session) return ["unverified"];
@@ -279,208 +292,210 @@ export function AppShell({ children, sidebarExtra }: AppShellProps) {
   }
 
   /* -----------------------------------------------------------------------
-     Nav links renderer
-     ----------------------------------------------------------------------- */
-
-  function renderNavLinks(onLinkClick?: () => void) {
-    return (
-      <div className="space-y-0.5">
-        {visibleNavItems.map((item) => {
-          const href = resolveHref(item, primaryRole);
-          const isActive = isLinkActive(item);
-          const Icon = item.icon;
-
-          return (
-            <Link
-              key={item.id}
-              href={href}
-              onClick={onLinkClick}
-              className="flex items-center gap-2.5 px-3 py-2 text-[12px] rounded-lg transition-all duration-200"
-              style={{
-                color: isActive ? "#FFFFFF" : "var(--sidebar-foreground)",
-                background: isActive ? "var(--sidebar-accent)" : "transparent",
-                fontWeight: isActive ? 500 : 400,
-              }}
-            >
-              <Icon size={14} aria-hidden="true" />
-              {item.label}
-              {isActive && (
-                <div
-                  className="ml-auto w-1 h-1 rounded-full"
-                  style={{ background: "var(--sidebar-primary)" }}
-                />
-              )}
-            </Link>
-          );
-        })}
-      </div>
-    );
-  }
-
-  /* -----------------------------------------------------------------------
-     User section (shared between desktop and mobile)
-     ----------------------------------------------------------------------- */
-
-  function renderUserSection() {
-    return (
-      <div
-        className="px-3 py-3"
-        style={{ borderTop: "1px solid var(--sidebar-border)" }}
-      >
-        <div className="flex items-center gap-2.5">
-          <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-medium shrink-0"
-            style={{
-              background: "var(--brand-gradient)",
-              color: "#FFFFFF",
-            }}
-          >
-            {initials}
-          </div>
-          <div className="min-w-0">
-            <p
-              className="text-[12px] font-medium truncate"
-              style={{ color: "rgba(255,255,255,0.85)" }}
-            >
-              {userName || "Guest"}
-            </p>
-            <p
-              className="text-[11px]"
-              style={{ color: "var(--sidebar-foreground)" }}
-            >
-              {roleLabel(primaryRole)}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* -----------------------------------------------------------------------
      Render
      ----------------------------------------------------------------------- */
 
   return (
-    <div className="min-h-screen flex">
-      {/* ===== Desktop Sidebar ===== */}
-      <aside className="hidden lg:flex flex-col w-[260px] fixed inset-y-0 left-0 z-40 bg-sidebar-background">
-        {/* Logo */}
-        <div className="px-5 h-[52px] flex items-center">
-          <Link
-            href="/dashboard"
-            className="text-[13px] tracking-[0.18em] font-medium uppercase"
-            style={{ color: "rgba(255,255,255,0.85)" }}
-          >
-            {SITECONFIG.brand.name}
-          </Link>
-        </div>
+    <div className="min-h-screen flex flex-col">
 
-        {/* Nav links */}
-        <nav className="flex-1 px-2 py-1 overflow-y-auto">
-          {renderNavLinks()}
-        </nav>
-
-        {/* Sidebar extra */}
-        {sidebarExtra && (
-          <div className="px-3 pb-2 border-t border-sidebar-border mt-1 pt-3">
-            {sidebarExtra}
-          </div>
-        )}
-
-        {/* Back to Website */}
-        <div className="px-2 pb-1">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 px-3 py-2 text-[12px] rounded-lg transition-all duration-200"
-            style={{ color: "var(--sidebar-foreground)" }}
-          >
-            <ExternalLink size={14} aria-hidden="true" />
-            Back to Website
-          </Link>
-        </div>
-
-        {/* User section */}
-        {renderUserSection()}
-      </aside>
-
-      {/* ===== Mobile Header ===== */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 flex items-center justify-between px-5 bg-sidebar-background border-b border-sidebar-border">
+      {/* ===== Top Header (64px) ===== */}
+      <header
+        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6"
+        style={{
+          height: "64px",
+          background: "#ffffff",
+          borderBottom: "1px solid #e2e8f0",
+        }}
+      >
+        {/* Logo — left */}
         <Link
           href="/dashboard"
-          className="text-[11px] tracking-[0.2em] font-medium uppercase"
-          style={{ color: "rgba(255,255,255,0.85)" }}
+          className="text-[13px] tracking-[0.18em] font-medium uppercase shrink-0"
+          style={{ color: "#1B2A4A" }}
         >
           {SITECONFIG.brand.name}
         </Link>
-        <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          className="p-2 rounded-lg"
-          style={{ color: "var(--sidebar-foreground)" }}
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
-        >
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
-      </div>
 
-      {/* ===== Mobile Sidebar Overlay ===== */}
-      {mobileOpen && (
-        <>
-          <div
-            className="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
-          />
-          <aside className="lg:hidden fixed inset-y-0 left-0 z-50 w-[280px] flex flex-col animate-slide-in-left bg-sidebar-background">
-            <div className="px-5 h-14 flex items-center justify-between">
-              <span
-                className="text-[11px] tracking-[0.2em] font-medium uppercase"
-                style={{ color: "rgba(255,255,255,0.85)" }}
-              >
-                {SITECONFIG.brand.name}
-              </span>
-              <button
-                onClick={() => setMobileOpen(false)}
-                className="p-1"
-                style={{ color: "var(--sidebar-foreground)" }}
-              >
-                <X size={18} />
-              </button>
+        {/* Right: user section */}
+        <div className="flex items-center gap-3" ref={userMenuRef}>
+          {/* Back to website link — subtle */}
+          <Link
+            href="/"
+            className="hidden sm:flex items-center gap-1.5 text-[12px] transition-colors"
+            style={{ color: "#64748b" }}
+          >
+            <ExternalLink size={13} aria-hidden="true" />
+            Website
+          </Link>
+
+          {/* Divider */}
+          <div className="hidden sm:block w-px h-4" style={{ background: "#e2e8f0" }} />
+
+          {/* User avatar + name + role — triggers dropdown */}
+          <button
+            onClick={() => setUserMenuOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors"
+            style={{
+              background: userMenuOpen ? "#f1f5f9" : "transparent",
+            }}
+            aria-haspopup="true"
+            aria-expanded={userMenuOpen}
+          >
+            {/* Initials avatar */}
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-medium shrink-0"
+              style={{
+                background: "var(--brand-gradient)",
+                color: "#FFFFFF",
+              }}
+            >
+              {initials}
             </div>
 
-            <nav className="flex-1 px-3 py-1 overflow-y-auto">
-              {renderNavLinks(() => setMobileOpen(false))}
+            {/* Name + role */}
+            <div className="hidden sm:block text-left">
+              <p
+                className="text-[12px] font-medium leading-none"
+                style={{ color: "#1B2A4A" }}
+              >
+                {userName}
+              </p>
+              <p
+                className="text-[11px] leading-none mt-0.5"
+                style={{ color: "#64748b" }}
+              >
+                {roleLabel(primaryRole)}
+              </p>
+            </div>
 
-              {sidebarExtra && (
-                <div className="mt-3 pt-3 border-t border-sidebar-border">
-                  {sidebarExtra}
-                </div>
-              )}
+            <ChevronDown
+              size={13}
+              className="hidden sm:block transition-transform"
+              style={{
+                color: "#64748b",
+                transform: userMenuOpen ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            />
+          </button>
 
+          {/* User dropdown */}
+          {userMenuOpen && (
+            <div
+              className="absolute top-[58px] right-4 w-48 rounded-xl shadow-lg border overflow-hidden z-50"
+              style={{
+                background: "#ffffff",
+                borderColor: "#e2e8f0",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.10)",
+              }}
+            >
+              {/* User info header */}
+              <div
+                className="px-4 py-3"
+                style={{ borderBottom: "1px solid #f1f5f9" }}
+              >
+                <p className="text-[12px] font-medium truncate" style={{ color: "#1B2A4A" }}>
+                  {userName}
+                </p>
+                <p className="text-[11px] truncate" style={{ color: "#64748b" }}>
+                  {roleLabel(primaryRole)}
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="py-1">
+                <Link
+                  href="/"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] transition-colors hover:bg-slate-50"
+                  style={{ color: "#64748b" }}
+                >
+                  <ExternalLink size={13} aria-hidden="true" />
+                  Back to Website
+                </Link>
+
+                <Link
+                  href="/api/auth/signout"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] transition-colors hover:bg-slate-50"
+                  style={{ color: "#dc2626" }}
+                >
+                  <LogOut size={13} aria-hidden="true" />
+                  Sign Out
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* ===== Horizontal Tab Nav (below header, sticky) ===== */}
+      <nav
+        className="fixed left-0 right-0 z-40 flex items-end overflow-x-auto scrollbar-hide"
+        style={{
+          top: "64px",
+          height: "44px",
+          background: "#ffffff",
+          borderBottom: "1px solid #e2e8f0",
+        }}
+      >
+        <div className="flex items-end h-full px-4 gap-0" style={{ minWidth: "max-content" }}>
+          {visibleNavItems.map((item) => {
+            const href = resolveHref(item, primaryRole);
+            const isActive = isLinkActive(item);
+            const Icon = item.icon;
+
+            return (
               <Link
-                href="/"
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 text-[13px] rounded-xl transition-all duration-200 mt-4"
+                key={item.id}
+                href={href}
+                className="relative flex items-center gap-1.5 h-full transition-colors whitespace-nowrap"
                 style={{
-                  color: "var(--sidebar-foreground)",
-                  borderTop: "1px solid var(--sidebar-border)",
-                  paddingTop: "1rem",
+                  padding: "0 20px",
+                  fontSize: "13px",
+                  fontWeight: isActive ? 700 : 500,
+                  color: isActive ? "#1B2A4A" : "#64748b",
+                  borderBottom: isActive
+                    ? "3px solid #0D9488"
+                    : "3px solid transparent",
                 }}
               >
-                <ExternalLink size={16} aria-hidden="true" />
-                Back to Website
+                <Icon size={13} aria-hidden="true" />
+                {item.label}
               </Link>
-            </nav>
+            );
+          })}
+        </div>
+      </nav>
 
-            {renderUserSection()}
-          </aside>
-        </>
+      {/* ===== sidebarExtra strip (optional — renders below tab nav) ===== */}
+      {sidebarExtra && (
+        <div
+          className="fixed left-0 right-0 z-30 px-6 py-2"
+          style={{
+            top: "108px",
+            background: "#f8fafc",
+            borderBottom: "1px solid #e2e8f0",
+          }}
+        >
+          {sidebarExtra}
+        </div>
       )}
 
-      {/* ===== Main Content ===== */}
-      <main className="flex-1 lg:ml-[260px] pt-14 lg:pt-0 min-h-screen mesh-bg bg-background">
-        <div className="relative z-10">{children}</div>
+      {/* ===== Main Content Area ===== */}
+      <main
+        className="flex-1 min-h-screen mesh-bg"
+        style={{
+          paddingTop: sidebarExtra ? "144px" : "108px",
+          background: "#f0f4f8",
+        }}
+      >
+        <div className="relative z-10" style={{ padding: "28px 32px" }}>
+          {children}
+        </div>
       </main>
 
       <PageContextTracker />
+      <AIConcierge context={{ userRole: primaryRole, userEmail: session?.email }} />
     </div>
   );
 }

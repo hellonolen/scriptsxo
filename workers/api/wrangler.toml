@@ -14,3 +14,10 @@ bucket_name = "scriptsxo-assets"
 
 [vars]
 SITE_URL = "https://www.scriptsxo.com"
+
+# Required secrets (set via: npx wrangler secret put SECRET_NAME)
+# AWS_ACCESS_KEY_ID
+# AWS_SECRET_ACCESS_KEY
+# AWS_REGION (default: us-east-1)
+# SNS_PHARMACY_TOPIC_PREFIX
+# ANTHROPIC_API_KEY

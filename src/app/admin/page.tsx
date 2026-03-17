@@ -23,6 +23,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { NavCard } from "@/components/ui/nav-card";
 import { term } from "@/lib/config";
 import { members, prescriptions as prescriptionsApi } from "@/lib/api";
+import { AgentActivityFeed } from "@/components/agent-activity-feed";
 
 const ADMIN_CARDS = [
   {
@@ -117,6 +118,17 @@ export default function AdminPage() {
           <StatCard label={`${term("titlePlural")} Today`} value={patientCount === null ? "—" : String(patientCount)} icon={Users} />
           <StatCard label="Rx Processed" value={recentRxList === undefined ? "—" : String(recentRxList.length)} icon={Pill} />
           <StatCard label="Revenue" value="—" icon={DollarSign} />
+        </div>
+
+        {/* Agent Activity */}
+        <div className="bg-card border border-border rounded-lg p-6 mb-10">
+          <h2
+            className="text-lg text-foreground font-light mb-5"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            Agent Activity
+          </h2>
+          <AgentActivityFeed maxItems={8} />
         </div>
 
         {/* System Health + Recent Activity */}

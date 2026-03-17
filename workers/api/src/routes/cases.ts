@@ -3,6 +3,7 @@ import { newId } from '../lib/id';
 import { requireCap, requireAnyCap, err, ok, type Env } from '../lib/auth';
 import { auditLog } from '../lib/audit';
 import { CAP } from '../lib/caps';
+import { runAgent } from '../lib/agents';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -75,6 +76,38 @@ app.post('/:id/advance', async (c) => {
     patientEmail: row.patient_email,
     payload: { from: row.case_state, to: toState },
   });
+
+  // ─── Agent triggers (fire-and-forget) ─────────────────────────────────────
+  const id = c.req.param('id');
+  const agentInput: Record<string, unknown> = { caseId: id, fromState: row.case_state, toState, notes };
+
+  let agentName: string | null = null;
+  let triggerEvent: string | null = null;
+
+  if (toState === 'identity_pending') {
+    agentName = 'TriageAgent';
+    triggerEvent = 'case.identity_pending';
+  } else if (toState === 'ready_for_clinical_review') {
+    // AutoReviewAgent fires first — it will auto-advance the case to approved/denied/provider_review
+    agentName = 'AutoReviewAgent';
+    triggerEvent = 'case.ready_for_clinical_review';
+  } else if (toState === 'provider_review') {
+    // ClinicalReviewAgent runs as supplemental summary for cases escalated to providers
+    agentName = 'ClinicalReviewAgent';
+    triggerEvent = 'case.provider_review';
+  } else if (toState === 'pharmacy_exception') {
+    agentName = 'PharmacyAgent';
+    triggerEvent = 'case.pharmacy_exception';
+  }
+
+  if (agentName && triggerEvent) {
+    const env = c.env;
+    const trigger = triggerEvent;
+    const agent = agentName;
+    c.executionCtx?.waitUntil(
+      runAgent(env, agent, trigger, 'case', id, agentInput).catch(console.error)
+    );
+  }
 
   return ok({ success: true, state: toState });
 });

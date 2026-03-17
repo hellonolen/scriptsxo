@@ -159,16 +159,21 @@ export default function FAQPage() {
                             <div className="sticky top-[88px]">
                                 <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-[var(--muted-foreground)] mb-4">Categories</p>
                                 <ul className="space-y-1">
-                                    {FAQ_SECTIONS.map((section) => (
+                                    {FAQ_SECTIONS.map((section) => {
+                                        const anchorId = section.category.toLowerCase().replace(/\s+/g, '-').replace(/&/g, 'and');
+                                        return (
                                         <li key={section.category}>
-                                            <a
-                                                href={`#${section.category.toLowerCase().replace(/\s+/g, '-').replace(/&/g, 'and')}`}
-                                                className="block px-3 py-2 rounded-lg text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] hover:bg-[var(--secondary)] transition-colors"
+                                            <button
+                                                onClick={() => {
+                                                    document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                                }}
+                                                className="block w-full text-left px-3 py-2 rounded-lg text-sm text-[var(--muted-foreground)] hover:text-[var(--primary)] hover:bg-[var(--secondary)] transition-colors cursor-pointer"
                                             >
                                                 {section.category}
-                                            </a>
+                                            </button>
                                         </li>
-                                    ))}
+                                        );
+                                    })}
                                 </ul>
                                 <div className="mt-10 pt-8 border-t border-[var(--border)]">
                                     <p className="text-sm text-[var(--muted-foreground)] mb-3">Still have questions?</p>

@@ -91,6 +91,11 @@ const nextConfig: NextConfig = {
     return config;
   },
 
+  // Turbopack is the default bundler in Next.js 16.
+  // The webpack config above is kept for backward compatibility but
+  // Turbopack handles node polyfill fallbacks automatically.
+  turbopack: {},
+
   env: {},
 
   // Disable x-powered-by header

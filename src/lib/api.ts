@@ -181,6 +181,11 @@ export const consultations = {
 
   deny: (id: string, reason?: string) =>
     apiFetch<{ success: boolean }>(`/consultations/${id}/deny`, { method: 'POST', body: JSON.stringify({ reason }) }),
+
+  override: (id: string, action: 'block' | 'approve', reason?: string) =>
+    apiFetch<{ success: boolean; caseState: string }>(`/consultations/${id}/override`, {
+      method: 'POST', body: JSON.stringify({ action, reason }),
+    }),
 };
 
 // ─── Prescriptions ───────────────────────────────────────────────────
@@ -316,4 +321,16 @@ export const erx = {
     apiFetch<{ success: boolean }>('/erx/status-update', {
       method: 'POST', body: JSON.stringify({ transactionId, status, pharmacyNote }),
     }),
+};
+
+// ─── Agents ──────────────────────────────────────────────────────────
+
+export const agentsApi = {
+  chat: (message: string, context?: Record<string, unknown>) =>
+    apiFetch<{ reply: string; runId?: string }>('/agents/chat', {
+      method: 'POST', body: JSON.stringify({ message, context }),
+    }),
+
+  getRuns: (entityId?: string) =>
+    apiFetch<Record<string, unknown>[]>(`/agents/runs${entityId ? `?entity_id=${entityId}` : ''}`),
 };

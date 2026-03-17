@@ -21,6 +21,7 @@ import aiRoutes from './routes/ai';
 import snsRoutes from './routes/sns';
 import casesRoutes from './routes/cases';
 import erxRoutes from './routes/erx';
+import agentsRoutes from './routes/agents';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -62,6 +63,7 @@ app.route('/ai', aiRoutes);
 app.route('/sns', snsRoutes);
 app.route('/cases', casesRoutes);
 app.route('/erx', erxRoutes);
+app.route('/agents', agentsRoutes);
 
 // ─── 404 ─────────────────────────────────────────────────────────────
 app.notFound((c) => c.json({ success: false, error: 'Not found' }, 404));

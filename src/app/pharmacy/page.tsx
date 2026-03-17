@@ -9,7 +9,10 @@ import {
   Pill,
   AlertCircle,
   Loader2,
+  FlaskConical,
+  BarChart2,
 } from "lucide-react";
+import { NavCard } from "@/components/ui/nav-card";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
@@ -229,6 +232,24 @@ export default function PharmacyPage() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Compound + Tracker nav cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-10">
+          <NavCard
+            href="/pharmacy/compound"
+            icon={FlaskConical}
+            title="Compound Rx"
+            description="Manage compound prescriptions through all compounding stages — Received, In Compounding, QC Review, Dispensed, and Shipped."
+            stat="View Compounds"
+          />
+          <NavCard
+            href="/pharmacy/tracker"
+            icon={BarChart2}
+            title="Rx Tracker"
+            description="Prescription analytics, PA management, denial rates by payer, and compounding pipeline visualized by time period."
+            stat="View Analytics"
+          />
         </div>
       </div>
     </AppShell>

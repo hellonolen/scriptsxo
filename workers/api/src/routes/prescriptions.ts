@@ -2,8 +2,21 @@ import { Hono } from 'hono';
 import { newId } from '../lib/id';
 import { requireCap, requireAnyCap, err, ok, type Env } from '../lib/auth';
 import { CAP } from '../lib/caps';
+import { snsPublish, snsCreateTopic } from '../lib/sns';
 
 const app = new Hono<{ Bindings: Env }>();
+
+app.get('/', async (c) => {
+  await requireAnyCap(c, [CAP.RX_READ, CAP.ADMIN_READ]);
+  const { results } = await c.env.DB.prepare(`
+    SELECT rx.*, p.email as patient_email, m.name as patient_name
+    FROM prescriptions rx
+    LEFT JOIN patients p ON rx.patient_id = p.id
+    LEFT JOIN members m ON p.member_id = m.id
+    ORDER BY rx.created_at DESC LIMIT 200
+  `).all();
+  return ok(results ?? []);
+});
 
 app.post('/', async (c) => {
   await requireCap(c, CAP.RX_WRITE);
@@ -99,12 +112,90 @@ app.post('/:id/send-to-pharmacy', async (c) => {
   await requireCap(c, CAP.RX_WRITE);
   const { pharmacyId, ePrescribeId } = await c.req.json<{ pharmacyId: string; ePrescribeId?: string }>();
   const id = c.req.param('id');
-  const rx = await c.env.DB.prepare('SELECT status FROM prescriptions WHERE id = ?').bind(id).first<{ status: string }>();
-  if (!rx) return err('Not found', 404);
-  if (rx.status !== 'signed') return err('Prescription must be signed before sending');
 
+  const rxCheck = await c.env.DB.prepare('SELECT status FROM prescriptions WHERE id = ?').bind(id).first<{ status: string }>();
+  if (!rxCheck) return err('Not found', 404);
+  if (rxCheck.status !== 'signed') return err('Prescription must be signed before sending');
+
+  const now = Date.now();
   await c.env.DB.prepare('UPDATE prescriptions SET status = ?, pharmacy_id = ?, eprescribe_id = ?, sent_to_pharmacy_at = ?, updated_at = ? WHERE id = ?')
-    .bind('sent', pharmacyId, ePrescribeId ?? null, Date.now(), Date.now(), id).run();
+    .bind('sent', pharmacyId, ePrescribeId ?? null, now, now, id).run();
+
+  // Fire SNS notification to pharmacy (fire-and-forget)
+  c.executionCtx?.waitUntil(
+    (async () => {
+      try {
+        const rx = await c.env.DB.prepare(`
+          SELECT p.*, pt.email as patient_email, pt.first_name as patient_first, pt.last_name as patient_last,
+                 pr.first_name as provider_first, pr.last_name as provider_last, pr.npi_number, pr.title,
+                 ph.name as pharmacy_name, ph.notification_email, ph.notification_phone, ph.sns_topic_arn
+          FROM prescriptions p
+          LEFT JOIN patients pt ON p.patient_id = pt.id
+          LEFT JOIN providers pr ON p.provider_id = pr.id
+          LEFT JOIN pharmacies ph ON ph.id = ?
+          WHERE p.id = ?
+        `).bind(pharmacyId, id).first<Record<string, unknown>>();
+
+        if (!rx) return;
+
+        const patientName = `${rx.patient_first} ${rx.patient_last}`;
+        const providerName = `${rx.title ?? 'Dr.'} ${rx.provider_first} ${rx.provider_last}`;
+        const recipient = (rx.notification_email ?? rx.pharmacy_email) as string | null;
+
+        if (!recipient) return;
+
+        let topicArn = rx.sns_topic_arn as string | null;
+        if (!topicArn) {
+          const safeName = pharmacyId.replace(/[^a-zA-Z0-9-_]/g, '-').slice(0, 50);
+          topicArn = await snsCreateTopic(c.env, `scriptsxo-pharmacy-${safeName}`);
+          if (topicArn) {
+            await c.env.DB.prepare('UPDATE pharmacies SET sns_topic_arn = ? WHERE id = ?')
+              .bind(topicArn, pharmacyId).run();
+          }
+        }
+
+        if (!topicArn) return;
+
+        const subject = `New Prescription: ${rx.medication_name} for ${patientName}`;
+        const message = [
+          'PRESCRIPTION NOTIFICATION — ScriptsXO',
+          '',
+          `Prescription ID: ${id}`,
+          `Medication: ${rx.medication_name}${rx.dosage ? ` ${rx.dosage}` : ''}`,
+          `Form: ${rx.form ?? 'N/A'} | Quantity: ${rx.quantity ?? 'N/A'} | Days Supply: ${rx.days_supply ?? 'N/A'}`,
+          `Directions: ${rx.directions ?? 'N/A'}`,
+          `Refills: ${rx.refills_authorized ?? 0}`,
+          '',
+          `Patient: ${patientName}`,
+          `Patient Email: ${rx.patient_email}`,
+          '',
+          `Prescriber: ${providerName}`,
+          `NPI: ${rx.npi_number ?? 'N/A'}`,
+          '',
+          `Sent: ${new Date(now).toLocaleString('en-US', { timeZone: 'America/New_York' })} ET`,
+          '',
+          '— ScriptsXO Prescription Management Platform',
+        ].join('\n');
+
+        const result = await snsPublish(c.env, { topicArn, subject, message });
+
+        const deliveryId = newId();
+        await c.env.DB.prepare(`
+          INSERT INTO sns_deliveries (id, prescription_id, pharmacy_id, channel, sns_message_id, sns_topic_arn, recipient, status, payload, created_at)
+          VALUES (?, ?, ?, 'email', ?, ?, ?, ?, ?, ?)
+        `).bind(
+          deliveryId, id, pharmacyId,
+          result?.MessageId ?? null, topicArn, recipient,
+          result ? 'sent' : 'failed',
+          JSON.stringify({ subject, message }),
+          now
+        ).run();
+      } catch (e) {
+        console.error('[send-to-pharmacy] SNS error:', e);
+      }
+    })()
+  );
+
   return ok({ success: true });
 });
 

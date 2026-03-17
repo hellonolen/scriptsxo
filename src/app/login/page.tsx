@@ -1,883 +1,367 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Fingerprint,
-} from "lucide-react";
-import { SITECONFIG } from "@/lib/config";
-import {
-  createSession,
-  setSessionCookie,
-  getSessionCookie,
-  isAdminEmail,
-  createAdminSession,
-  setAdminCookie,
-} from "@/lib/auth";
-import { auth, members, patients } from "@/lib/api";
-import {
-  registerPasskey,
-  authenticatePasskey,
-  isWebAuthnSupported,
-  isPlatformAuthenticatorAvailable,
-} from "@/lib/webauthn";
+import { ArrowRight, Mail } from "lucide-react";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 
-/* ---------------------------------------------------------------------------
-   Constants
-   --------------------------------------------------------------------------- */
+const BRAND_NAME = "SCRIPTSXO";
+const SESSION_KEY = "scriptsxo_session";
+const CTA_LABEL = "GET STARTED";
+const CTA_HREF = "/pricing";
+const QUOTE_TEXT = '"Telehealth prescriptions, simplified."';
 
-/** Video URL for the left panel background. Empty string = dark fallback. */
-const LOGIN_VIDEO_URL = "";
+const NAV_LINKS = [
+  { label: "ABOUT", href: "/about" },
+  { label: "PRICING", href: "/pricing" },
+];
 
-const FEATURE_BULLETS = [
-  "Board-Certified Telehealth",
-  "Prescriptions",
-  "Secure Patient Intake",
-  "Provider Portal",
-  "Pharmacy Fulfillment",
-] as const;
-
-/* ---------------------------------------------------------------------------
-   Auth step types
-   --------------------------------------------------------------------------- */
-
-type AuthStep =
-  | "initial"
-  | "create_account"
-  | "form"
-  | "processing"
-  | "routing"
-  | "error"
-  | "passkey_register"
-  | "magic_link_sent"
-  | "magic_link_verify";
-
-/* ---------------------------------------------------------------------------
-   Login Page Component
-   --------------------------------------------------------------------------- */
+const ADMIN_EMAILS = [
+  "hellonolen@gmail.com",
+  "nolen@doclish.com",
+  "nolen@scriptsxo.com",
+];
 
 export default function LoginPage() {
   const router = useRouter();
-
-  // Form fields
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"form" | "sent" | "code">("form");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Auth state
-  const [step, setStep] = useState<AuthStep>("initial");
-  const [error, setError] = useState("");
-  const [statusText, setStatusText] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  const [passkeysAvailable, setPasskeysAvailable] = useState(true);
-  const [isDev, setIsDev] = useState(false);
-  const codeInputRef = useRef<HTMLInputElement>(null);
+  const sendMagicLink = useMutation(api.auth.sendMagicLink);
+  const sendBackupCode = useMutation(api.auth.sendBackupCode);
+  const verifyBackupCode = useMutation(api.auth.verifyBackupCode);
 
-  // Detect dev mode after mount to prevent SSR hydration mismatch
+  // Check if already logged in
   useEffect(() => {
-    const dev =
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
-    setIsDev(dev);
-  }, []);
-
-  // Patient/membership state for post-auth routing
-  const [routingEmail, setRoutingEmail] = useState<string | null>(null);
-  const [patient, setPatient] = useState<Record<string, unknown> | null | undefined>(undefined);
-  const [membership, setMembership] = useState<{ isPaid?: boolean } | null | undefined>(undefined);
-
-  // Check WebAuthn support on mount (skip in dev)
-  useEffect(() => {
-    if (isDev) {
-      setPasskeysAvailable(false);
-      return;
-    }
-    async function checkSupport() {
-      if (!isWebAuthnSupported()) {
-        setPasskeysAvailable(false);
-        return;
-      }
-      const platformAvailable = await isPlatformAuthenticatorAvailable();
-      if (!platformAvailable) {
-        setPasskeysAvailable(false);
+    const session = localStorage.getItem(SESSION_KEY);
+    if (session) {
+      try {
+        const parsed = JSON.parse(session);
+        if (parsed.expiresAt > Date.now()) {
+          router.push("/dashboard");
+        } else {
+          localStorage.removeItem(SESSION_KEY);
+        }
+      } catch {
+        localStorage.removeItem(SESSION_KEY);
       }
     }
-    checkSupport();
-  }, [isDev]);
+  }, [router]);
 
-  // Focus code input when magic link step is shown
-  useEffect(() => {
-    if (step === "magic_link_verify" && codeInputRef.current) {
-      codeInputRef.current.focus();
-    }
-  }, [step]);
+  const handleSendMagicLink = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!firstName.trim() || !email.trim()) return;
 
-  // Fetch patient and membership data when routing email is set
-  useEffect(() => {
-    if (!routingEmail) return;
+    setIsLoading(true);
+    setError(null);
 
-    const currentSession = getSessionCookie();
-    const role = currentSession?.role;
+    try {
+      const result = await sendMagicLink({
+        email: email.toLowerCase().trim(),
+        firstName: firstName.trim(),
+      });
 
-    // Short-circuit for roles that don't need patient/membership data
-    if (role === "admin") { router.push("/dashboard"); return; }
-    if (role === "unverified" || !role) { router.push("/access/setup"); return; }
-    if (role === "provider") { router.push("/provider"); return; }
-    if (role === "pharmacy") { router.push("/pharmacy"); return; }
-    if (isDev) { router.push("/dashboard"); return; }
-
-    // Fetch patient and membership data for verified patients
-    Promise.all([
-      patients.getByEmail(routingEmail).catch(() => null),
-      // Membership status not yet in api.ts — treat as unpaid until implemented
-      Promise.resolve(null as { isPaid?: boolean } | null),
-    ]).then(([patientData, membershipData]) => {
-      setPatient(patientData as Record<string, unknown> | null);
-      setMembership(membershipData);
-
-      if (currentSession) {
-        const paymentStatus = membershipData?.isPaid === true ? "active" : "none";
-        setSessionCookie({ ...currentSession, paymentStatus });
-      }
-
-      const hasPaid = membershipData?.isPaid === true;
-      if (patientData && hasPaid) {
-        router.push("/dashboard");
+      if (result.success) {
+        setStep("sent");
       } else {
-        router.push("/intake/symptoms");
+        setError(result.error || "Failed to send. Please try again.");
       }
-    });
-  }, [routingEmail, isDev, router]);
-
-  /* -------------------------------------------------------------------------
-     Auth handlers
-     ------------------------------------------------------------------------- */
-
-  function handleAuthError(err: unknown) {
-    const message =
-      err instanceof Error ? err.message : "An unexpected error occurred";
-
-    if (
-      message.includes("NotAllowed") ||
-      message.includes("cancelled") ||
-      message.includes("aborted") ||
-      message.includes("The operation either timed out")
-    ) {
-      setError("Authentication was cancelled. Please try again.");
-    } else {
-      setError(message);
-    }
-    setStep("error");
-  }
-
-  function completeAuth(
-    authEmail: string,
-    authName?: string,
-    sessionToken?: string
-  ) {
-    const baseSession = createSession(authEmail, authName);
-    const session = sessionToken
-      ? { ...baseSession, sessionToken }
-      : baseSession;
-    setSessionCookie(session);
-
-    if (isAdminEmail(authEmail)) {
-      setAdminCookie(createAdminSession(authEmail));
-    }
-
-    setRoutingEmail(authEmail.toLowerCase());
-    setStep("routing");
-    setStatusText("Signing you in...");
-  }
-
-  /** DEV MODE: Just create session and go. */
-  async function handleDevLogin() {
-    if (!email.trim() || !firstName.trim()) return;
-    await members.getOrCreate(email.toLowerCase(), firstName).catch(() => {});
-    completeAuth(email, firstName);
-  }
-
-  /**
-   * Main form submit handler.
-   * - Dev mode: instant login
-   * - Production + no passkeys: magic link
-   * - Production + passkeys: try passkey, fall back to magic link
-   */
-  async function handleFormSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim() || !firstName.trim()) return;
-
-    if (isDev) {
-      await handleDevLogin();
-      return;
-    }
-
-    if (!passkeysAvailable) {
-      await handleRequestMagicLink();
-      return;
-    }
-
-    setStep("processing");
-    setStatusText("Checking your account...");
-    setError("");
-
-    try {
-      const { challenge } = await auth.createChallenge(email.toLowerCase(), "auth");
-
-      setStatusText("Verify with your device...");
-      const authentication = await authenticatePasskey({ challenge, rpId: window.location.hostname, allowCredentials: [] });
-
-      setStatusText("Verifying...");
-      const credId = (authentication as unknown as Record<string, unknown>).id as string;
-      const verifyResult = await auth.verifyCredential({
-        credentialId: credId,
-        challenge,
-      });
-
-      if (!verifyResult.success) throw new Error(verifyResult.error ?? "Verification failed");
-
-      const authEmail = verifyResult.email || email;
-      const memberResult = await members.getOrCreate(authEmail.toLowerCase(), firstName);
-      const sessionResult = await auth.createSession(memberResult.memberId, authEmail.toLowerCase());
-      completeAuth(authEmail, firstName, sessionResult.sessionToken);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "";
-
-      // No passkeys registered -- offer registration
-      if (
-        message.includes("No passkeys") ||
-        message.includes("no credentials") ||
-        message.includes("No passkeys registered")
-      ) {
-        setStep("passkey_register");
-        setError("");
-      } else if (
-        message.includes("RP ID") ||
-        message.includes("invalid for this domain")
-      ) {
-        await handleRequestMagicLink();
-      } else {
-        handleAuthError(err);
-      }
-    }
-  }
-
-  /** Registration: create passkey bound to this device (production only). */
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault();
-    if (!firstName.trim()) return;
-
-    setStep("processing");
-    setStatusText("Setting up your passkey...");
-    setError("");
-
-    try {
-      const { challenge } = await auth.createChallenge(email.toLowerCase(), "register");
-
-      setStatusText("Register with your device...");
-      const registration = await registerPasskey({
-        challenge,
-        rp: { name: "ScriptsXO", id: window.location.hostname },
-        user: { id: btoa(email.toLowerCase()), name: email.toLowerCase(), displayName: firstName },
-        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-        timeout: 60000,
-      });
-
-      setStatusText("Securing your account...");
-      const reg = registration as unknown as Record<string, unknown>;
-      const storeResult = await auth.storeCredential({
-        email: email.toLowerCase(),
-        credentialId: reg.id as string,
-        publicKey: JSON.stringify(reg.response),
-        counter: 0,
-        deviceType: "platform",
-        transports: ["internal"],
-      });
-
-      if (!storeResult.success) throw new Error(storeResult.error ?? "Registration failed");
-
-      const memberResult = await members.getOrCreate(email.toLowerCase(), firstName);
-      const sessionResult = await auth.createSession(memberResult.memberId, email.toLowerCase());
-      completeAuth(email, firstName, sessionResult.sessionToken);
-    } catch (err: unknown) {
-      handleAuthError(err);
-    }
-  }
-
-  /** Request a magic link code via email (production only). */
-  async function handleRequestMagicLink() {
-    setStep("processing");
-    setStatusText("Sending verification code...");
-    setError("");
-
-    try {
-      const result = await auth.sendMagicLink(email.toLowerCase());
-
-      if (!result.success) {
-        setError("Failed to send verification code");
-        setStep("error");
-        return;
-      }
-
-      setStep("magic_link_verify");
-      setVerificationCode("");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to send code";
-      setError(message);
-      setStep("error");
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      setError(msg);
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
-  /** Verify the magic link code (production only). */
-  async function handleVerifyCode(e: React.FormEvent) {
-    e.preventDefault();
-    if (!verificationCode.trim()) return;
-
-    setStep("processing");
-    setStatusText("Verifying code...");
-    setError("");
+  const handleUseCodeInstead = async () => {
+    setIsLoading(true);
+    setError(null);
 
     try {
-      const result = await auth.verifyMagicLink(email.toLowerCase(), verificationCode.trim());
+      const result = await sendBackupCode({
+        email: email.toLowerCase().trim(),
+      });
 
-      if (!result.valid) {
-        setError(result.error ?? "Invalid code");
-        setStep("magic_link_verify");
-        return;
-      }
-
-      const memberResult = await members.getOrCreate(email.toLowerCase(), firstName);
-      const sessionResult = await auth.createSession(memberResult.memberId, email.toLowerCase());
-      completeAuth(email, firstName, sessionResult.sessionToken);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Verification failed";
-      setError(message);
-      setStep("magic_link_verify");
-    }
-  }
-
-  /** Sign in with passkey (discoverable credential, no email needed). */
-  async function handlePasskeySignIn() {
-    if (isDev) {
-      setStep("create_account");
-      return;
-    }
-
-    if (!passkeysAvailable) {
-      setStep("create_account");
-      return;
-    }
-
-    setStep("processing");
-    setStatusText("Waiting for your device...");
-    setError("");
-
-    try {
-      const { challenge } = await auth.createChallenge(undefined, "auth");
-      const authentication = await authenticatePasskey({ challenge, rpId: window.location.hostname, allowCredentials: [] });
-
-      setStatusText("Verifying...");
-      const credId = (authentication as unknown as Record<string, unknown>).id as string;
-      const verifyResult = await auth.verifyCredential({ credentialId: credId, challenge });
-
-      if (!verifyResult.success) throw new Error(verifyResult.error ?? "Verification failed");
-
-      const authEmail = verifyResult.email || email;
-      const memberResult = await members.getOrCreate(authEmail.toLowerCase(), firstName || authEmail.split("@")[0]);
-      const sessionResult = await auth.createSession(memberResult.memberId, authEmail.toLowerCase());
-      completeAuth(authEmail, firstName, sessionResult.sessionToken);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "";
-
-      if (
-        message.includes("No passkeys") ||
-        message.includes("no credentials") ||
-        message.includes("NotAllowed") ||
-        message.includes("cancelled") ||
-        message.includes("aborted") ||
-        message.includes("The operation either timed out")
-      ) {
-        setStep("create_account");
-        setError("");
+      if (result.success) {
+        setStep("code");
       } else {
-        handleAuthError(err);
+        setError(result.error || "Failed to send code.");
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      setError(msg);
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
-  function handleRetry() {
-    setStep("initial");
-    setError("");
-    setStatusText("");
-    setVerificationCode("");
-  }
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!code.trim()) return;
 
-  /* -------------------------------------------------------------------------
-     Render
-     ------------------------------------------------------------------------- */
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await verifyBackupCode({
+        email: email.toLowerCase().trim(),
+        code: code.trim(),
+      });
+
+      if (result.success) {
+        const session = {
+          email: result.email,
+          name: result.name || firstName,
+          role: result.role || "member",
+          isAdmin: result.isAdmin || false,
+          authenticatedAt: Date.now(),
+          expiresAt: Date.now() + 60 * 24 * 60 * 60 * 1000,
+        };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+
+        if (result.isAdmin) {
+          router.push("/admin");
+        } else {
+          router.push("/dashboard");
+        }
+      } else {
+        setError(result.error || "Invalid code. Please try again.");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Verification failed";
+      setError(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <main className="min-h-screen flex">
-      {/* ==================================================================
-          LEFT PANEL -- Editorial branding with video background
-          Hidden on mobile, visible at lg+
-          ================================================================== */}
-      <div
-        className="hidden lg:flex lg:w-[55%] relative overflow-hidden"
-        style={{ background: "var(--sidebar-background)" }}
-      >
-        {/* Video background -- falls back to dark panel when URL is empty */}
-        {LOGIN_VIDEO_URL && (
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover"
-            aria-hidden="true"
-          >
-            <source src={LOGIN_VIDEO_URL} />
-          </video>
-        )}
-
-        {/* Dark overlay gradient for text readability */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "linear-gradient(180deg, rgba(30, 16, 55, 0.92) 0%, rgba(30, 16, 55, 0.75) 50%, rgba(30, 16, 55, 0.95) 100%)",
-          }}
-        />
-
-        {/* Subtle radial accent */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                "radial-gradient(ellipse at 20% 50%, rgba(91, 33, 182, 0.15) 0%, transparent 70%)",
-            }}
-          />
-        </div>
-
-        {/* Vertical gradient line accent */}
-        <div
-          className="absolute left-0 top-[20%] bottom-[20%] w-px opacity-30"
-          style={{
-            background:
-              "linear-gradient(180deg, transparent, var(--brand-secondary), var(--brand), transparent)",
-          }}
-        />
-
-        {/* Panel content */}
-        <div className="relative z-10 grid grid-rows-[auto_1fr_auto] p-16 xl:p-24 w-full h-full">
-          {/* Brand name */}
-          <span
-            className="text-[13px] tracking-[0.35em] font-light uppercase"
-            style={{ color: "var(--sidebar-primary)" }}
-          >
-            SCRIPTSXO
-          </span>
-
-          {/* Headline block */}
-          <div className="max-w-lg self-center">
-            <h1
-              className="text-5xl xl:text-[4.25rem] text-white/85 font-light leading-[1.08] tracking-[-0.02em]"
-              style={{ fontFamily: "var(--font-heading)" }}
-            >
-              Prescriptions, delivered
-              <br />
-              <em
-                className="not-italic"
-                style={{
-                  fontFamily: "var(--font-heading)",
-                  fontStyle: "italic",
-                  background:
-                    "linear-gradient(135deg, var(--sidebar-primary), var(--brand))",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                with precision.
-              </em>
-            </h1>
-
-            {/* Feature bullets */}
-            <ul className="mt-8 space-y-2.5">
-              {FEATURE_BULLETS.map((bullet) => (
-                <li
-                  key={bullet}
-                  className="flex items-center gap-3 text-[13px] font-light tracking-wide"
-                  style={{ color: "rgba(255, 255, 255, 0.45)" }}
+    <main className="min-h-screen bg-black text-white flex">
+      {/* Left - Form */}
+      <div className="flex-1 flex items-center justify-center px-8">
+        <div className="w-full max-w-md">
+          {/* Mini Nav */}
+          <div className="flex items-center justify-between mb-16">
+            <Link href="/" className="text-lg font-light tracking-wider text-white">
+              {BRAND_NAME}
+            </Link>
+            <nav className="flex items-center gap-6">
+              {NAV_LINKS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="text-xs tracking-wider text-white/40 hover:text-white transition-colors"
                 >
-                  <span
-                    className="w-1 h-1 rounded-full flex-shrink-0"
-                    style={{ background: "var(--sidebar-primary)" }}
-                    aria-hidden="true"
-                  />
-                  {bullet}
-                </li>
+                  {item.label}
+                </Link>
               ))}
-            </ul>
+              <Link
+                href={CTA_HREF}
+                className="px-4 py-1.5 text-xs tracking-wider font-medium bg-white text-black rounded-[5px] hover:bg-white/90 transition-colors"
+              >
+                {CTA_LABEL}
+              </Link>
+            </nav>
           </div>
 
-          {/* Bottom words */}
-          <div className="flex items-center gap-6">
-            <span className="text-[12px] tracking-[0.15em] text-white/40 uppercase">HIPAA</span>
-            <span className="text-[12px] text-white/20">&middot;</span>
-            <span className="text-[12px] tracking-[0.15em] text-white/40 uppercase">Licensed</span>
-            <span className="text-[12px] text-white/20">&middot;</span>
-            <span className="text-[12px] tracking-[0.15em] text-white/40 uppercase">Secure</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ==================================================================
-          RIGHT PANEL -- Auth Form (Light theme)
-          ================================================================== */}
-      <div className="flex-1 flex items-center justify-center px-8 py-16 lg:py-0" style={{ backgroundColor: '#F8F7FC', color: '#0f172a' }}>
-        <div className="w-full max-w-sm">
-
-          {/* Mobile-only brand */}
-          <div className="lg:hidden mb-12">
-            <span className="text-sm tracking-[0.3em] font-light uppercase" style={{ color: 'rgba(15,23,42,0.5)' }}>
-              SCRIPTSXO
-            </span>
-          </div>
-
-          {/* STEP: Initial -- Sign in with passkey */}
-          {step === "initial" && (
+          {/* Step 1: First Name + Email */}
+          {step === "form" && (
             <>
-              <p className="text-xs tracking-[0.3em] mb-4 uppercase" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                Sign In
-              </p>
-              <h1 className="text-4xl md:text-5xl font-extralight tracking-tight mb-4" style={{ color: '#0f172a' }}>
+              <p className="text-xs tracking-[0.3em] text-white/40 mb-4 uppercase">Sign In</p>
+              <h1 className="text-4xl md:text-5xl font-extralight tracking-tight mb-4">
                 Welcome.
               </h1>
-              <p className="font-light mb-8" style={{ color: 'rgba(15,23,42,0.5)' }}>
-                Sign in with your passkey using Face ID, Touch ID, or Windows Hello.
+              <p className="text-white/40 font-light mb-8">
+                Enter your name and email. We'll send you a sign-in link.
               </p>
 
               {error && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-[5px]">
+                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleSendMagicLink} className="space-y-6">
+                <div>
+                  <label className="block text-xs tracking-wider text-white/40 mb-3 uppercase">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Your first name"
+                    className="w-full px-0 py-4 bg-transparent border-0 border-b border-white/20 text-white placeholder-white/30 focus:outline-none focus:border-white transition-colors text-lg font-light"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs tracking-wider text-white/40 mb-3 uppercase">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@email.com"
+                    className="w-full px-0 py-4 bg-transparent border-0 border-b border-white/20 text-white placeholder-white/30 focus:outline-none focus:border-white transition-colors text-lg font-light"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading || !firstName.trim() || !email.trim()}
+                  className="w-full flex items-center justify-center gap-3 px-8 py-5 bg-white text-black text-sm tracking-wider font-medium hover:bg-white/90 transition-colors disabled:opacity-50 rounded-[5px]"
+                >
+                  <Mail size={20} />
+                  {isLoading ? "SENDING..." : "SEND SIGN-IN LINK"}
+                </button>
+              </form>
+            </>
+          )}
+
+          {/* Step 2: Magic Link Sent */}
+          {step === "sent" && (
+            <>
+              <button
+                onClick={() => { setStep("form"); setError(null); }}
+                className="text-white/40 hover:text-white text-sm mb-8"
+              >
+                &larr; Back
+              </button>
+
+              <p className="text-xs tracking-[0.3em] text-white/40 mb-4 uppercase">Check Your Email</p>
+              <h1 className="text-4xl md:text-5xl font-extralight tracking-tight mb-4">
+                Link sent.
+              </h1>
+              <p className="text-white/40 font-light mb-2">
+                We sent a sign-in link to <span className="text-white">{email}</span>
+              </p>
+              <p className="text-white/30 font-light text-sm mb-8">
+                Click the link in your email to sign in. Check your spam folder if you don't see it.
+              </p>
+
+              {error && (
+                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                   {error}
                 </div>
               )}
 
               <div className="space-y-4">
                 <button
-                  type="button"
-                  onClick={handlePasskeySignIn}
-                  className="w-full flex items-center justify-center gap-3 px-8 py-5 text-white text-sm tracking-wider font-medium transition-colors disabled:opacity-50 rounded-[5px]"
-                  style={{ background: 'linear-gradient(135deg, #7C3AED, #2DD4BF)' }}
+                  onClick={() => handleSendMagicLink()}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-3 px-8 py-5 border border-white/20 text-sm tracking-wider hover:bg-white/10 transition-colors rounded-[5px]"
                 >
-                  <Fingerprint size={20} />
-                  SIGN IN WITH PASSKEY
+                  {isLoading ? "RESENDING..." : "RESEND LINK"}
                 </button>
 
                 <div className="flex items-center gap-4 my-6">
-                  <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(15,23,42,0.1)' }} />
-                  <span className="text-xs tracking-wider" style={{ color: 'rgba(15,23,42,0.35)' }}>NEW USER?</span>
-                  <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(15,23,42,0.1)' }} />
+                  <div className="flex-1 h-px bg-white/10" />
+                  <span className="text-xs text-white/30 tracking-wider">OR</span>
+                  <div className="flex-1 h-px bg-white/10" />
                 </div>
 
                 <button
-                  type="button"
-                  onClick={() => setStep("create_account")}
-                  className="w-full flex items-center justify-center gap-3 px-8 py-5 text-sm tracking-wider transition-colors rounded-[5px]"
-                  style={{ border: '1px solid rgba(15,23,42,0.15)', color: '#0f172a' }}
+                  onClick={handleUseCodeInstead}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-3 px-8 py-5 border border-white/10 text-sm tracking-wider text-white/60 hover:bg-white/5 hover:text-white transition-colors rounded-[5px]"
                 >
-                  CREATE ACCOUNT
-                </button>
-              </div>
-
-              <div className="mt-12 pt-8 space-y-3" style={{ borderTop: '1px solid rgba(15,23,42,0.1)' }}>
-                <button
-                  type="button"
-                  onClick={() => setStep("create_account")}
-                  className="block transition-colors text-sm"
-                  style={{ color: 'rgba(15,23,42,0.5)' }}
-                >
-                  Lost your passkey?
+                  {isLoading ? "SENDING CODE..." : "USE 8-DIGIT CODE INSTEAD"}
                 </button>
               </div>
             </>
           )}
 
-          {/* STEP: Create Account -- Name + Email form */}
-          {step === "create_account" && (
+          {/* Step 3: Backup — 8-digit code */}
+          {step === "code" && (
             <>
               <button
-                type="button"
-                onClick={handleRetry}
-                className="text-sm mb-8 transition-colors"
-                style={{ color: 'rgba(15,23,42,0.4)' }}
+                onClick={() => { setStep("sent"); setCode(""); setError(null); }}
+                className="text-white/40 hover:text-white text-sm mb-8"
               >
-                &larr; Back to sign in
+                &larr; Back
               </button>
 
-              <p className="text-xs tracking-[0.3em] mb-4 uppercase" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                Create Account
-              </p>
-              <h1 className="text-4xl md:text-5xl font-extralight tracking-tight mb-4" style={{ color: '#0f172a' }}>
-                Set up your<br /><span className="italic">passkey.</span>
+              <p className="text-xs tracking-[0.3em] text-white/40 mb-4 uppercase">Backup Code</p>
+              <h1 className="text-4xl md:text-5xl font-extralight tracking-tight mb-4">
+                Enter your code.
               </h1>
-              <p className="font-light mb-8" style={{ color: 'rgba(15,23,42,0.5)' }}>
-                Enter your name and email, then use Face ID, Touch ID, or Windows Hello to create your account.
+              <p className="text-white/40 font-light mb-2">
+                We sent an 8-digit code to <span className="text-white">{email}</span>
               </p>
 
               {error && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-[5px]">
+                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 text-sm mt-4">
                   {error}
                 </div>
               )}
 
-              <form onSubmit={handleFormSubmit} className="space-y-6">
+              <form onSubmit={handleVerifyCode} className="space-y-6 mt-8">
                 <div>
-                  <label className="block text-xs tracking-wider mb-3 uppercase" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                    First Name
+                  <label className="block text-xs tracking-wider text-white/40 mb-3 uppercase">
+                    8-Digit Code
                   </label>
                   <input
                     type="text"
-                    placeholder="Jane"
-                    value={firstName}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setFirstName(e.target.value)
-                    }
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    placeholder="00000000"
+                    className="w-full px-0 py-4 bg-transparent border-0 border-b border-white/20 text-white placeholder-white/30 focus:outline-none focus:border-white transition-colors text-3xl font-light tracking-[0.4em] text-center"
                     required
-                    autoComplete="given-name"
                     autoFocus
-                    className="w-full px-0 py-4 bg-transparent border-0 border-b transition-colors text-lg font-light focus:outline-none"
-                    style={{ borderBottomColor: 'rgba(15,23,42,0.2)', color: '#0f172a', caretColor: '#7C3AED' }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs tracking-wider mb-3 uppercase" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setEmail(e.target.value)
-                    }
-                    required
-                    autoComplete="email webauthn"
-                    className="w-full px-0 py-4 bg-transparent border-0 border-b transition-colors text-lg font-light focus:outline-none"
-                    style={{ borderBottomColor: 'rgba(15,23,42,0.2)', color: '#0f172a', caretColor: '#7C3AED' }}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full flex items-center justify-center gap-3 px-8 py-5 text-white text-sm tracking-wider font-medium transition-colors disabled:opacity-50 rounded-[5px]"
-                  style={{ background: 'linear-gradient(135deg, #7C3AED, #2DD4BF)' }}
-                >
-                  <Fingerprint size={20} />
-                  CONTINUE
-                </button>
-              </form>
-
-              <div className="mt-8 p-4 rounded" style={{ backgroundColor: 'rgba(15,23,42,0.03)' }}>
-                <p className="text-xs" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                  Your passkey is stored securely on your device. We never see your biometric data.
-                </p>
-              </div>
-            </>
-          )}
-
-          {/* STEP: Processing / Routing spinner */}
-          {(step === "processing" || step === "routing") && (
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="w-8 h-8 border-2 rounded-full animate-spin mb-4" style={{ borderColor: 'rgba(15,23,42,0.15)', borderTopColor: '#7C3AED' }} />
-              <p className="text-sm font-light" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                {statusText || "Please wait..."}
-              </p>
-            </div>
-          )}
-
-          {/* STEP: Passkey registration (new user) */}
-          {step === "passkey_register" && (
-            <>
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="text-sm mb-8 transition-colors"
-                style={{ color: 'rgba(15,23,42,0.4)' }}
-              >
-                &larr; Back to sign in
-              </button>
-
-              <p className="text-xs tracking-[0.3em] mb-4 uppercase" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                Set Up Passkey
-              </p>
-              <h1 className="text-4xl md:text-5xl font-extralight tracking-tight mb-4" style={{ color: '#0f172a' }}>
-                Create your<br /><span className="italic">passkey.</span>
-              </h1>
-              <p className="font-light mb-8" style={{ color: 'rgba(15,23,42,0.5)' }}>
-                No account found for <strong style={{ color: '#0f172a' }}>{email}</strong>. Register a passkey to continue.
-              </p>
-
-              {error && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-[5px]">
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleRegister} className="space-y-6">
-                <p className="text-xs" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                  You will use Face ID, Touch ID, or Windows Hello to securely sign in. Your biometric data never leaves your device.
-                </p>
-
-                <button
-                  type="submit"
-                  className="w-full flex items-center justify-center gap-3 px-8 py-5 text-white text-sm tracking-wider font-medium transition-colors disabled:opacity-50 rounded-[5px]"
-                  style={{ background: 'linear-gradient(135deg, #7C3AED, #2DD4BF)' }}
-                >
-                  <Fingerprint size={20} />
-                  REGISTER WITH PASSKEY
-                </button>
-              </form>
-
-              <div className="mt-12 pt-8 space-y-3" style={{ borderTop: '1px solid rgba(15,23,42,0.1)' }}>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await handleRequestMagicLink();
-                  }}
-                  className="block transition-colors text-sm"
-                  style={{ color: 'rgba(15,23,42,0.5)' }}
-                >
-                  Register with email code instead
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRetry}
-                  className="block transition-colors text-sm"
-                  style={{ color: 'rgba(15,23,42,0.5)' }}
-                >
-                  Use a different email
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* STEP: Magic link code verification */}
-          {step === "magic_link_verify" && (
-            <>
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="text-sm mb-8 transition-colors"
-                style={{ color: 'rgba(15,23,42,0.4)' }}
-              >
-                &larr; Back to sign in
-              </button>
-
-              <p className="text-xs tracking-[0.3em] mb-4 uppercase" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                Verify Code
-              </p>
-              <h1 className="text-4xl md:text-5xl font-extralight tracking-tight mb-4" style={{ color: '#0f172a' }}>
-                Check your email.
-              </h1>
-              <p className="font-light mb-8" style={{ color: 'rgba(15,23,42,0.5)' }}>
-                We sent a 6-digit code to <strong style={{ color: '#0f172a' }}>{email}</strong>. Enter it below.
-              </p>
-
-              {error && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-[5px]">
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleVerifyCode} className="space-y-6">
-                <div>
-                  <label className="block text-xs tracking-wider mb-3 uppercase" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                    Verification Code
-                  </label>
-                  <input
-                    ref={codeInputRef}
-                    type="text"
                     inputMode="numeric"
-                    placeholder="000000"
-                    value={verificationCode}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                      setVerificationCode(val);
-                      setError("");
-                    }}
-                    required
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    className="w-full px-0 py-4 bg-transparent border-0 border-b transition-colors text-lg font-light tracking-[0.3em] text-center focus:outline-none"
-                    style={{ borderBottomColor: 'rgba(15,23,42,0.2)', color: '#0f172a', caretColor: '#7C3AED' }}
+                    maxLength={8}
                   />
                 </div>
 
                 <button
                   type="submit"
-                  disabled={verificationCode.length !== 6}
-                  className="w-full flex items-center justify-center gap-3 px-8 py-5 text-white text-sm tracking-wider font-medium transition-colors disabled:opacity-50 rounded-[5px]"
-                  style={{ background: 'linear-gradient(135deg, #7C3AED, #2DD4BF)' }}
+                  disabled={isLoading || code.length !== 8}
+                  className="w-full flex items-center justify-center gap-3 px-8 py-5 bg-white text-black text-sm tracking-wider font-medium hover:bg-white/90 transition-colors disabled:opacity-50 rounded-[5px]"
                 >
-                  VERIFY CODE
+                  <ArrowRight size={20} />
+                  {isLoading ? "VERIFYING..." : "SIGN IN"}
                 </button>
               </form>
 
-              <div className="mt-12 pt-8 space-y-3" style={{ borderTop: '1px solid rgba(15,23,42,0.1)' }}>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setError("");
-                    await handleRequestMagicLink();
-                  }}
-                  className="block transition-colors text-sm"
-                  style={{ color: 'rgba(15,23,42,0.5)' }}
-                >
-                  Resend code
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRetry}
-                  className="block transition-colors text-sm"
-                  style={{ color: 'rgba(15,23,42,0.5)' }}
-                >
-                  Use a different email
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* STEP: Error */}
-          {step === "error" && (
-            <>
-              <p className="text-xs tracking-[0.3em] mb-4 uppercase" style={{ color: 'rgba(15,23,42,0.4)' }}>
-                Error
-              </p>
-              <h1 className="text-4xl md:text-5xl font-extralight tracking-tight mb-4" style={{ color: '#0f172a' }}>
-                Something went wrong.
-              </h1>
-
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm rounded-[5px]">
-                {error || "An unexpected error occurred. Please try again."}
-              </div>
-
               <button
-                type="button"
-                onClick={handleRetry}
-                className="w-full flex items-center justify-center gap-3 px-8 py-5 text-sm tracking-wider transition-colors rounded-[5px]"
-                style={{ border: '1px solid rgba(15,23,42,0.15)', color: '#0f172a' }}
+                onClick={handleUseCodeInstead}
+                disabled={isLoading}
+                className="mt-6 w-full text-center text-sm text-white/40 hover:text-white transition-colors"
               >
-                TRY AGAIN
+                Didn't get the code? Send again
               </button>
             </>
           )}
 
+          <p className="text-sm text-white/30 mt-12">
+            New here?{" "}
+            <Link href="/pricing" className="text-white hover:underline underline-offset-4">
+              Get started
+            </Link>
+          </p>
+        </div>
+      </div>
+
+      {/* Right - Visual */}
+      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#5B21B6] via-[#7C3AED] to-[#2DD4BF]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black to-transparent" />
+        <div className="absolute bottom-12 left-12 right-12">
+          <p className="text-2xl font-extralight leading-relaxed">
+            {QUOTE_TEXT}
+          </p>
         </div>
       </div>
     </main>

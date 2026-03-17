@@ -27,6 +27,11 @@ import {
   Home,
   ArrowRight,
   ScanFace,
+  Scale,
+  Heart,
+  Zap,
+  Brain,
+  Activity,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -40,21 +45,42 @@ import { consultations, storage } from "@/lib/api";
 
 const STEPS = [
   { id: "welcome", label: "Get Started", icon: Home, number: 1 },
-  { id: "intake", label: "New Intake", icon: User, number: 2 },
-  { id: "payment", label: "Payment", icon: CreditCard, number: 3 },
-  { id: "identity", label: "Identity Check", icon: ScanFace, number: 4 },
-  { id: "medical", label: "Medical History", icon: FileText, number: 5 },
-  { id: "symptoms", label: "Symptoms", icon: Pill, number: 6 },
-  { id: "verification", label: "Verification", icon: Shield, number: 7 },
-  { id: "video", label: "Video Verification", icon: Video, number: 8 },
-  { id: "review", label: "Review", icon: ClipboardCheck, number: 9 },
-  { id: "approved", label: "Approved", icon: Check, number: 10 },
-  { id: "pharmacy", label: "Send to Pharmacy", icon: Truck, number: 11 },
-  { id: "fulfilled", label: "Fulfilled", icon: Package, number: 12 },
+  { id: "service", label: "Select Service", icon: Stethoscope, number: 2 },
+  { id: "intake", label: "New Intake", icon: User, number: 3 },
+  { id: "payment", label: "Payment", icon: CreditCard, number: 4 },
+  { id: "identity", label: "Identity Check", icon: ScanFace, number: 5 },
+  { id: "medical", label: "Medical History", icon: FileText, number: 6 },
+  { id: "symptoms", label: "Symptoms", icon: Pill, number: 7 },
+  { id: "consent", label: "Consent", icon: Shield, number: 8 },
+  { id: "verification", label: "Verification", icon: Shield, number: 9 },
+  { id: "video", label: "Video Verification", icon: Video, number: 10 },
+  { id: "review", label: "Review", icon: ClipboardCheck, number: 11 },
+  { id: "approved", label: "Approved", icon: Check, number: 12 },
+  { id: "pharmacy", label: "Send to Pharmacy", icon: Truck, number: 13 },
+  { id: "fulfilled", label: "Fulfilled", icon: Package, number: 14 },
 ] as const;
 
-/** Steps 10-12 are completion states — they only highlight when reached */
+/** Steps 12-14 are completion states — they only highlight when reached */
 const COMPLETION_STEPS: Set<StepId> = new Set(["approved", "pharmacy", "fulfilled"]);
+
+/* ---------------------------------------------------------------------------
+   US STATES
+   --------------------------------------------------------------------------- */
+
+const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"];
+
+/* ---------------------------------------------------------------------------
+   SERVICE CATEGORIES
+   --------------------------------------------------------------------------- */
+
+const SERVICE_CATEGORIES = [
+  { id: "weight-management", label: "Weight Management", desc: "Semaglutide, Tirzepatide, GLP-1", icon: Scale },
+  { id: "mens-health", label: "Men's Health", desc: "Testosterone, ED, hair loss", icon: User },
+  { id: "womens-health", label: "Women's Health", desc: "Hormones, fertility, weight", icon: Users },
+  { id: "general-wellness", label: "General Wellness", desc: "Supplements, peptides, general", icon: Heart },
+  { id: "pain-management", label: "Pain Management", desc: "Peptides, anti-inflammatory", icon: Zap },
+  { id: "mental-wellness", label: "Mental Wellness", desc: "Anxiety support", icon: Brain },
+] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
 
@@ -212,7 +238,7 @@ function StartPageInner() {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async function submitIntakeVideo(args: { patientEmail: string; patientName: string; transcript: string; medicalHistory: { conditions?: string; medications?: string; allergies?: string }; chiefComplaint: string; pharmacyLocation: string; videoStorageId: string }): Promise<{ consultationId: string }> {
+  async function submitIntakeVideo(args: { patientEmail: string; patientName: string; transcript: string; medicalHistory: { conditions?: string; medications?: string; allergies?: string }; chiefComplaint: string; pharmacyLocation: string; videoStorageId: string; patientState?: string }): Promise<{ consultationId: string }> {
     const result = await consultations.create({ ...args, status: "pending_review" });
     return { consultationId: result.id };
   }
@@ -324,6 +350,13 @@ function StartPageInner() {
 
   // Payment consent
   const [noRefundAccepted, setNoRefundAccepted] = useState(false);
+
+  // Service + state selection (Step 2)
+  const [serviceCategory, setServiceCategory] = useState<string>("");
+  const [patientState, setPatientState] = useState<string>("");
+
+  // Telehealth consent (Step 8)
+  const [consentChecks, setConsentChecks] = useState({ telehealth: false, noEmergency: false, privacyTerms: false });
 
   // Stripe Identity state
   const searchParams = useSearchParams();
@@ -440,14 +473,60 @@ function StartPageInner() {
     callback();
   }
 
-  /** Advance from welcome landing page into the intake chat flow */
+  /** Advance from welcome landing page into the service selection step */
   function handleWelcomeStart() {
     completeStep("welcome");
+    advanceTo("service");
+    addSystemMessage(
+      "Welcome to ScriptsXO. Let's get you started. First, select the treatment category you're interested in and the state where you're located — this helps us match you with a licensed provider.",
+      "service"
+    );
+  }
+
+  /** Handle service + state selection completion */
+  function handleServiceContinue() {
+    const categoryLabel = SERVICE_CATEGORIES.find((c) => c.id === serviceCategory)?.label ?? serviceCategory;
+    try {
+      localStorage.setItem(
+        "sxo_service_intake",
+        JSON.stringify({ category: serviceCategory, categoryLabel, state: patientState, savedAt: Date.now() })
+      );
+    } catch {
+      // localStorage may be unavailable in some environments
+    }
+    completeStep("service");
     advanceTo("intake");
     addSystemMessage(
-      "Welcome to ScriptsXO. I'll walk you through the process to get your medication. First — are you ordering for yourself, or on behalf of someone else?",
+      `Got it. You're in ${patientState} looking for ${categoryLabel} options. Let me get you started.`,
       "intake"
     );
+    simulateTyping(() => {
+      addSystemMessage(
+        "Now — are you ordering for yourself, or on behalf of someone else?",
+        "intake"
+      );
+    });
+  }
+
+  /** Handle telehealth consent completion */
+  function handleConsentContinue() {
+    try {
+      localStorage.setItem(
+        "sxo_consent",
+        JSON.stringify({ consentedAt: Date.now(), checks: consentChecks })
+      );
+    } catch {
+      // localStorage may be unavailable in some environments
+    }
+    addUserMessage("Telehealth consent accepted");
+    completeStep("consent");
+    simulateTyping(() => {
+      advanceTo("verification");
+      addSystemMessage(
+        "Consent recorded. Now I need to verify your identity. Please upload a government-issued ID. If there's a previous prescription for this medication, upload a photo of it as well.",
+        "verification"
+      );
+    });
   }
 
   /** Call AI via the aiChat action with role-aware context.
@@ -766,11 +845,9 @@ function StartPageInner() {
     );
 
     setIsTyping(false);
-    advanceTo("verification");
-    const fallback = patientType === "returning"
-      ? "Now I need to verify identity. Please upload a government-issued ID. Since this is a returning client, also upload a photo of the previous prescription — this helps us get set up faster."
-      : "Now I need to verify identity. Please upload a government-issued ID. If there's a previous prescription for this medication, upload a photo of it as well.";
-    addSystemMessage(response || fallback, "verification");
+    advanceTo("consent");
+    const fallback = "Before we continue, please review and accept the telehealth consent agreement.";
+    addSystemMessage(response || fallback, "consent");
   }
 
   /* ---- Step: Verification (with AI document scanning) ---- */
@@ -1126,6 +1203,7 @@ function StartPageInner() {
         chiefComplaint: symptomData.complaint || "General prescription request",
         pharmacyLocation: savedPharmacyLocation,
         videoStorageId,
+        patientState: patientState || undefined,
       });
 
       setSubmissionId(result.consultationId);
@@ -1189,6 +1267,69 @@ function StartPageInner() {
     switch (currentStep) {
       case "welcome":
         return null; // Welcome renders its own full-page layout below
+
+      case "service":
+        return (
+          <div className="mt-4 space-y-5">
+            {/* Treatment category grid */}
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-3">Select a treatment category</p>
+              <div className="grid grid-cols-2 gap-3">
+                {SERVICE_CATEGORIES.map((cat) => {
+                  const Icon = cat.icon;
+                  const isSelected = serviceCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setServiceCategory(cat.id)}
+                      className={`glass-card p-4 text-left transition-all duration-200 ${
+                        isSelected
+                          ? "border-brand-secondary/60 bg-brand-secondary/5 shadow-[0_4px_16px_rgba(124,58,237,0.15)]"
+                          : "hover:border-brand-secondary/30 hover:shadow-[0_4px_12px_rgba(124,58,237,0.08)]"
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 transition-colors ${
+                        isSelected ? "bg-brand-secondary text-white shadow-[0_2px_8px_rgba(124,58,237,0.3)]" : "bg-muted text-muted-foreground"
+                      }`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <p className={`text-xs font-medium mb-0.5 ${isSelected ? "text-brand-secondary" : "text-foreground"}`}>
+                        {cat.label}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground leading-snug">{cat.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* State dropdown */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                What state are you located in?
+              </label>
+              <select
+                value={patientState}
+                onChange={(e) => setPatientState(e.target.value)}
+                className="w-full px-4 py-3 rounded-md border border-border bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring appearance-none"
+              >
+                <option value="">Select your state</option>
+                {US_STATES.map((st) => (
+                  <option key={st} value={st}>{st}</option>
+                ))}
+              </select>
+            </div>
+
+            <Button
+              onClick={handleServiceContinue}
+              disabled={!serviceCategory || !patientState}
+              className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
+            >
+              Continue
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        );
 
       case "intake":
         // Phase 1: Who is ordering?
@@ -1774,6 +1915,69 @@ function StartPageInner() {
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </>
               )}
+            </Button>
+          </div>
+        );
+
+      case "consent":
+        return (
+          <div className="mt-4 glass-card p-5 space-y-5">
+            <div>
+              <p className="text-sm font-medium text-foreground mb-1">Telehealth Consent &amp; Privacy Agreement</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed mb-4">
+                ScriptsXO telehealth services are provided by licensed, independent physicians. Providers review your intake asynchronously — this is not an emergency service. If you are experiencing a medical emergency, call 911 immediately.
+              </p>
+              <div className="space-y-2.5 text-xs text-muted-foreground leading-relaxed border-t border-border pt-4">
+                <p>Your information is handled on a HIPAA-compliant platform. All data is encrypted at rest and in transit and is never sold to third parties.</p>
+                <p>E-prescriptions are sent directly to your selected pharmacy upon provider approval. Approval is not guaranteed.</p>
+                <p>You have the right to decline treatment at any time and to request that your data be deleted.</p>
+              </div>
+            </div>
+
+            {/* Checkboxes */}
+            <div className="space-y-3 border-t border-border pt-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentChecks.telehealth}
+                  onChange={(e) => setConsentChecks((prev) => ({ ...prev, telehealth: e.target.checked }))}
+                  className="mt-0.5 w-4 h-4 rounded border-border accent-brand-secondary flex-shrink-0"
+                />
+                <span className="text-xs text-foreground leading-relaxed">
+                  I consent to asynchronous telehealth services provided by licensed physicians through ScriptsXO.
+                </span>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentChecks.noEmergency}
+                  onChange={(e) => setConsentChecks((prev) => ({ ...prev, noEmergency: e.target.checked }))}
+                  className="mt-0.5 w-4 h-4 rounded border-border accent-brand-secondary flex-shrink-0"
+                />
+                <span className="text-xs text-foreground leading-relaxed">
+                  I acknowledge that this service is not for emergency care and I will call 911 or go to the nearest emergency room in a medical emergency.
+                </span>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentChecks.privacyTerms}
+                  onChange={(e) => setConsentChecks((prev) => ({ ...prev, privacyTerms: e.target.checked }))}
+                  className="mt-0.5 w-4 h-4 rounded border-border accent-brand-secondary flex-shrink-0"
+                />
+                <span className="text-xs text-foreground leading-relaxed">
+                  I have read and agree to the Privacy Policy and Terms of Service.
+                </span>
+              </label>
+            </div>
+
+            <Button
+              onClick={handleConsentContinue}
+              disabled={!consentChecks.telehealth || !consentChecks.noEmergency || !consentChecks.privacyTerms}
+              className="w-full bg-brand hover:bg-brand-hover text-white h-11 text-xs font-medium tracking-wide shadow-[0_4px_14px_rgba(91,33,182,0.3)]"
+            >
+              <Shield className="w-4 h-4 mr-2" />
+              Accept &amp; Continue
             </Button>
           </div>
         );

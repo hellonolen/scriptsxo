@@ -12,6 +12,8 @@ import {
   ClipboardList,
   Loader2,
   FileClock,
+  ShieldCheck,
+  ChevronRight,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,7 @@ import { NavCard } from "@/components/ui/nav-card";
 import { term } from "@/lib/config";
 import { getSessionCookie } from "@/lib/auth";
 import { consultations, prescriptions } from "@/lib/api";
+import { AgentActivityFeed } from "@/components/agent-activity-feed";
 
 const URGENCY_VARIANT: Record<string, "warning" | "info" | "success"> = {
   urgent: "warning",
@@ -211,6 +214,48 @@ export default function ProviderDashboard() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* AI Case Review — primary case oversight nav */}
+        <div className="mb-10">
+          <a
+            href="/provider/oversight"
+            className="flex items-center justify-between p-6 rounded-xl bg-primary/8 border border-primary/20 hover:bg-primary/12 transition-colors group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                <ShieldCheck size={24} className="text-primary" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="text-[10px] tracking-[0.15em] uppercase text-primary font-medium mb-0.5">
+                  AI-Powered Review
+                </p>
+                <h2
+                  className="text-xl text-foreground font-light"
+                  style={{ fontFamily: "var(--font-heading)" }}
+                >
+                  AI Case Review
+                </h2>
+                <p className="text-sm text-muted-foreground font-light mt-0.5">
+                  Agent-reviewed cases ready for oversight — approve, block, or monitor auto-processed cases.
+                </p>
+              </div>
+            </div>
+            <div className="text-muted-foreground group-hover:text-foreground transition-colors shrink-0 ml-4">
+              <ChevronRight size={20} />
+            </div>
+          </a>
+        </div>
+
+        {/* Agent Activity */}
+        <div className="bg-card border border-border rounded-lg p-6 mb-10">
+          <h2
+            className="text-xl text-foreground font-light mb-5"
+            style={{ fontFamily: "var(--font-heading)" }}
+          >
+            Agent Activity
+          </h2>
+          <AgentActivityFeed maxItems={5} />
         </div>
 
         {/* Navigation Cards */}

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Search, Package, Truck, CheckCircle2, Clock, Filter, ChevronRight, XCircle, MapPin, Pill, Calendar, Phone, ArrowRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Package, Truck, CheckCircle2, Clock, Filter, ChevronRight, XCircle, MapPin, Pill, Phone, ArrowRight, Loader2, Mail, MessageSquare } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageHeader } from "@/components/ui/page-header";
+import { Badge } from "@/components/ui/badge";
+import { snsDelivery } from "@/lib/api";
 
 /* ── Mock Data ── */
 type TrackingStatus = "pending" | "dispensed" | "shipped" | "delivered" | "cancelled";
@@ -226,10 +228,69 @@ function TrackingTimeline({ order }: { order: TrackingOrder }) {
     );
 }
 
+// ─── SNS Delivery Types ───────────────────────────────────────────────────────
+
+type SnsChannel = "email" | "sms";
+type SnsStatus = "pending" | "sent" | "delivered" | "failed";
+
+interface SnsDelivery {
+  id: string;
+  snsMessageId: string | null;
+  channel: SnsChannel;
+  status: SnsStatus;
+  recipient: string | null;
+  createdAt: string;
+}
+
+function snsStatusVariant(
+  s: SnsStatus
+): "secondary" | "warning" | "success" | "error" {
+  switch (s) {
+    case "pending":
+      return "secondary";
+    case "sent":
+      return "warning";
+    case "delivered":
+      return "success";
+    case "failed":
+      return "error";
+  }
+}
+
+function truncateMessageId(id: string | null): string {
+  if (!id) return "—";
+  return id.length > 16 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id;
+}
+
+function formatRelative(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const hrs = Math.floor(diffMin / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function TrackingPage() {
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState<TrackingStatus | "all">("all");
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [snsDeliveries, setSnsDeliveries] = useState<SnsDelivery[]>([]);
+    const [snsLoading, setSnsLoading] = useState(true);
+
+    useEffect(() => {
+        snsDelivery
+            .getAllDeliveries()
+            .then((data) => {
+                const items = Array.isArray(data) ? (data as unknown as SnsDelivery[]) : [];
+                setSnsDeliveries(items);
+            })
+            .catch(() => setSnsDeliveries([]))
+            .finally(() => setSnsLoading(false));
+    }, []);
 
     const filtered = MOCK_ORDERS.filter((o) => {
         const matchSearch =
@@ -258,6 +319,101 @@ export default function TrackingPage() {
                         backHref="/admin"
                     />
                 </header>
+
+                {/* ── SNS Delivery Status ── */}
+                <div className="bg-card border border-border rounded-xl overflow-hidden mb-8">
+                    <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+                        <div>
+                            <p className="text-[10px] font-medium tracking-widest uppercase text-muted-foreground mb-0.5">
+                                SNS Delivery Status
+                            </p>
+                            <h2
+                                className="text-base font-light text-foreground"
+                                style={{ fontFamily: "var(--font-heading)" }}
+                            >
+                                Notification Deliveries
+                            </h2>
+                        </div>
+                        {snsLoading && (
+                            <Loader2 size={16} className="animate-spin text-muted-foreground" />
+                        )}
+                    </div>
+
+                    {snsLoading ? (
+                        <div className="flex items-center justify-center gap-2 py-10">
+                            <Loader2 size={16} className="animate-spin text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">Loading deliveries...</p>
+                        </div>
+                    ) : snsDeliveries.length === 0 ? (
+                        <div className="flex items-center justify-center py-10">
+                            <p className="text-sm text-muted-foreground">No SNS deliveries found.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse">
+                                <thead>
+                                    <tr className="bg-muted/30">
+                                        {["SNS Message ID", "Channel", "Status", "Recipient", "Sent"].map((h) => (
+                                            <th
+                                                key={h}
+                                                className="px-4 py-3 text-left text-[10px] tracking-[0.1em] uppercase font-light text-muted-foreground border-b border-border whitespace-nowrap"
+                                            >
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {snsDeliveries.map((d) => (
+                                        <tr key={d.id} className="hover:bg-muted/30 transition-colors">
+                                            <td className="px-4 py-3">
+                                                <p className="text-xs font-mono text-muted-foreground">
+                                                    {truncateMessageId(d.snsMessageId)}
+                                                </p>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-1.5">
+                                                    {d.channel === "email" ? (
+                                                        <Mail size={12} className="text-muted-foreground" aria-hidden="true" />
+                                                    ) : (
+                                                        <MessageSquare size={12} className="text-muted-foreground" aria-hidden="true" />
+                                                    )}
+                                                    <Badge variant={d.channel === "email" ? "info" : "secondary"}>
+                                                        {d.channel}
+                                                    </Badge>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <Badge variant={snsStatusVariant(d.status)}>
+                                                    {d.status}
+                                                </Badge>
+                                            </td>
+                                            <td className="px-4 py-3 text-xs text-muted-foreground">
+                                                {d.recipient ?? "—"}
+                                            </td>
+                                            <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                                                {formatRelative(d.createdAt)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Historical Orders ── */}
+                <div className="mb-4">
+                    <p className="text-[10px] font-medium tracking-widest uppercase text-muted-foreground mb-1">
+                        Historical
+                    </p>
+                    <h2
+                        className="text-lg font-light text-foreground"
+                        style={{ fontFamily: "var(--font-heading)" }}
+                    >
+                        Prescription Orders
+                    </h2>
+                </div>
 
                 {/* ── Stats Row ── */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">

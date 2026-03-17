@@ -45,6 +45,21 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_email_code", ["email", "code"]),
 
+  // === LOGIN CODES (magic link + backup code auth) ===
+  loginCodes: defineTable({
+    email: v.string(),
+    code: v.string(),
+    token: v.string(),
+    firstName: v.string(),
+    type: v.union(v.literal("magic_link"), v.literal("backup_code")),
+    used: v.boolean(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_token", ["token"])
+    .index("by_code_email", ["email", "code"]),
+
   // === ORGANIZATIONS ===
   organizations: defineTable({
     name: v.string(),

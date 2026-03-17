@@ -125,4 +125,59 @@ app.post('/:id/claim', async (c) => {
   return ok({ success: true });
 });
 
+// POST /consultations/:id/override — provider override of AI verdict
+app.post('/:id/override', async (c) => {
+  const caller = await requireCap(c, CAP.CONSULT_START);
+  const { action, reason } = await c.req.json<{ action: 'block' | 'approve'; reason?: string }>();
+
+  if (action !== 'block' && action !== 'approve') {
+    return err('action must be "block" or "approve"', 400);
+  }
+
+  const id = c.req.param('id');
+  const now = Date.now();
+
+  const consultation = await c.env.DB.prepare(
+    'SELECT id, patient_email, case_state FROM consultations WHERE id = ?'
+  ).bind(id).first<{ id: string; patient_email: string | null; case_state: string }>();
+
+  if (!consultation) return err('Consultation not found', 404);
+
+  const newCaseState = action === 'block' ? 'denied' : 'approved';
+
+  await c.env.DB.prepare(`
+    UPDATE consultations
+    SET provider_override = ?, provider_override_by = ?, provider_override_at = ?,
+        provider_override_reason = ?, case_state = ?, updated_at = ?
+    WHERE id = ?
+  `).bind(
+    action,
+    caller.email,
+    now,
+    reason ?? null,
+    newCaseState,
+    now,
+    id
+  ).run();
+
+  await auditLog({
+    db: c.env.DB,
+    eventType: action === 'block' ? 'case.denied' : 'case.approved',
+    entityType: 'consultation',
+    entityId: id,
+    actorEmail: caller.email,
+    actorRole: caller.role,
+    patientEmail: consultation.patient_email ?? undefined,
+    payload: {
+      action,
+      reason,
+      previousState: consultation.case_state,
+      newState: newCaseState,
+      providerOverride: true,
+    },
+  });
+
+  return ok({ success: true, caseState: newCaseState });
+});
+
 export default app;
